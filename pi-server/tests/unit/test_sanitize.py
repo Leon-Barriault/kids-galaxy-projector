@@ -1,8 +1,6 @@
 """
-Unit tests – pure functions, no HTTP, no disk side-effects beyond the function itself.
+Unit tests for sanitize_filename – pure function, no mocks required.
 """
-
-import pytest
 
 from main import sanitize_filename
 
