@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // Compose compiler plugin (Kotlin itself is built into AGP 9+)
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
