@@ -1,18 +1,27 @@
-.PHONY: test test-unit test-integration lint lint-python lint-docker lint-shell lint-kotlin docker-up docker-down certs help install-dev
+.PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
+        arch test test-unit test-integration test-android build-android \
+        docker-up docker-down certs vendor-three verify
 
 help:
 	@echo "Kids Galaxy Projector - common targets"
 	@echo "  make install-dev      - install runtime + test dependencies"
 	@echo "  make lint             - lint all layers (Python, Docker, shell, Kotlin)"
-	@echo "  make test-unit        - run pure unit tests only"
-	@echo "  make test-integration - run end-to-end integration tests"
-	@echo "  make test             - run both suites"
+	@echo "  make arch             - enforce clean-architecture boundaries"
+	@echo "  make test-unit        - fast unit tests (domain/application/infrastructure)"
+	@echo "  make test-integration - end-to-end API tests"
+	@echo "  make test             - both Python suites"
+	@echo "  make test-android     - JVM unit tests for the Android app"
+	@echo "  make build-android    - assemble the debug APK"
+	@echo "  make verify           - lint + arch + all tests (what CI runs)"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make docker-down"
 	@echo "  make certs            - generate mTLS certificates"
+	@echo "  make vendor-three     - refresh the vendored Three.js build"
 
 install-dev:
 	cd pi-server && pip install -r requirements-dev.txt
+
+# -------------------- linting --------------------
 
 lint: lint-python lint-docker lint-shell lint-kotlin
 
@@ -27,15 +36,46 @@ lint-shell:
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
-	cd android && ktlint --relative --editorconfig=.editorconfig "app/src/main/kotlin/**/*.kt"
+	cd android && ktlint --relative --editorconfig=.editorconfig "app/src/**/*.kt"
+
+# -------------------- architecture --------------------
+
+# These guard the layering. They are cheap and catch the mistake that is easiest
+# to make by accident: reaching for a framework type inside the domain.
+arch:
+	@echo "==> Kotlin domain must not import Android or Compose"
+	@! grep -rn "^import \(android\|androidx\)" android/app/src/main/kotlin/com/kidsgalaxy/domain/ \
+		|| { echo "FAIL: domain layer is not framework-free"; exit 1; }
+	@echo "==> Kotlin dependencies must point inwards"
+	@! grep -rn "com\.kidsgalaxy\.\(data\|presentation\|ui\|di\)" android/app/src/main/kotlin/com/kidsgalaxy/domain/ \
+		|| { echo "FAIL: domain depends on an outer layer"; exit 1; }
+	@echo "==> Python domain/application must not import FastAPI or Pillow"
+	@! grep -rn "^\(import\|from\) \(fastapi\|starlette\|PIL\)" pi-server/app/domain/ pi-server/app/application/ \
+		|| { echo "FAIL: domain/application depends on a framework"; exit 1; }
+	@echo "==> Projector assets must not reference the public internet"
+	@! grep -rnE "https?://" pi-server/static/index.html pi-server/static/galaxy.js \
+		|| { echo "FAIL: static assets reference remote resources"; exit 1; }
+	@echo "All architecture boundaries hold."
+
+# -------------------- tests --------------------
 
 test-unit:
-	cd pi-server && python -m pytest tests/unit/ -v --cov=main --cov-report=term-missing
+	cd pi-server && python -m pytest tests/unit/ -v --cov=app --cov=main --cov-report=term-missing
 
 test-integration:
-	cd pi-server && python -m pytest tests/integration/ -v --cov=main --cov-report=term-missing
+	cd pi-server && python -m pytest tests/integration/ -v --cov=app --cov=main --cov-report=term-missing
 
 test: test-unit test-integration
+
+test-android:
+	cd android && ./gradlew testDebugUnitTest
+
+build-android:
+	cd android && ./gradlew assembleDebug
+
+verify: lint arch test test-android
+
+# -------------------- local stack --------------------
 
 docker-up:
 	docker compose up --build
@@ -45,3 +85,15 @@ docker-down:
 
 certs:
 	cd pi-server/certs && chmod +x generate_certs.sh && ./generate_certs.sh
+
+# Refresh the vendored Three.js build. Pinned so the offline projector and the
+# import map cannot drift apart.
+vendor-three:
+	cd pi-server/static/vendor && npm pack three@0.170.0 \
+		&& tar -xzf three-0.170.0.tgz \
+		&& cp package/build/three.module.js three.module.js \
+		&& mkdir -p jsm/controls \
+		&& cp package/examples/jsm/controls/OrbitControls.js jsm/controls/OrbitControls.js \
+		&& cp package/LICENSE THREE_LICENSE.txt \
+		&& rm -rf package three-0.170.0.tgz
+	@echo "Vendored Three.js refreshed."

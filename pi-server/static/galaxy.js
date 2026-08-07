@@ -339,19 +339,92 @@ function applyPlanetTexture(url, name) {
   );
 }
 
+function handlePlanetPayload(data) {
+  if (data && data.has_planet && data.url) {
+    applyPlanetTexture(data.url, data.name);
+  }
+}
+
 async function checkForNewPlanet() {
   try {
     const res = await fetch('/api/current-planet');
     if (!res.ok) return;
-    const data = await res.json();
-    if (data.has_planet && data.url) {
-      applyPlanetTexture(data.url, data.name);
-    }
-  } catch (e) {}
+    handlePlanetPayload(await res.json());
+  } catch (e) {
+    /* Offline or server restarting - the next tick will retry. */
+  }
 }
 
-setInterval(checkForNewPlanet, 2500);
-checkForNewPlanet();
+/**
+ * Live updates. Preferred path is Server-Sent Events, so a new planet appears
+ * the instant it is uploaded. If SSE is unavailable (or drops repeatedly), we
+ * fall back to the original 2.5s poll so the projector never goes dark.
+ */
+const POLL_INTERVAL_MS = 2500;
+let pollTimer = null;
+
+function startPolling() {
+  if (pollTimer !== null) return;
+  pollTimer = setInterval(checkForNewPlanet, POLL_INTERVAL_MS);
+  checkForNewPlanet();
+}
+
+function stopPolling() {
+  if (pollTimer === null) return;
+  clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+function startLiveUpdates() {
+  if (typeof EventSource === 'undefined') {
+    startPolling();
+    return;
+  }
+
+  let sseFailures = 0;
+
+  function connect() {
+    let source;
+    try {
+      source = new EventSource('/api/events');
+    } catch (e) {
+      startPolling();
+      return;
+    }
+
+    source.addEventListener('open', function () {
+      sseFailures = 0;
+      stopPolling(); // Push is live; polling is redundant.
+    });
+
+    source.addEventListener('planet', function (event) {
+      try {
+        handlePlanetPayload(JSON.parse(event.data));
+      } catch (e) {
+        console.warn('Bad planet event payload', e);
+      }
+    });
+
+    source.addEventListener('error', function () {
+      // EventSource auto-reconnects, but poll in the meantime so we never stall.
+      startPolling();
+      sseFailures += 1;
+      if (sseFailures >= 5) {
+        // Give up on push and stay on the poll path.
+        source.close();
+        console.warn('SSE unavailable - staying on polling fallback');
+      }
+    });
+  }
+
+  connect();
+  // Safety net: if SSE never opens, polling takes over shortly after load.
+  setTimeout(function () {
+    if (pollTimer === null && currentPlanetUrl === null) checkForNewPlanet();
+  }, POLL_INTERVAL_MS);
+}
+
+startLiveUpdates();
 
 window.addEventListener('resize', function () {
   camera.aspect = window.innerWidth / window.innerHeight;

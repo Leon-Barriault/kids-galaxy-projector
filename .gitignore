@@ -1,16 +1,27 @@
 # Android
 *.iml
 .gradle/
-/local.properties
+local.properties
 /.idea/
 .DS_Store
-/build
+build/
 /captures
 .externalNativeBuild
 .cxx
 *.apk
 *.ap_
 *.aab
+# NOTE: android/gradle/wrapper/gradle-wrapper.jar is intentionally committed -
+# the wrapper is how CI and new contributors get a reproducible Gradle version.
+
+# Certificates and keys - generated per deployment, never committed
+pi-server/certs/*.crt
+pi-server/certs/*.key
+pi-server/certs/*.p12
+pi-server/certs/*.srl
+pi-server/certs/*.csr
+android/app/src/main/assets/*.p12
+android/app/src/main/assets/*.crt
 
 # Python
 __pycache__/
@@ -30,3 +41,11 @@ pi-server/uploads/*
 .vscode/
 *.swp
 *.swo
+
+# Coverage artifacts
+.coverage
+.coverage.*
+coverage*.xml
+htmlcov/
+.ruff_cache/
+.pytest_cache/

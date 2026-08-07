@@ -36,12 +36,17 @@ You will then have the full project tree (`android/`, `pi-server/`, `docker-comp
 | Concern | Approach |
 |---------|----------|
 | Local development without hardware | Docker Compose (`docker compose up --build`) |
-| Certificate authentication | Mutual TLS between tablet and server |
+| Offline operation | Three.js is vendored locally — the projector needs no internet |
+| Live updates | Server-Sent Events push each planet instantly (polling fallback) |
+| Certificate authentication | Mutual TLS, wired on both server **and** tablet |
 | Android as the only app | Lock Task Mode + Device Owner / COSU support |
-| Code quality | Unit + integration tests (23+), GitHub Actions CI |
-| SDLC alignment | Automated tests gate every change; UNRELEASED.md; clear DoD-style checks; changelog-driven |
+| Architecture | Clean architecture on both sides; boundaries enforced in CI |
+| Code quality | 123 Python tests + Kotlin JVM tests, 96% server coverage, GitHub Actions CI |
+| SDLC alignment | Lint, architecture, tests and Android build all gate every change |
 
-See **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk setup, and project Definition of Done.
+See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the layering and testing strategy,
+and **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk
+setup, and the project Definition of Done.
 
 ---
 
@@ -49,19 +54,36 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk 
 
 ```
 kids-galaxy-projector/
-┌── android/                 # Native Android app (Kotlin + Jetpack Compose, kiosk-ready)
-┌── pi-server/               # FastAPI backend + Three.js galaxy
-│   ┌── main.py
-│   ┌── Dockerfile
-│   ┌── tests/               # Unit + integration tests
-│   ┌── certs/               # mTLS certificate generation
-│   ┌── static/              # Galaxy web page
+├── android/                     # Native Android app (Kotlin + Compose, kiosk-ready)
+│   ├── gradlew                  # Gradle wrapper (reproducible builds)
+│   └── app/src/
+│       ├── main/kotlin/com/kidsgalaxy/
+│       │   ├── domain/          # Rules + entities (no Android imports)
+│       │   ├── data/            # Retrofit, mTLS, Bitmap rendering
+│       │   ├── presentation/    # ViewModel + UI state
+│       │   ├── ui/              # Compose screens
+│       │   └── di/              # Composition root
+│       └── test/                # JVM unit tests (no emulator needed)
+├── pi-server/                   # FastAPI backend + Three.js galaxy
+│   ├── main.py                  # ASGI entry point (app = create_app())
+│   ├── app/
+│   │   ├── domain/              # Rules + entities (no FastAPI imports)
+│   │   ├── application/         # Use cases
+│   │   ├── ports.py             # Abstractions the use cases depend on
+│   │   ├── infrastructure/      # Filesystem, Pillow, pub/sub, rate limiting
+│   │   ├── api/                 # Routing + error translation
+│   │   └── factory.py           # Composition root
+│   ├── tests/                   # unit/{domain,application,infrastructure} + integration
+│   ├── certs/                   # mTLS certificate generation (with SANs)
+│   ├── static/                  # Galaxy page + vendored Three.js (offline)
 │   └── uploads/
-┌── scripts/                 # Hotspot + Chromium kiosk helpers
-┌── docker-compose.yml       # Full local stack (hardware-free)
-┌── .github/workflows/ci.yml # CI pipeline (tests + Docker build)
-┌── UNRELEASED.md            # Changelog staging (keep-a-changelog style)
-└── DEVELOPMENT.md           # Local + SDLC guidance
+├── scripts/                     # Hotspot + Chromium kiosk helpers
+├── docker-compose.yml           # Full local stack (hardware-free)
+├── Makefile                     # make verify runs everything CI runs
+├── .github/workflows/ci.yml     # CI: lint, architecture, tests, Android, Docker
+├── ARCHITECTURE.md              # Layering + testing strategy
+├── UNRELEASED.md                # Changelog staging (keep-a-changelog style)
+└── DEVELOPMENT.md               # Local + SDLC guidance
 ```
 
 ---
@@ -76,10 +98,11 @@ docker compose up --build
 Run tests:
 
 ```bash
-cd pi-server
-pip install -r requirements-dev.txt
-pytest tests/unit/ -v          # unit tests
-pytest tests/integration/ -v   # integration / end-to-end
+make install-dev
+make test-unit          # domain / application / infrastructure (fast)
+make test-integration   # end-to-end through the HTTP API
+make test-android       # Kotlin JVM tests (no emulator required)
+make verify             # everything CI runs: lint + architecture + all tests
 ```
 
 ---
@@ -122,11 +145,22 @@ bash scripts/start_kiosk.sh
 ## 3. Certificate authentication (mTLS)
 
 ```bash
-cd pi-server/certs && ./generate_certs.sh
+# The server IP must be baked into the certificate: Android ignores the
+# Common Name and requires a subjectAltName.
+cd pi-server/certs && SERVER_IP=10.42.0.1 ./generate_certs.sh
 ```
 
-Install `client.p12` + `ca.crt` on each tablet.  
-**No passwords or tokens are exchanged at runtime.** The PKCS#12 import password is used only during installation.
+Then give the app its identity, and build a release APK (which uses HTTPS + mTLS):
+
+```bash
+cp pi-server/certs/client.p12 pi-server/certs/ca.crt \
+   android/app/src/main/assets/
+cd android && ./gradlew assembleRelease
+```
+
+Install `client.p12` + `ca.crt` on each tablet.
+**No passwords or tokens are exchanged at runtime.** The PKCS#12 import password
+is used only during installation.
 
 Full details in [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -148,22 +182,31 @@ The app is designed to be the only foreground experience on the tablet (HOME cat
 
 ## 5. Security
 
-- Upload size limit, magic-byte validation, re-encoding with Pillow
-- Filename sanitization + UUID storage
-- Path-traversal protection
-- Rate limiting
-- Optional (recommended) mTLS – certificate-based tablet authentication
+- Upload size rejected **before** the body is buffered (Content-Length + bounded read)
+- Magic-byte validation, then re-encoding with Pillow (drops smuggled metadata)
+- Filename sanitization + UUID storage; display name kept in sidecar metadata
+- Path-traversal protection (basename + containment check)
+- Per-client rate limiting with bounded memory
+- mTLS – certificate-based tablet authentication, implemented on both ends, with
+  IP/DNS SANs so Android actually accepts the chain
+- Cleartext HTTP scoped to the hotspot host only; everything else is HTTPS-only
+- Request logging disabled in release builds
 - Local network only by design
 
 ---
 
 ## 6. CI / Quality gates (Test Phase principle)
 
-Every push and pull request runs two distinct jobs:
+Every push and pull request runs:
 
-- **Unit tests** (mock isolation, pure functions)
-- **Integration tests** (end-to-end: upload → current-planet → serve texture)
-- Docker image build check
+- **Lint** – Python (ruff), Dockerfile (hadolint), shell (shellcheck), Kotlin (ktlint, whole tree)
+- **Architecture** – domain layers must stay framework-free, dependencies must
+  point inwards, and `static/` must not reference the public internet
+- **Unit tests** – domain, application (with fakes), infrastructure
+- **Integration tests** – end-to-end: upload → current-planet → serve texture → events
+- **Certificates** – the generated chain must validate and carry an IP SAN
+- **Android** – the app is compiled and its JVM unit tests run
+- **Docker** – image builds, health check passes, vendored Three.js is served
 
 A red pipeline blocks merge / release candidate creation.
 

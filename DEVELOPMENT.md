@@ -21,11 +21,61 @@ Point the Android emulator or a real tablet (on the same machine network) to `ht
 cd pi-server
 python -m venv venv
 source venv/bin/activate   # or Windows equivalent
-pip install -r requirements.txt
-pytest tests/ -v --cov=. --cov-report=term-missing
+pip install -r requirements-dev.txt
+pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
 ```
 
-CI runs the same suite on every push/PR (see `.github/workflows/ci.yml`).
+From the repository root, `make verify` runs everything CI runs: lint,
+architecture boundaries, both Python suites, and the Android JVM tests.
+
+The suites are separated by cost and purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)):
+
+| Suite | What it covers |
+|-------|----------------|
+| `tests/unit/domain/` | Business rules in isolation — no I/O, no framework |
+| `tests/unit/application/` | Use-case orchestration, driven entirely by fakes |
+| `tests/unit/infrastructure/` | Real disk, real Pillow, injected clock |
+| `tests/integration/` | The HTTP contract, end to end |
+
+### Android tests
+
+The domain and presentation layers are plain Kotlin, so they run on the JVM with
+no emulator:
+
+```bash
+cd android && ./gradlew testDebugUnitTest
+```
+
+This covers the texture-projection mathematics, the drawing/undo rules, and the
+whole ViewModel state machine including error wording per HTTP status.
+
+CI runs all of the above on every push/PR (see `.github/workflows/ci.yml`).
+
+## Architecture boundaries
+
+The layering is enforced, not merely documented:
+
+```bash
+make arch
+```
+
+It fails the build if the Kotlin domain imports `android`/`androidx`, if either
+domain layer reaches outward, if the Python domain imports FastAPI or Pillow, or
+if the projector's assets reference a remote URL (which would break the offline
+deployment). Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a layer.
+
+## Offline assets
+
+The projector runs on a Pi hotspot with **no internet access**, so Three.js is
+vendored into `pi-server/static/vendor/` and served locally; the page uses a
+system font stack rather than a web font. To update the pinned version:
+
+```bash
+make vendor-three
+```
+
+Never reintroduce a CDN `<script>` or `@import` — `make arch` will fail, and the
+projector would render a black screen in the field.
 
 ## Certificate-based authentication (mTLS)
 
@@ -40,7 +90,25 @@ We use **mutual TLS** between the tablet and the server. This is:
 ```bash
 cd pi-server/certs
 chmod +x generate_certs.sh
-./generate_certs.sh
+SERVER_IP=10.42.0.1 ./generate_certs.sh          # bake the Pi's address in
+# Optional overrides:
+#   SERVER_DNS=kids-galaxy.local
+#   CLIENT_P12_PASSWORD=<install-time secret>
+#   DAYS=825
+```
+
+The server certificate carries `subjectAltName` entries for the IP **and** the
+DNS name. This is not optional: modern Android and OkHttp ignore the certificate
+Common Name entirely, so a certificate without a matching SAN fails the handshake
+— and because the tablet connects to `10.42.0.1`, an IP SAN is what it needs. The
+CA is also issued with explicit `basicConstraints=CA:TRUE`, which strict clients
+require before they will treat it as an issuer.
+
+Verify what you generated:
+
+```bash
+openssl verify -CAfile ca.crt server.crt
+openssl x509 -in server.crt -noout -ext subjectAltName
 ```
 
 ### Run the server with mTLS enforced
@@ -53,13 +121,39 @@ uvicorn main:app --host 0.0.0.0 --port 8443 \
   --ssl-cert-reqs 2
 ```
 
-### Install the client certificate on tablets
+### Give the app its client certificate
 
-1. Copy `client.p12` and `ca.crt` to the tablet.
-2. Install the PKCS#12 (password: `KidsGalaxy`) into the Android credential store / user certificates.
-3. Configure the app (or a Managed Configuration) to use the client certificate for HTTPS.
+The app presents its certificate from its own assets (it does not read the system
+credential store), so copy both files in before building a release APK:
 
-For a full production deployment you would issue one client certificate per tablet (or per batch) and revoke as needed.
+```bash
+cp pi-server/certs/client.p12 pi-server/certs/ca.crt \
+   android/app/src/main/assets/
+cd android && ./gradlew assembleRelease
+```
+
+Both files are gitignored — certificates are per-deployment and must never be
+committed.
+
+How the transport is chosen: `app/build.gradle.kts` injects `SERVER_BASE_URL`,
+`USE_MTLS` and `CLIENT_CERT_PASSWORD` per build type. **Debug** builds talk
+cleartext HTTP to `http://<host>:8000` for lab work; **release** builds talk
+HTTPS + mTLS to `https://<host>:8443`. Override per site without touching source:
+
+```bash
+./gradlew assembleRelease \
+  -PkidsGalaxyServerHost=10.42.0.1 \
+  -PkidsGalaxyCertPassword=<install-time secret>
+```
+
+`ApiClient` pins trust to the project CA (the Pi's certificate is self-signed, so
+the system trust store would reject it) and presents `client.p12` as the client
+identity. If either asset is missing, it raises a clear
+`CertificateSetupException` rather than silently falling back to an
+unauthenticated connection.
+
+For a full production deployment you would issue one client certificate per
+tablet (or per batch) and revoke as needed.
 
 > **Note on Wi-Fi itself**: A full EAP-TLS (WPA2-Enterprise) hotspot on the Pi is possible with hostapd + FreeRADIUS, but it is significantly more operationally heavy for a portable kids setup. mTLS protects the application path, which is the critical trust boundary. An optional EAP-TLS guide can be added later if required.
 

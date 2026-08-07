@@ -22,8 +22,13 @@ services:
       - ENVIRONMENT=development
       - UPLOAD_DIR=/app/uploads
       - MAX_FILE_SIZE=5242880
-      # Set to "true" to require client certificates (mTLS)
-      - REQUIRE_CLIENT_CERT=${REQUIRE_CLIENT_CERT:-false}
+      # Newest N planets are kept; older drawings are pruned with their metadata
+      # so a long event cannot fill the Pi's disk.
+      - MAX_STORED_PLANETS=${MAX_STORED_PLANETS:-30}
+      # Per-client cooldown between uploads, in seconds.
+      - RATE_LIMIT_SECONDS=${RATE_LIMIT_SECONDS:-3}
+      # Comma-separated origins, or "*" for the closed local network.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

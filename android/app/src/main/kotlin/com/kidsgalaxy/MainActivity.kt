@@ -6,8 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.kidsgalaxy.ui.PlanetDrawerScreen
 import com.kidsgalaxy.ui.theme.KidsGalaxyTheme
-import com.kidsgalaxy.viewmodel.DrawingViewModel
 
+/**
+ * Single-screen kiosk activity.
+ *
+ * The ViewModel is obtained through the standard `viewModel()` factory inside
+ * [PlanetDrawerScreen], so an in-progress drawing survives recomposition and
+ * configuration changes. The server address and transport (cleartext vs mTLS)
+ * come from BuildConfig - see app/build.gradle.kts.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -15,17 +22,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KidsGalaxyTheme {
-                val viewModel =
-                    DrawingViewModel().apply {
-                        // Local development / cleartext (Docker or Pi without mTLS):
-                        //   initApi("http://10.42.0.1:8000/")
-                        // Production with mTLS (recommended):
-                        //   initApi("https://10.42.0.1:8443/")
-                        //   and configure OkHttp client certificate (see DEVELOPMENT.md)
-                        // Default NetworkManager hotspot IP is usually 10.42.0.1
-                        initApi("http://10.42.0.1:8000/")
-                    }
-                PlanetDrawerScreen(viewModel = viewModel)
+                PlanetDrawerScreen()
             }
         }
     }
