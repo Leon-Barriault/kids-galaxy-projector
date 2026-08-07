@@ -11,11 +11,17 @@ import android.util.Log
  *   adb shell dpm set-device-owner com.kidsgalaxy/.DeviceAdminReceiver
  */
 class DeviceAdminReceiver : DeviceAdminReceiver() {
-    override fun onEnabled(context: Context, intent: Intent) {
-        Log.i(TAG, "Device admin enabled – kiosk mode available")
+    override fun onEnabled(
+        context: Context,
+        intent: Intent,
+    ) {
+        Log.i(TAG, "Device admin enabled - kiosk mode available")
     }
 
-    override fun onDisabled(context: Context, intent: Intent) {
+    override fun onDisabled(
+        context: Context,
+        intent: Intent,
+    ) {
         Log.i(TAG, "Device admin disabled")
     }
 

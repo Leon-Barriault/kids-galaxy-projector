@@ -15,11 +15,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KidsGalaxyTheme {
-                val viewModel = DrawingViewModel().apply {
-                    // Change this IP if your Raspberry Pi uses a different address
-                    // Default NetworkManager hotspot IP is usually 10.42.0.1
-                    initApi("http://10.42.0.1:8000/")
-                }
+                val viewModel =
+                    DrawingViewModel().apply {
+                        // Local development / cleartext (Docker or Pi without mTLS):
+                        //   initApi("http://10.42.0.1:8000/")
+                        // Production with mTLS (recommended):
+                        //   initApi("https://10.42.0.1:8443/")
+                        //   and configure OkHttp client certificate (see DEVELOPMENT.md)
+                        // Default NetworkManager hotspot IP is usually 10.42.0.1
+                        initApi("http://10.42.0.1:8000/")
+                    }
                 PlanetDrawerScreen(viewModel = viewModel)
             }
         }

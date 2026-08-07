@@ -17,7 +17,7 @@ from PIL import Image
 os.environ.setdefault("UPLOAD_DIR", "uploads")
 Path("uploads").mkdir(exist_ok=True)
 
-from main import app, _last_upload  # noqa: E402
+from main import _last_upload, app  # noqa: E402
 
 
 @pytest.fixture

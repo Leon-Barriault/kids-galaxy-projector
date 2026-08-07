@@ -11,7 +11,7 @@ data class UploadResponse(
     val status: String,
     val message: String,
     val planet_id: String? = null,
-    val name: String? = null
+    val name: String? = null,
 )
 
 interface PlanetApi {
@@ -19,6 +19,6 @@ interface PlanetApi {
     @POST("api/upload")
     suspend fun uploadPlanet(
         @Part file: MultipartBody.Part,
-        @Part("name") name: RequestBody
+        @Part("name") name: RequestBody,
     ): Response<UploadResponse>
 }
