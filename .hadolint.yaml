@@ -1,0 +1,6 @@
+# Dockerfile lint rules for Kids Galaxy Projector
+ignored:
+  # Debian slim package versions drift with point releases; we rely on
+  # --no-install-recommends + minimal package set instead of exact pins.
+  - DL3008
+failure-threshold: warning

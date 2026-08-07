@@ -39,7 +39,7 @@ openssl pkcs12 -export -out client.p12 \
   -passout pass:KidsGalaxy
 
 # Cleanup
-rm -f *.csr ca.srl
+rm -f ./*.csr ./ca.srl
 
 echo ""
 echo "Certificates generated in $(pwd):"
@@ -55,4 +55,4 @@ echo "    --ssl-certfile certs/server.crt \\"
 echo "    --ssl-ca-certs certs/ca.crt \\"
 echo "    --ssl-cert-reqs 2"
 echo ""
-echo "Install client.p12 + ca.crt on each tablet (Device Owner / Managed Config)."
+echo "Install client.p12 + ca.crt on each tablet (install-time password only)."
