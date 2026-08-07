@@ -27,52 +27,55 @@ fun DrawingCanvas(
     onStartStroke: (Offset) -> Unit,
     onContinueStroke: (Offset) -> Unit,
     onEndStroke: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var currentPath by remember { mutableStateOf(Path()) }
     var currentPoints by remember { mutableStateOf(listOf<Offset>()) }
 
     Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                        currentPoints = listOf(offset)
-                        onStartStroke(offset)
-                    },
-                    onDrag = { change, _ ->
-                        val newPoint = change.position
-                        currentPath.lineTo(newPoint.x, newPoint.y)
-                        currentPoints = currentPoints + newPoint
-                        onContinueStroke(newPoint)
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        onEndStroke()
-                        currentPath = Path()
-                        currentPoints = emptyList()
-                    }
-                )
-            }
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.White)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            currentPath = Path().apply { moveTo(offset.x, offset.y) }
+                            currentPoints = listOf(offset)
+                            onStartStroke(offset)
+                        },
+                        onDrag = { change, _ ->
+                            val newPoint = change.position
+                            currentPath.lineTo(newPoint.x, newPoint.y)
+                            currentPoints = currentPoints + newPoint
+                            onContinueStroke(newPoint)
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            onEndStroke()
+                            currentPath = Path()
+                            currentPoints = emptyList()
+                        },
+                    )
+                },
     ) {
         // Draw finished strokes
         strokes.forEach { stroke ->
             if (stroke.points.size < 2) return@forEach
-            val path = Path().apply {
-                moveTo(stroke.points.first().x, stroke.points.first().y)
-                stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
-            }
+            val path =
+                Path().apply {
+                    moveTo(stroke.points.first().x, stroke.points.first().y)
+                    stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
+                }
             drawPath(
                 path = path,
                 color = stroke.color,
-                style = Stroke(
-                    width = stroke.strokeWidth,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
-                )
+                style =
+                    Stroke(
+                        width = stroke.strokeWidth,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
             )
         }
 
@@ -81,11 +84,12 @@ fun DrawingCanvas(
             drawPath(
                 path = currentPath,
                 color = currentColor,
-                style = Stroke(
-                    width = currentStrokeWidth,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
-                )
+                style =
+                    Stroke(
+                        width = currentStrokeWidth,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
             )
         }
     }
