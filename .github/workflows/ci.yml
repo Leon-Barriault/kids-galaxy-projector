@@ -13,10 +13,11 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  # Make `import main` work when pytest collects from tests/unit and tests/integration
+  PYTHONPATH: ${{ github.workspace }}/pi-server
+
 jobs:
-  # ------------------------------------------------------------------
-  # 1. Unit tests – pure functions, no HTTP, fast feedback
-  # ------------------------------------------------------------------
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -53,9 +54,6 @@ jobs:
           path: pi-server/coverage-unit.xml
           if-no-files-found: ignore
 
-  # ------------------------------------------------------------------
-  # 2. Integration / end-to-end tests – full API flow via TestClient
-  # ------------------------------------------------------------------
   integration-tests:
     name: Integration tests (end-to-end)
     runs-on: ubuntu-latest
@@ -92,9 +90,6 @@ jobs:
           path: pi-server/coverage-integration.xml
           if-no-files-found: ignore
 
-  # ------------------------------------------------------------------
-  # 3. Docker image build + smoke test
-  # ------------------------------------------------------------------
   docker-build:
     name: Docker image builds
     runs-on: ubuntu-latest
@@ -112,9 +107,6 @@ jobs:
           docker stop kg-test
           docker rm kg-test
 
-  # ------------------------------------------------------------------
-  # 4. Android sources present (placeholder until full Gradle CI)
-  # ------------------------------------------------------------------
   android-sources:
     name: Android sources present
     runs-on: ubuntu-latest
