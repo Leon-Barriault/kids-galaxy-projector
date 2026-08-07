@@ -6,7 +6,10 @@ package com.kidsgalaxy.domain.model
  * Using a plain [Point] and an ARGB [Int] instead of Compose's `Offset`/`Color`
  * keeps this layer testable on the JVM and independent of the UI toolkit.
  */
-data class Point(val x: Float, val y: Float)
+data class Point(
+    val x: Float,
+    val y: Float,
+)
 
 /** A single brush stroke: the path, its colour, and its width in canvas pixels. */
 data class StrokePath(
@@ -22,7 +25,10 @@ data class StrokePath(
  * Size of the surface a drawing was made on, in pixels.
  * Needed to project canvas coordinates onto the square texture without distortion.
  */
-data class CanvasSize(val width: Float, val height: Float) {
+data class CanvasSize(
+    val width: Float,
+    val height: Float,
+) {
     val isMeasured: Boolean get() = width > 0f && height > 0f
 
     companion object {
@@ -40,20 +46,15 @@ data class Drawing(
     val strokes: List<StrokePath> = emptyList(),
     val canvasSize: CanvasSize = CanvasSize.Unmeasured,
 ) {
-
     val isEmpty: Boolean get() = strokes.isEmpty()
 
-    fun withCanvasSize(size: CanvasSize): Drawing =
-        if (size == canvasSize) this else copy(canvasSize = size)
+    fun withCanvasSize(size: CanvasSize): Drawing = if (size == canvasSize) this else copy(canvasSize = size)
 
     /** Adds a stroke, ignoring taps and empty paths that would render nothing. */
-    fun addStroke(stroke: StrokePath): Drawing =
-        if (stroke.isRenderable) copy(strokes = strokes + stroke) else this
+    fun addStroke(stroke: StrokePath): Drawing = if (stroke.isRenderable) copy(strokes = strokes + stroke) else this
 
-    fun undo(): Drawing =
-        if (strokes.isEmpty()) this else copy(strokes = strokes.dropLast(1))
+    fun undo(): Drawing = if (strokes.isEmpty()) this else copy(strokes = strokes.dropLast(1))
 
     /** Clears strokes but keeps the measured canvas size. */
-    fun clear(): Drawing =
-        if (strokes.isEmpty()) this else copy(strokes = emptyList())
+    fun clear(): Drawing = if (strokes.isEmpty()) this else copy(strokes = emptyList())
 }

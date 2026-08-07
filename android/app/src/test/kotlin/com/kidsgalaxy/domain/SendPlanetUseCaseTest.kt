@@ -18,7 +18,6 @@ import org.junit.Test
  * drawings, blank names and failure mapping are checked in milliseconds.
  */
 class SendPlanetUseCaseTest {
-
     private fun drawingWithOneStroke() =
         Drawing().addStroke(
             StrokePath(
@@ -35,7 +34,10 @@ class SendPlanetUseCaseTest {
         var lastName: String? = null
         var lastDrawing: Drawing? = null
 
-        override suspend fun sendPlanet(drawing: Drawing, name: String): Result<Unit> {
+        override suspend fun sendPlanet(
+            drawing: Drawing,
+            name: String,
+        ): Result<Unit> {
             calls++
             lastName = name
             lastDrawing = drawing
@@ -44,49 +46,55 @@ class SendPlanetUseCaseTest {
     }
 
     @Test
-    fun `refuses to send an empty drawing`() = runTest {
-        val repository = FakeRepository()
-        val result = SendPlanetUseCase(repository).invoke(Drawing(), "My Planet")
+    fun `refuses to send an empty drawing`() =
+        runTest {
+            val repository = FakeRepository()
+            val result = SendPlanetUseCase(repository).invoke(Drawing(), "My Planet")
 
-        assertTrue(result is SendPlanetResult.NothingDrawn)
-        assertEquals("no network call should be made", 0, repository.calls)
-    }
-
-    @Test
-    fun `sends a drawing with strokes`() = runTest {
-        val repository = FakeRepository()
-        val result = SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "Sparkle")
-
-        assertTrue(result is SendPlanetResult.Success)
-        assertEquals(1, repository.calls)
-        assertEquals("Sparkle", repository.lastName)
-    }
+            assertTrue(result is SendPlanetResult.NothingDrawn)
+            assertEquals("no network call should be made", 0, repository.calls)
+        }
 
     @Test
-    fun `blank name falls back to a friendly default`() = runTest {
-        val repository = FakeRepository()
-        SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "   ")
-        assertEquals("My Planet", repository.lastName)
-    }
+    fun `sends a drawing with strokes`() =
+        runTest {
+            val repository = FakeRepository()
+            val result = SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "Sparkle")
+
+            assertTrue(result is SendPlanetResult.Success)
+            assertEquals(1, repository.calls)
+            assertEquals("Sparkle", repository.lastName)
+        }
 
     @Test
-    fun `name is trimmed`() = runTest {
-        val repository = FakeRepository()
-        SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "  Sparkle World  ")
-        assertEquals("Sparkle World", repository.lastName)
-    }
+    fun `blank name falls back to a friendly default`() =
+        runTest {
+            val repository = FakeRepository()
+            SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "   ")
+            assertEquals("My Planet", repository.lastName)
+        }
 
     @Test
-    fun `punctuation in the name is preserved for the projector`() = runTest {
-        val repository = FakeRepository()
-        SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "Alice's World!")
-        assertEquals("Alice's World!", repository.lastName)
-    }
+    fun `name is trimmed`() =
+        runTest {
+            val repository = FakeRepository()
+            SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "  Sparkle World  ")
+            assertEquals("Sparkle World", repository.lastName)
+        }
 
     @Test
-    fun `repository failure is reported as a failure result`() = runTest {
-        val repository = FakeRepository(Result.failure(RuntimeException("boom")))
-        val result = SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "X")
-        assertTrue(result is SendPlanetResult.Failed)
-    }
+    fun `punctuation in the name is preserved for the projector`() =
+        runTest {
+            val repository = FakeRepository()
+            SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "Alice's World!")
+            assertEquals("Alice's World!", repository.lastName)
+        }
+
+    @Test
+    fun `repository failure is reported as a failure result`() =
+        runTest {
+            val repository = FakeRepository(Result.failure(RuntimeException("boom")))
+            val result = SendPlanetUseCase(repository).invoke(drawingWithOneStroke(), "X")
+            assertTrue(result is SendPlanetResult.Failed)
+        }
 }

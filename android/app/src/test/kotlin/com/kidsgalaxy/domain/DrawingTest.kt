@@ -14,7 +14,6 @@ import org.junit.Test
  * Pure Kotlin - no Compose, no Android, so it is trivially testable.
  */
 class DrawingTest {
-
     private val red = 0xFFE53935.toInt()
 
     private fun stroke(vararg coords: Pair<Float, Float>) =
@@ -59,7 +58,15 @@ class DrawingTest {
                 .undo()
 
         assertEquals(1, drawing.strokes.size)
-        assertEquals(0f, drawing.strokes.first().points.first().x, 0.001f)
+        assertEquals(
+            0f,
+            drawing.strokes
+                .first()
+                .points
+                .first()
+                .x,
+            0.001f,
+        )
     }
 
     @Test

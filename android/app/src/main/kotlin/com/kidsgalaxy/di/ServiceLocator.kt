@@ -18,15 +18,13 @@ import com.kidsgalaxy.presentation.DrawingViewModel
  * the graph is three objects deep and adding Hilt would cost more than it saves.
  */
 object ServiceLocator {
-
     fun planetRepository(context: Context): PlanetRepository =
         RetrofitPlanetRepository(
             api = ApiClient.create(context.applicationContext),
             renderer = AndroidPlanetTextureRenderer(),
         )
 
-    fun sendPlanetUseCase(context: Context): SendPlanetUseCase =
-        SendPlanetUseCase(planetRepository(context))
+    fun sendPlanetUseCase(context: Context): SendPlanetUseCase = SendPlanetUseCase(planetRepository(context))
 
     /**
      * Factory so Compose can obtain the ViewModel through `viewModel(factory = ...)`,

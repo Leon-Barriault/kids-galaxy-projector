@@ -15,7 +15,6 @@ import org.junit.Test
  * and could only be validated by eye on a device.
  */
 class TextureProjectionTest {
-
     private val textureSize = 1024
 
     @Test

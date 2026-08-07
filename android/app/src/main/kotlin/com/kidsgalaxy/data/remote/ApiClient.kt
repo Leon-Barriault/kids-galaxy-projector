@@ -38,8 +38,10 @@ object ApiClient {
     private const val CA_CERT_ASSET = "ca.crt"
 
     /** Thrown when mTLS is required but the certificate assets are absent/unusable. */
-    class CertificateSetupException(message: String, cause: Throwable? = null) :
-        IOException(message, cause)
+    class CertificateSetupException(
+        message: String,
+        cause: Throwable? = null,
+    ) : IOException(message, cause)
 
     fun create(
         context: Context,
@@ -47,7 +49,8 @@ object ApiClient {
         useMutualTls: Boolean = BuildConfig.USE_MTLS,
     ): PlanetApi {
         val builder =
-            OkHttpClient.Builder()
+            OkHttpClient
+                .Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
                 .writeTimeout(20, TimeUnit.SECONDS)
@@ -66,7 +69,8 @@ object ApiClient {
             applyMutualTls(context, builder)
         }
 
-        return Retrofit.Builder()
+        return Retrofit
+            .Builder()
             .baseUrl(baseUrl.trimEnd('/') + "/")
             .client(builder.build())
             .addConverterFactory(GsonConverterFactory.create())
@@ -119,7 +123,8 @@ object ApiClient {
                 }
             }
 
-        return KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+        return KeyManagerFactory
+            .getInstance(KeyManagerFactory.getDefaultAlgorithm())
             .apply { init(keyStore, password) }
             .keyManagers
     }
@@ -149,7 +154,8 @@ object ApiClient {
             }
 
         val factory =
-            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            TrustManagerFactory
+                .getInstance(TrustManagerFactory.getDefaultAlgorithm())
                 .apply { init(trustStore) }
 
         return factory.trustManagers.filterIsInstance<X509TrustManager>().firstOrNull()

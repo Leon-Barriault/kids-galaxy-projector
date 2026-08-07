@@ -24,8 +24,10 @@ class RetrofitPlanetRepository(
     private val renderer: PlanetTextureRenderer,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : PlanetRepository {
-
-    override suspend fun sendPlanet(drawing: Drawing, name: String): Result<Unit> =
+    override suspend fun sendPlanet(
+        drawing: Drawing,
+        name: String,
+    ): Result<Unit> =
         withContext(ioDispatcher) {
             runCatching {
                 val png = renderer.renderPng(drawing)

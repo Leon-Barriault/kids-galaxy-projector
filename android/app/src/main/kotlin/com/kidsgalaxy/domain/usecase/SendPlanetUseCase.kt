@@ -12,7 +12,9 @@ sealed interface SendPlanetResult {
     /** The child pressed launch without drawing anything. */
     data object NothingDrawn : SendPlanetResult
 
-    data class Failed(val cause: Throwable?) : SendPlanetResult
+    data class Failed(
+        val cause: Throwable?,
+    ) : SendPlanetResult
 }
 
 /**
@@ -21,9 +23,13 @@ sealed interface SendPlanetResult {
  * Owns two rules that must not live in the UI: an empty drawing is never sent,
  * and a blank name becomes a friendly default. Both are covered by unit tests.
  */
-class SendPlanetUseCase(private val repository: PlanetRepository) {
-
-    suspend operator fun invoke(drawing: Drawing, name: String): SendPlanetResult {
+class SendPlanetUseCase(
+    private val repository: PlanetRepository,
+) {
+    suspend operator fun invoke(
+        drawing: Drawing,
+        name: String,
+    ): SendPlanetResult {
         if (drawing.isEmpty) return SendPlanetResult.NothingDrawn
 
         val displayName = name.trim().ifBlank { DEFAULT_PLANET_NAME }

@@ -10,7 +10,10 @@ import com.kidsgalaxy.domain.model.Drawing
  * upload rules be tested with a fake.
  */
 interface PlanetRepository {
-    suspend fun sendPlanet(drawing: Drawing, name: String): Result<Unit>
+    suspend fun sendPlanet(
+        drawing: Drawing,
+        name: String,
+    ): Result<Unit>
 }
 
 /**
@@ -20,5 +23,6 @@ interface PlanetRepository {
  * presentation layer can react to the status code without importing anything
  * from `data` - keeping dependencies pointing inwards.
  */
-class UploadRejectedException(val statusCode: Int) :
-    Exception("Upload rejected with HTTP $statusCode")
+class UploadRejectedException(
+    val statusCode: Int,
+) : Exception("Upload rejected with HTTP $statusCode")
