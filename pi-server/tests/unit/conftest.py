@@ -1,5 +1,5 @@
 """
-Unit-test conftest – no FastAPI app, no TestClient, no disk fixtures.
+Unit-test conftest - no FastAPI app, no TestClient, no disk fixtures.
 
 Isolation rules:
 - Do not import main.app or TestClient here.
