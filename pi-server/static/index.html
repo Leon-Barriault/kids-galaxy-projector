@@ -5,49 +5,184 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kids Galaxy Projector</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap');
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
       overflow: hidden;
       background: #000;
-      font-family: system-ui, sans-serif;
+      font-family: 'Nunito', system-ui, sans-serif;
+      cursor: none;
     }
+
     #canvas-container {
       width: 100vw;
       height: 100vh;
     }
+
     #ui {
       position: absolute;
-      top: 20px;
-      left: 20px;
+      top: 28px;
+      left: 32px;
       color: #fff;
-      text-shadow: 0 0 8px #00f, 0 0 12px #0ff;
       pointer-events: none;
       z-index: 10;
+      max-width: min(520px, 70vw);
     }
+
+    #badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.25), rgba(255, 213, 79, 0.2));
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      padding: 8px 18px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(8px);
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+
+    #badge .emoji { font-size: 1.25rem; }
+
     #planet-name {
-      font-size: 2rem;
-      font-weight: 700;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 900;
+      line-height: 1.15;
       opacity: 0;
-      transition: opacity 1s ease;
+      transform: translateY(12px) scale(0.96);
+      transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+      text-shadow:
+        0 0 12px rgba(79, 195, 247, 0.9),
+        0 0 28px rgba(255, 213, 79, 0.5),
+        0 4px 12px rgba(0, 0, 0, 0.6);
     }
+
     #planet-name.visible {
       opacity: 1;
+      transform: translateY(0) scale(1);
     }
+
+    #planet-name.celebrate {
+      animation: name-pop 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes name-pop {
+      0%   { transform: scale(0.6); opacity: 0; }
+      60%  { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
     #status {
-      font-size: 1rem;
+      margin-top: 10px;
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      font-weight: 600;
+      color: #dce9ff;
+      opacity: 0.9;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+    }
+
+    #celebration {
+      position: absolute;
+      left: 50%;
+      top: 18%;
+      transform: translateX(-50%) scale(0.8);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      text-align: center;
+      transition: opacity 0.4s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #celebration.show {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    #celebration .burst {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      filter: drop-shadow(0 0 16px rgba(255, 213, 79, 0.9));
+      animation: spin-slow 6s linear infinite;
+    }
+
+    #celebration .msg {
       margin-top: 8px;
-      opacity: 0.7;
+      font-size: clamp(1.4rem, 3.5vw, 2.2rem);
+      font-weight: 900;
+      color: #fff;
+      text-shadow:
+        0 0 16px rgba(255, 213, 79, 0.95),
+        0 0 32px rgba(79, 195, 247, 0.7),
+        0 4px 12px rgba(0, 0, 0, 0.7);
+    }
+
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    #hint {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      pointer-events: none;
+      font-weight: 700;
+      font-size: clamp(0.9rem, 1.8vw, 1.15rem);
+      color: rgba(255, 255, 255, 0.75);
+      background: rgba(10, 14, 42, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      padding: 10px 22px;
+      backdrop-filter: blur(6px);
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+    }
+
+    #sparkles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 15;
+    }
+
+    .sparkle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      animation: sparkle-fall 1.8s ease-out forwards;
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    @keyframes sparkle-fall {
+      0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
     }
   </style>
 </head>
 <body>
   <div id="ui">
-    <div id="planet-name">Waiting for a planet...</div>
-    <div id="status">Kids Galaxy Projector ready</div>
+    <div id="badge"><span class="emoji">🚀</span> Kids Galaxy Projector</div>
+    <div id="planet-name">Waiting for a planet…</div>
+    <div id="status">Draw on the tablet and launch into space!</div>
   </div>
+
+  <div id="celebration" aria-hidden="true">
+    <div class="burst">🌟</div>
+    <div class="msg">A new world has arrived!</div>
+  </div>
+
+  <div id="hint">✨ Your planet orbits the sun and spins in space</div>
+  <div id="sparkles"></div>
   <div id="canvas-container"></div>
 
-  <!-- Three.js r170+ (CDN) -->
   <script type="importmap">
   {
     "imports": {
@@ -56,7 +191,6 @@
     }
   }
   </script>
-
   <script type="module" src="/static/galaxy.js"></script>
 </body>
 </html>
