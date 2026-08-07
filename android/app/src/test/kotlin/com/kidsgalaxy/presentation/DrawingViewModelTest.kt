@@ -31,7 +31,6 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DrawingViewModelTest {
-
     private val dispatcher = StandardTestDispatcher()
 
     private class FakeRepository(
@@ -40,7 +39,10 @@ class DrawingViewModelTest {
         var calls = 0
         var lastName: String? = null
 
-        override suspend fun sendPlanet(drawing: Drawing, name: String): Result<Unit> {
+        override suspend fun sendPlanet(
+            drawing: Drawing,
+            name: String,
+        ): Result<Unit> {
             calls++
             lastName = name
             return outcome
@@ -97,7 +99,9 @@ class DrawingViewModelTest {
         viewModel.changeStrokeWidth(48f)
         drawOneStroke()
 
-        val stroke = viewModel.uiState.value.drawing.strokes.single()
+        val stroke =
+            viewModel.uiState.value.drawing.strokes
+                .single()
         assertEquals(0xFF2196F3.toInt(), stroke.colorArgb)
         assertEquals(48f, stroke.strokeWidth, 0.001f)
     }
@@ -133,122 +137,142 @@ class DrawingViewModelTest {
     // -------------------- sending --------------------
 
     @Test
-    fun `launching an empty drawing shows an error and sends nothing`() = runTest {
-        viewModel.sendPlanet("My Planet")
-        advanceUntilIdle()
+    fun `launching an empty drawing shows an error and sends nothing`() =
+        runTest {
+            viewModel.sendPlanet("My Planet")
+            advanceUntilIdle()
 
-        assertEquals(0, repository.calls)
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSending)
-    }
-
-    @Test
-    fun `successful launch shows the celebration`() = runTest {
-        drawOneStroke()
-        viewModel.sendPlanet("Sparkle World")
-        advanceUntilIdle()
-
-        assertEquals(1, repository.calls)
-        assertEquals("Sparkle World", repository.lastName)
-        assertTrue(viewModel.uiState.value.showSuccess)
-        assertFalse(viewModel.uiState.value.isSending)
-        assertNull(viewModel.uiState.value.errorMessage)
-    }
+            assertEquals(0, repository.calls)
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertFalse(viewModel.uiState.value.isSending)
+        }
 
     @Test
-    fun `failed launch surfaces an error and clears the sending flag`() = runTest {
-        repository.outcome = Result.failure(RuntimeException("no network"))
-        drawOneStroke()
-        viewModel.sendPlanet("Doomed World")
-        advanceUntilIdle()
+    fun `successful launch shows the celebration`() =
+        runTest {
+            drawOneStroke()
+            viewModel.sendPlanet("Sparkle World")
+            advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSending)
-        assertFalse(viewModel.uiState.value.showSuccess)
-    }
-
-    @Test
-    fun `double tap on launch only sends once`() = runTest {
-        drawOneStroke()
-        viewModel.sendPlanet("Once")
-        viewModel.sendPlanet("Twice") // while the first is still in flight
-        advanceUntilIdle()
-
-        assertEquals(1, repository.calls)
-    }
+            assertEquals(1, repository.calls)
+            assertEquals("Sparkle World", repository.lastName)
+            assertTrue(viewModel.uiState.value.showSuccess)
+            assertFalse(viewModel.uiState.value.isSending)
+            assertNull(viewModel.uiState.value.errorMessage)
+        }
 
     @Test
-    fun `error can be dismissed`() = runTest {
-        viewModel.sendPlanet("") // empty drawing -> error
-        advanceUntilIdle()
-        assertNotNull(viewModel.uiState.value.errorMessage)
+    fun `failed launch surfaces an error and clears the sending flag`() =
+        runTest {
+            repository.outcome = Result.failure(RuntimeException("no network"))
+            drawOneStroke()
+            viewModel.sendPlanet("Doomed World")
+            advanceUntilIdle()
 
-        viewModel.clearError()
-        assertNull(viewModel.uiState.value.errorMessage)
-    }
-
-    @Test
-    fun `success can be dismissed`() = runTest {
-        drawOneStroke()
-        viewModel.sendPlanet("World")
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.showSuccess)
-
-        viewModel.dismissSuccess()
-        assertFalse(viewModel.uiState.value.showSuccess)
-    }
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertFalse(viewModel.uiState.value.isSending)
+            assertFalse(viewModel.uiState.value.showSuccess)
+        }
 
     @Test
-    fun `rate limited response explains the wait in kid-friendly words`() = runTest {
-        repository.outcome = Result.failure(UploadRejectedException(429))
-        drawOneStroke()
-        viewModel.sendPlanet("Too Fast")
-        advanceUntilIdle()
+    fun `double tap on launch only sends once`() =
+        runTest {
+            drawOneStroke()
+            viewModel.sendPlanet("Once")
+            viewModel.sendPlanet("Twice") // while the first is still in flight
+            advanceUntilIdle()
 
-        val message = viewModel.uiState.value.errorMessage
-        assertNotNull(message)
-        assertTrue("should mention slowing down: $message", message!!.contains("Slow down"))
-    }
-
-    @Test
-    fun `server error is reported as a hiccup`() = runTest {
-        repository.outcome = Result.failure(UploadRejectedException(503))
-        drawOneStroke()
-        viewModel.sendPlanet("Broken")
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("hiccup"))
-    }
+            assertEquals(1, repository.calls)
+        }
 
     @Test
-    fun `unknown status code still surfaces the number`() = runTest {
-        repository.outcome = Result.failure(UploadRejectedException(418))
-        drawOneStroke()
-        viewModel.sendPlanet("Teapot")
-        advanceUntilIdle()
+    fun `error can be dismissed`() =
+        runTest {
+            viewModel.sendPlanet("") // empty drawing -> error
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.errorMessage)
 
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("418"))
-    }
-
-    @Test
-    fun `network failure suggests checking the wifi`() = runTest {
-        repository.outcome = Result.failure(java.io.IOException("unreachable"))
-        drawOneStroke()
-        viewModel.sendPlanet("Offline")
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("KidsGalaxy Wi-Fi"))
-    }
+            viewModel.clearError()
+            assertNull(viewModel.uiState.value.errorMessage)
+        }
 
     @Test
-    fun `starting a new planet resets the canvas`() = runTest {
-        drawOneStroke()
-        viewModel.sendPlanet("World")
-        advanceUntilIdle()
+    fun `success can be dismissed`() =
+        runTest {
+            drawOneStroke()
+            viewModel.sendPlanet("World")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showSuccess)
 
-        viewModel.startNewPlanet()
+            viewModel.dismissSuccess()
+            assertFalse(viewModel.uiState.value.showSuccess)
+        }
 
-        assertTrue(viewModel.uiState.value.drawing.isEmpty)
-        assertFalse(viewModel.uiState.value.showSuccess)
-    }
+    @Test
+    fun `rate limited response explains the wait in kid-friendly words`() =
+        runTest {
+            repository.outcome = Result.failure(UploadRejectedException(429))
+            drawOneStroke()
+            viewModel.sendPlanet("Too Fast")
+            advanceUntilIdle()
+
+            val message = viewModel.uiState.value.errorMessage
+            assertNotNull(message)
+            assertTrue("should mention slowing down: $message", message!!.contains("Slow down"))
+        }
+
+    @Test
+    fun `server error is reported as a hiccup`() =
+        runTest {
+            repository.outcome = Result.failure(UploadRejectedException(503))
+            drawOneStroke()
+            viewModel.sendPlanet("Broken")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.errorMessage!!
+                    .contains("hiccup"),
+            )
+        }
+
+    @Test
+    fun `unknown status code still surfaces the number`() =
+        runTest {
+            repository.outcome = Result.failure(UploadRejectedException(418))
+            drawOneStroke()
+            viewModel.sendPlanet("Teapot")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.errorMessage!!
+                    .contains("418"),
+            )
+        }
+
+    @Test
+    fun `network failure suggests checking the wifi`() =
+        runTest {
+            repository.outcome = Result.failure(java.io.IOException("unreachable"))
+            drawOneStroke()
+            viewModel.sendPlanet("Offline")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.errorMessage!!
+                    .contains("KidsGalaxy Wi-Fi"),
+            )
+        }
+
+    @Test
+    fun `starting a new planet resets the canvas`() =
+        runTest {
+            drawOneStroke()
+            viewModel.sendPlanet("World")
+            advanceUntilIdle()
+
+            viewModel.startNewPlanet()
+
+            assertTrue(viewModel.uiState.value.drawing.isEmpty)
+            assertFalse(viewModel.uiState.value.showSuccess)
+        }
 }

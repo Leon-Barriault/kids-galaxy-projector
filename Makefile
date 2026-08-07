@@ -88,12 +88,20 @@ certs:
 
 # Refresh the vendored Three.js build. Pinned so the offline projector and the
 # import map cannot drift apart.
+# Three.js version vendored into pi-server/static/vendor. Bump here only.
+THREE_VERSION ?= 0.185.1
+
+# NOTE: since r16x, three.module.js is NOT self-contained - it imports from
+# three.core.js. Both must be vendored or the projector fails to load offline.
 vendor-three:
-	cd pi-server/static/vendor && npm pack three@0.170.0 \
-		&& tar -xzf three-0.170.0.tgz \
+	cd pi-server/static/vendor && npm pack three@$(THREE_VERSION) \
+		&& tar -xzf three-$(THREE_VERSION).tgz \
 		&& cp package/build/three.module.js three.module.js \
+		&& cp package/build/three.core.js three.core.js \
 		&& mkdir -p jsm/controls \
 		&& cp package/examples/jsm/controls/OrbitControls.js jsm/controls/OrbitControls.js \
 		&& cp package/LICENSE THREE_LICENSE.txt \
-		&& rm -rf package three-0.170.0.tgz
-	@echo "Vendored Three.js refreshed."
+		&& rm -rf package three-$(THREE_VERSION).tgz
+	@echo "Vendored Three.js $(THREE_VERSION) refreshed."
+	@test -f pi-server/static/vendor/three.core.js \
+		|| { echo "ERROR: three.core.js missing - the projector will not load."; exit 1; }

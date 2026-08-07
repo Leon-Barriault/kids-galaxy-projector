@@ -20,7 +20,6 @@ import java.io.ByteArrayOutputStream
 class AndroidPlanetTextureRenderer(
     private val textureSize: Int = DEFAULT_TEXTURE_SIZE,
 ) : PlanetTextureRenderer {
-
     override fun renderPng(drawing: Drawing): ByteArray {
         val bitmap = Bitmap.createBitmap(textureSize, textureSize, Bitmap.Config.ARGB_8888)
         try {
@@ -31,7 +30,10 @@ class AndroidPlanetTextureRenderer(
         }
     }
 
-    private fun drawInto(bitmap: Bitmap, drawing: Drawing) {
+    private fun drawInto(
+        bitmap: Bitmap,
+        drawing: Drawing,
+    ) {
         val canvas = Canvas(bitmap)
         // White background so the drawing stands out on the sphere.
         canvas.drawColor(Color.WHITE)

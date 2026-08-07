@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 class DrawingViewModel(
     private val sendPlanet: SendPlanetUseCase,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(DrawingUiState())
     val uiState: StateFlow<DrawingUiState> = _uiState.asStateFlow()
 
@@ -42,7 +41,10 @@ class DrawingViewModel(
     }
 
     /** Records the real drawing-surface size so the texture is undistorted. */
-    fun onCanvasSizeChanged(width: Float, height: Float) {
+    fun onCanvasSizeChanged(
+        width: Float,
+        height: Float,
+    ) {
         val size = CanvasSize(width, height)
         if (!size.isMeasured) return
         _uiState.update { it.copy(drawing = it.drawing.withCanvasSize(size)) }
