@@ -1,8 +1,25 @@
 package com.kidsgalaxy.ui
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -11,9 +28,7 @@ import com.kidsgalaxy.viewmodel.DrawingViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlanetDrawerScreen(
-    viewModel: DrawingViewModel = viewModel()
-) {
+fun PlanetDrawerScreen(viewModel: DrawingViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var planetName by remember { mutableStateOf("") }
@@ -21,17 +36,19 @@ fun PlanetDrawerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Draw Your Planet 🌍") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                title = { Text("Draw Your Planet \ud83c\udf0d") },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
+            modifier =
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize(),
         ) {
             OutlinedTextField(
                 value = planetName,
@@ -39,9 +56,10 @@ fun PlanetDrawerScreen(
                 label = { Text("Name your planet") },
                 placeholder = { Text("e.g. Sparkle World") },
                 singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
             DrawingCanvas(
@@ -51,10 +69,11 @@ fun PlanetDrawerScreen(
                 onStartStroke = viewModel::startStroke,
                 onContinueStroke = viewModel::continueStroke,
                 onEndStroke = viewModel::endStroke,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
             )
 
             DrawingControls(
@@ -67,7 +86,7 @@ fun PlanetDrawerScreen(
                 onClear = viewModel::clear,
                 onLaunch = {
                     viewModel.sendPlanet(context, planetName.ifBlank { "My Awesome Planet" })
-                }
+                },
             )
         }
     }
@@ -82,7 +101,7 @@ fun PlanetDrawerScreen(
                 TextButton(onClick = { /* error is cleared on next send */ }) {
                     Text("OK")
                 }
-            }
+            },
         )
     }
 
@@ -90,7 +109,7 @@ fun PlanetDrawerScreen(
     if (state.showSuccess) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissSuccess() },
-            title = { Text("🚀 Planet Launched!") },
+            title = { Text("\ud83d\ude80 Planet Launched!") },
             text = {
                 Text("Your planet is now flying through the galaxy!\nLook at the projector!")
             },
@@ -98,7 +117,7 @@ fun PlanetDrawerScreen(
                 Button(onClick = { viewModel.dismissSuccess() }) {
                     Text("Awesome!")
                 }
-            }
+            },
         )
     }
 }
