@@ -3,29 +3,28 @@ Kids Galaxy Projector - Secure FastAPI backend
 Receives planet drawings from Android tablets and serves the 3D galaxy visualization.
 """
 
-import os
-import uuid
-import time
 import logging
+import os
+import time
+import uuid
+from io import BytesIO
 from pathlib import Path
-from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
-import aiofiles
 
 # -------------------- Configuration --------------------
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-MAX_FILE_SIZE = 5 * 1024 * 1024          # 5 MB
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/jpg"}
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-MAX_DIMENSION = 2048                     # pixels
-RATE_LIMIT_SECONDS = 3                   # simple per-IP cooldown
+MAX_DIMENSION = 2048  # pixels
+RATE_LIMIT_SECONDS = 3  # simple per-IP cooldown
 
 # -------------------- Logging --------------------
 logging.basicConfig(level=logging.INFO)
@@ -36,14 +35,14 @@ app = FastAPI(
     title="Kids Galaxy Projector",
     description="Secure backend for the kid planet drawing project",
     version="1.0.0",
-    docs_url=None,          # disable docs in production-like setup
+    docs_url=None,  # disable docs in production-like setup
     redoc_url=None,
 )
 
-# Very restrictive CORS – only needed if browser testing from another machine
+# Very restrictive CORS - only needed if browser testing from another machine
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],    # local network only in practice
+    allow_origins=["*"],  # local network only in practice
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -52,7 +51,7 @@ app.add_middleware(
 # Serve static files (Three.js page)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Simple in-memory rate limiting (IP → last upload timestamp)
+# Simple in-memory rate limiting (IP -> last upload timestamp)
 _last_upload: dict[str, float] = {}
 
 
@@ -69,7 +68,7 @@ def is_rate_limited(ip: str) -> bool:
     return False
 
 
-def sanitize_filename(name: Optional[str]) -> str:
+def sanitize_filename(name: str | None) -> str:
     if not name:
         return "planet.png"
     # Keep only safe characters and collapse any path-like sequences
@@ -81,7 +80,9 @@ def sanitize_filename(name: Optional[str]) -> str:
 async def validate_image(file: UploadFile) -> bytes:
     """Validate size, content-type and basic image integrity."""
     if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Only PNG and JPEG images are allowed.")
+        raise HTTPException(
+            status_code=400, detail="Only PNG and JPEG images are allowed."
+        )
 
     content = await file.read()
     size = len(content)
@@ -89,7 +90,10 @@ async def validate_image(file: UploadFile) -> bytes:
     if size == 0:
         raise HTTPException(status_code=400, detail="Empty file.")
     if size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024} MB).")
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024} MB).",
+        )
 
     # Quick magic-byte check
     if content.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -97,11 +101,12 @@ async def validate_image(file: UploadFile) -> bytes:
     elif content.startswith(b"\xff\xd8\xff"):
         pass  # JPEG
     else:
-        raise HTTPException(status_code=400, detail="File content is not a valid PNG or JPEG.")
+        raise HTTPException(
+            status_code=400, detail="File content is not a valid PNG or JPEG."
+        )
 
     # Verify integrity and dimensions with Pillow (re-open after verify is required)
     try:
-        from io import BytesIO
         # First pass: verify the image is not truncated / corrupted
         with Image.open(BytesIO(content)) as img:
             img.verify()
@@ -111,13 +116,15 @@ async def validate_image(file: UploadFile) -> bytes:
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Image dimensions too large (max {MAX_DIMENSION}px)."
+                    detail=f"Image dimensions too large (max {MAX_DIMENSION}px).",
                 )
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise
-        logger.warning(f"Image validation failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid or corrupted image.")
+        logger.warning("Image validation failed: %s", e)
+        raise HTTPException(
+            status_code=400, detail="Invalid or corrupted image."
+        ) from e
 
     return content
 
@@ -159,7 +166,10 @@ async def upload_planet(
     client_ip = get_client_ip(request)
 
     if is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Please wait a few seconds before sending another planet.")
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait a few seconds before sending another planet.",
+        )
 
     content = await validate_image(file)
 
@@ -171,24 +181,24 @@ async def upload_planet(
 
     # Re-encode with Pillow for safety (strips potential malicious metadata)
     try:
-        from io import BytesIO
         with Image.open(BytesIO(content)) as img:
             # Convert to RGB if necessary and save as clean PNG
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGBA")
-            else:
-                img = img.convert("RGB")
+            cleaned = (
+                img.convert("RGBA") if img.mode in ("RGBA", "P") else img.convert("RGB")
+            )
 
             # Optional: resize if very large while keeping aspect
-            if max(img.size) > 1024:
-                img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            if max(cleaned.size) > 1024:
+                cleaned.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
 
-            img.save(filepath, format="PNG", optimize=True)
+            cleaned.save(filepath, format="PNG", optimize=True)
     except Exception as e:
-        logger.error(f"Failed to process image: {e}")
-        raise HTTPException(status_code=500, detail="Could not process the image.")
+        logger.error("Failed to process image: %s", e)
+        raise HTTPException(
+            status_code=500, detail="Could not process the image."
+        ) from e
 
-    logger.info(f"Planet received from {client_ip}: {filename} ({name})")
+    logger.info("Planet received from %s: %s (%s)", client_ip, filename, name)
 
     return {
         "status": "success",
