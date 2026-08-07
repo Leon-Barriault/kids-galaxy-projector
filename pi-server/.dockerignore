@@ -1,0 +1,21 @@
+# Prevent test artifacts and unnecessary files from entering the production image
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+tests/
+*.md
+.env
+.venv
+venv/
+*.log
+uploads/*
+!uploads/.gitkeep
+certs/*.key
+certs/*.p12
+certs/*.srl
+.coverage*
