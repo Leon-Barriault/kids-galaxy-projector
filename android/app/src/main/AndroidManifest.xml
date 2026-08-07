@@ -4,24 +4,41 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.KidsGalaxy"
         android:usesCleartextTraffic="true">
-        <!-- Cleartext is required because we talk to the local Pi over HTTP.
-             This is acceptable for a closed local network only. -->
+        <!-- Cleartext is acceptable only on the closed local network.
+             Prefer HTTPS + mTLS in production. -->
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
+            android:lockTaskMode="if_whitelisted"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Device Admin for Lock Task Mode / single-app kiosk -->
+        <receiver
+            android:name=".DeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
