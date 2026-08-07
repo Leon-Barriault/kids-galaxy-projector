@@ -1,0 +1,46 @@
+# Kids Galaxy Projector – local development stack
+# Run the entire server side without any Raspberry Pi or projector hardware.
+#
+# Usage:
+#   docker compose up --build
+#   Server: http://localhost:8000
+#   Health: http://localhost:8000/health
+
+services:
+  pi-server:
+    build:
+      context: ./pi-server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./pi-server/uploads:/app/uploads
+      - ./pi-server/static:/app/static:ro
+      # Mount certs for optional mTLS development
+      - ./pi-server/certs:/app/certs:ro
+    environment:
+      - ENVIRONMENT=development
+      - UPLOAD_DIR=/app/uploads
+      - MAX_FILE_SIZE=5242880
+      # Set to "true" to require client certificates (mTLS)
+      - REQUIRE_CLIENT_CERT=${REQUIRE_CLIENT_CERT:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # Optional: simple static file server that mimics the projector page
+  # Useful for browser-based visual checks without Chromium kiosk
+  projector-mock:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./pi-server/static:/usr/share/nginx/html:ro
+    depends_on:
+      - pi-server
+    profiles:
+      - full
