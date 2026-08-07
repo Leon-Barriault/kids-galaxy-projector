@@ -72,9 +72,10 @@ def is_rate_limited(ip: str) -> bool:
 def sanitize_filename(name: Optional[str]) -> str:
     if not name:
         return "planet.png"
-    # Keep only safe characters
-    safe = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
-    return safe[:80] or "planet.png"
+    # Keep only safe characters and collapse any path-like sequences
+    safe = "".join(c for c in name if c.isalnum() or c in "_- ").strip()
+    safe = safe.replace("..", "")
+    return (safe[:80] or "planet").strip() or "planet"
 
 
 async def validate_image(file: UploadFile) -> bytes:
@@ -98,11 +99,14 @@ async def validate_image(file: UploadFile) -> bytes:
     else:
         raise HTTPException(status_code=400, detail="File content is not a valid PNG or JPEG.")
 
-    # Verify it can be opened by Pillow and is not too large dimension-wise
+    # Verify integrity and dimensions with Pillow (re-open after verify is required)
     try:
         from io import BytesIO
+        # First pass: verify the image is not truncated / corrupted
         with Image.open(BytesIO(content)) as img:
-            img.verify()  # verifies integrity
+            img.verify()
+        # Second pass: read size (verify() leaves the stream in an unusable state)
+        with Image.open(BytesIO(content)) as img:
             width, height = img.size
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
                 raise HTTPException(
