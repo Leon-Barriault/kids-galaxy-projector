@@ -1,0 +1,33 @@
+<!--
+  Default-configuration launcher icon.
+
+  The adaptive icon in mipmap-anydpi-v26 covers API 26+ (this app's minSdk), but
+  keeping an unqualified variant here means @mipmap/ic_launcher always resolves,
+  whatever configuration AAPT evaluates - which is exactly what failed the build
+  when no launcher icon existed at all.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Deep-space background, matching the app theme. -->
+    <path
+        android:fillColor="#0A0E2A"
+        android:pathData="M0,0 H108 V108 H0 Z" />
+
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M54,32 A22,22 0 1,1 53.9,32 Z" />
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-20">
+        <path
+            android:pathData="M28,54 A26,9 0 1,1 80,54 A26,9 0 1,1 28,54 Z"
+            android:strokeColor="#FFD54F"
+            android:strokeWidth="4" />
+    </group>
+</vector>
