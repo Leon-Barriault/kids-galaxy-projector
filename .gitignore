@@ -1,0 +1,32 @@
+# Android
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.ap_
+*.aab
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# Uploads (runtime)
+pi-server/uploads/*
+!pi-server/uploads/.gitkeep
+
+# IDE
+.vscode/
+*.swp
+*.swo
