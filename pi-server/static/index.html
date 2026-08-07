@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kids Galaxy Projector</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap');
-
+    /* No remote font import: the field deployment is an offline Pi hotspot.
+       We use a rounded system font stack so the page renders with zero network. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       overflow: hidden;
       background: #000;
-      font-family: 'Nunito', system-ui, sans-serif;
+      font-family: 'Nunito', 'Baloo 2', 'Comic Sans MS', system-ui,
+        -apple-system, 'Segoe UI', Roboto, sans-serif;
       cursor: none;
     }
 
@@ -183,11 +184,13 @@
   <div id="sparkles"></div>
   <div id="canvas-container"></div>
 
+  <!-- Three.js is vendored locally (static/vendor) so the projector works on a
+       fully offline Pi hotspot. See static/vendor/THREE_LICENSE.txt (MIT). -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+      "three": "/static/vendor/three.module.js",
+      "three/addons/": "/static/vendor/jsm/"
     }
   }
   </script>

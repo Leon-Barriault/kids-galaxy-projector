@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches KidsGalaxyTheme's background so the launch window and the
+         Compose UI are the same colour (no flash on cold start). -->
+    <color name="space_background">#0A0E2A</color>
+</resources>

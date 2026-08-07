@@ -1,33 +1,46 @@
 """
 Integration / end-to-end tests.
 
-These exercise the real FastAPI application through TestClient:
-  upload → current-planet → serve texture → health / static page.
+These drive the real FastAPI application through TestClient:
+  upload -> current-planet -> serve texture -> health / events.
 
-They validate the full request/response cycle, validation, rate limiting,
-and security controls without requiring a running Raspberry Pi or projector.
+They assert behaviour through the HTTP contract only, so the layered refactor
+underneath is verified without coupling the tests to internal structure.
 """
 
-from pathlib import Path
+import asyncio
+import json
 
 import pytest
-from main import MAX_FILE_SIZE, UPLOAD_DIR
+
+from app.config import Settings
+from app.factory import create_app
 
 
 class TestHealth:
     def test_health_ok(self, client):
         r = client.get("/health")
         assert r.status_code == 200
-        data = r.json()
-        assert data["status"] == "ok"
-        assert data["service"] == "kids-galaxy-projector"
+        assert r.json() == {"status": "ok", "service": "kids-galaxy-projector"}
 
 
 class TestGalaxyPage:
-    def test_index_served(self, client):
-        r = client.get("/")
-        # 200 when static/index.html is present (normal), 404 only if missing
-        assert r.status_code in (200, 404)
+    def test_returns_404_when_static_missing(self, client):
+        # The isolated test settings point at an empty static dir.
+        assert client.get("/").status_code == 404
+
+    def test_serves_index_when_present(self, tmp_path):
+        static_dir = tmp_path / "static"
+        static_dir.mkdir()
+        (static_dir / "index.html").write_text("<h1>Galaxy</h1>", encoding="utf-8")
+        from fastapi.testclient import TestClient
+
+        app = create_app(
+            Settings(upload_dir=tmp_path / "uploads", static_dir=static_dir)
+        )
+        r = TestClient(app).get("/")
+        assert r.status_code == 200
+        assert "Galaxy" in r.text
 
 
 class TestUploadValidation:
@@ -47,54 +60,106 @@ class TestUploadValidation:
         )
         assert r.status_code == 400
 
-    def test_reject_oversized(self, client):
-        big = b"\x89PNG\r\n\x1a\n" + b"x" * (MAX_FILE_SIZE + 1000)
+    def test_reject_content_type_mismatch(self, client):
+        """Declared image/png but the bytes are not a PNG."""
+        r = client.post(
+            "/api/upload",
+            files={"file": ("fake.png", b"totally not a png", "image/png")},
+            data={"name": "Fake"},
+        )
+        assert r.status_code == 400
+
+    def test_reject_oversized(self, client, app):
+        big = b"\x89PNG\r\n\x1a\n" + b"x" * (app.state.settings.max_file_size + 1000)
         r = client.post(
             "/api/upload",
             files={"file": ("big.png", big, "image/png")},
             data={"name": "Huge"},
         )
         assert r.status_code == 400
+        assert "too large" in r.json()["detail"].lower()
 
-    def test_rate_limit(self, client, make_png_bytes):
+
+class TestRateLimiting:
+    def test_second_upload_within_cooldown_is_throttled(self, tmp_path, make_png_bytes):
+        from fastapi.testclient import TestClient
+
+        app = create_app(
+            Settings(
+                upload_dir=tmp_path / "uploads",
+                static_dir=tmp_path / "static",
+                rate_limit_seconds=60.0,
+            )
+        )
+        client = TestClient(app)
         png = make_png_bytes()
-        r1 = client.post(
+
+        first = client.post(
             "/api/upload",
             files={"file": ("p1.png", png, "image/png")},
             data={"name": "P1"},
         )
-        assert r1.status_code == 200
+        assert first.status_code == 200
 
-        r2 = client.post(
+        second = client.post(
             "/api/upload",
             files={"file": ("p2.png", png, "image/png")},
             data={"name": "P2"},
         )
-        assert r2.status_code == 429
+        assert second.status_code == 429
+
+    def test_rejected_upload_does_not_start_the_cooldown(self, tmp_path, make_png_bytes):
+        """
+        A child whose drawing was rejected must be able to retry immediately -
+        nothing was stored, so nothing should be throttled.
+        """
+        from fastapi.testclient import TestClient
+
+        app = create_app(
+            Settings(
+                upload_dir=tmp_path / "uploads",
+                static_dir=tmp_path / "static",
+                rate_limit_seconds=60.0,
+            )
+        )
+        client = TestClient(app)
+
+        rejected = client.post(
+            "/api/upload",
+            files={"file": ("bad.png", b"not a real image", "image/png")},
+            data={"name": "Broken"},
+        )
+        assert rejected.status_code == 400
+
+        # Immediately afterwards, a valid drawing must still be accepted.
+        accepted = client.post(
+            "/api/upload",
+            files={"file": ("good.png", make_png_bytes(), "image/png")},
+            data={"name": "Second Try"},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["name"] == "Second Try"
 
 
 class TestServeUploadSecurity:
     def test_path_traversal_blocked(self, client):
         r = client.get("/uploads/../../etc/passwd")
-        assert r.status_code in (404, 400)
+        assert r.status_code in (400, 404)
+
+    def test_encoded_path_traversal_blocked(self, client):
+        r = client.get("/uploads/..%2f..%2fetc%2fpasswd")
+        assert r.status_code in (400, 404)
 
     def test_missing_planet_404(self, client):
-        r = client.get("/uploads/does-not-exist-xyz.png")
-        assert r.status_code == 404
+        assert client.get("/uploads/does-not-exist-xyz.png").status_code == 404
 
 
 class TestEndToEndPlanetFlow:
-    """
-    True end-to-end path:
-      1. Upload a valid planet drawing
-      2. Query /api/current-planet and see it
-      3. Fetch the texture URL and receive a valid image
-    """
+    """upload -> current-planet -> fetch texture."""
 
     def test_png_upload_then_visible_in_galaxy(self, client, make_png_bytes):
-        png = make_png_bytes(color=(30, 144, 255))  # dodger blue
+        png = make_png_bytes(color=(30, 144, 255))
 
-        # 1. Upload
         upload = client.post(
             "/api/upload",
             files={"file": ("kid_planet.png", png, "image/png")},
@@ -104,49 +169,175 @@ class TestEndToEndPlanetFlow:
         body = upload.json()
         assert body["status"] == "success"
         assert body["name"] == "Kid Blue Planet"
-        assert "planet_id" in body
-        texture_url = body["url"]
-        assert texture_url.startswith("/uploads/")
-        assert texture_url.endswith(".png")
+        assert body["planet_id"]
+        assert body["url"].startswith("/uploads/") and body["url"].endswith(".png")
 
-        # 2. current-planet endpoint must now report a planet
-        current = client.get("/api/current-planet")
-        assert current.status_code == 200
-        current_data = current.json()
-        assert current_data["has_planet"] is True
-        assert "url" in current_data
-        # The latest planet should match what we just uploaded
-        assert current_data["url"] == texture_url or texture_url in current_data["url"]
+        current = client.get("/api/current-planet").json()
+        assert current["has_planet"] is True
+        assert current["url"] == body["url"]
+        assert current["name"] == "Kid Blue Planet"
 
-        # 3. Serve the texture – end-to-end delivery of the image
-        texture = client.get(texture_url)
+        texture = client.get(body["url"])
         assert texture.status_code == 200
         assert texture.headers.get("content-type", "").startswith("image/")
-        assert len(texture.content) > 50  # non-trivial image payload
+        assert len(texture.content) > 50
 
-        # Optional cleanup so later runs stay clean
-        filename = Path(texture_url).name
-        saved = UPLOAD_DIR / filename
-        if saved.exists():
-            saved.unlink(missing_ok=True)
-
-    def test_jpeg_upload_roundtrip(self, client, make_jpeg_bytes):
-        jpeg = make_jpeg_bytes()
-
+    def test_jpeg_upload_is_stored_as_png(self, client, make_jpeg_bytes):
         upload = client.post(
             "/api/upload",
-            files={"file": ("planet.jpg", jpeg, "image/jpeg")},
+            files={"file": ("planet.jpg", make_jpeg_bytes(), "image/jpeg")},
             data={"name": "Orange World"},
         )
         assert upload.status_code == 200
-        data = upload.json()
-        assert data["status"] == "success"
-        assert data["name"] == "Orange World"
+        body = upload.json()
+        # Everything is normalised to PNG on the way in.
+        assert body["url"].endswith(".png")
+        assert client.get(body["url"]).status_code == 200
 
-        texture = client.get(data["url"])
-        assert texture.status_code == 200
-        assert texture.headers.get("content-type", "").startswith("image/")
+    def test_no_planet_before_any_upload(self, client):
+        assert client.get("/api/current-planet").json() == {"has_planet": False}
 
-        # Cleanup
-        filename = Path(data["url"]).name
-        (UPLOAD_DIR / filename).unlink(missing_ok=True)
+
+class TestDisplayName:
+    """
+    The projector must show exactly what the child typed - never the internal
+    id, never a name mangled by filesystem sanitization.
+    """
+
+    def test_name_has_no_uuid_prefix(self, client, upload_planet):
+        body = upload_planet("My Planet")
+        current = client.get("/api/current-planet").json()
+        assert current["name"] == "My Planet"
+        assert body["planet_id"] not in current["name"]
+
+    def test_unicode_and_punctuation_survive(self, client, upload_planet):
+        typed = "Alice's World!"
+        body = upload_planet(typed)
+        assert body["name"] == typed
+        assert client.get("/api/current-planet").json()["name"] == typed
+
+    def test_blank_name_falls_back_to_default(self, upload_planet):
+        assert upload_planet("   ")["name"] == "My Planet"
+
+    def test_traversal_attempt_in_name_is_neutralised(self, client, upload_planet):
+        body = upload_planet("../../etc/passwd")
+        assert "/" not in body["url"].removeprefix("/uploads/")
+        assert client.get(body["url"]).status_code == 200
+
+
+class TestRetention:
+    def test_only_the_newest_planets_are_kept(self, tmp_path, make_png_bytes):
+        from fastapi.testclient import TestClient
+
+        settings = Settings(
+            upload_dir=tmp_path / "uploads",
+            static_dir=tmp_path / "static",
+            rate_limit_seconds=0.0,
+            max_stored_planets=3,
+        )
+        client = TestClient(create_app(settings))
+
+        for i in range(6):
+            r = client.post(
+                "/api/upload",
+                files={"file": ("p.png", make_png_bytes(), "image/png")},
+                data={"name": f"Planet {i}"},
+            )
+            assert r.status_code == 200
+
+        images = list(settings.upload_dir.glob("*.png"))
+        sidecars = list(settings.upload_dir.glob("*.json"))
+        assert len(images) == 3
+        assert len(sidecars) == 3  # no orphaned metadata
+
+        # The most recent upload is still the one on screen.
+        assert client.get("/api/current-planet").json()["name"] == "Planet 5"
+
+
+def _parse_sse(chunk: str) -> dict:
+    for line in chunk.splitlines():
+        if line.startswith("data:"):
+            return json.loads(line[len("data:") :].strip())
+    raise AssertionError(f"No data line in SSE frame: {chunk!r}")
+
+
+@pytest.mark.asyncio
+class TestEventStream:
+    """
+    Server-Sent Events. The response generator is driven directly rather than
+    through TestClient: the stream is infinite, which deadlocks a blocking
+    client. The HTTP wiring itself is covered by test_events_endpoint_headers.
+    """
+
+    async def _open(self, app):
+        from unittest.mock import AsyncMock, MagicMock
+
+        request = MagicMock()
+        request.is_disconnected = AsyncMock(return_value=False)
+        # Resolve the registered endpoint through the app's router.
+        route = next(r for r in app.routes if getattr(r, "path", "") == "/api/events")
+        response = await route.endpoint(request)
+        return response.body_iterator
+
+    async def test_stream_primes_new_clients(self, app, client, upload_planet):
+        upload_planet("Streamed World")
+
+        stream = await self._open(app)
+        try:
+            first = await asyncio.wait_for(stream.__anext__(), timeout=5)
+        finally:
+            await stream.aclose()
+
+        payload = _parse_sse(first)
+        assert payload["has_planet"] is True
+        assert payload["name"] == "Streamed World"
+
+    async def test_upload_is_pushed_to_a_connected_client(self, app, publisher):
+        stream = await self._open(app)
+        try:
+            await asyncio.wait_for(stream.__anext__(), timeout=5)  # priming frame
+
+            publisher.publish(
+                {
+                    "has_planet": True,
+                    "url": "/uploads/pushed.png",
+                    "name": "Pushed World",
+                    "timestamp": 1234.0,
+                }
+            )
+            pushed = await asyncio.wait_for(stream.__anext__(), timeout=5)
+        finally:
+            await stream.aclose()
+
+        payload = _parse_sse(pushed)
+        assert payload["name"] == "Pushed World"
+
+    async def test_subscriber_is_released_on_disconnect(self, app, publisher):
+        assert publisher.subscriber_count == 0
+        stream = await self._open(app)
+        await asyncio.wait_for(stream.__anext__(), timeout=5)
+        assert publisher.subscriber_count == 1
+
+        await stream.aclose()
+        assert publisher.subscriber_count == 0
+
+
+@pytest.mark.asyncio
+class TestEventsEndpointHeaders:
+    async def test_sse_response_headers(self, app):
+        """
+        Inspect the response object without consuming its body - streaming an
+        endless response through a blocking test client would deadlock.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        request = MagicMock()
+        request.is_disconnected = AsyncMock(return_value=True)
+        route = next(r for r in app.routes if getattr(r, "path", "") == "/api/events")
+        response = await route.endpoint(request)
+
+        assert response.media_type == "text/event-stream"
+        assert response.headers["cache-control"] == "no-cache"
+        # Disables proxy buffering, which would otherwise delay every event.
+        assert response.headers["x-accel-buffering"] == "no"
+        await response.body_iterator.aclose()

@@ -1,3 +1,28 @@
 <resources>
     <string name="app_name">Kids Galaxy</string>
+
+    <!-- Drawing screen -->
+    <string name="screen_title">Draw Your Planet 🌍</string>
+    <string name="name_your_planet">Name your planet</string>
+    <string name="name_placeholder">e.g. Sparkle World</string>
+    <string name="pick_a_color">Pick a color</string>
+    <string name="brush_size">Brush size</string>
+    <string name="brush_small">Small</string>
+    <string name="brush_medium">Medium</string>
+    <string name="brush_big">Big</string>
+    <string name="undo">Undo</string>
+    <string name="clear">Clear</string>
+    <string name="launch_into_galaxy">Launch into the Galaxy!</string>
+    <string name="sending_to_galaxy">Sending to the Galaxy…</string>
+    <string name="drawing_canvas_description">Drawing area. Drag to draw your planet.</string>
+
+    <!-- Dialogs -->
+    <string name="oops">Oops!</string>
+    <string name="ok">OK</string>
+    <string name="launched_title">🚀 Planet Launched!</string>
+    <string name="launched_body">Your planet is now flying through the galaxy!\nLook at the projector!</string>
+    <string name="awesome">Awesome!</string>
+
+    <!-- Default planet name when the child leaves the field blank -->
+    <string name="default_planet_name">My Awesome Planet</string>
 </resources>

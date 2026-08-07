@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.KidsGalaxy" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Dark base theme matching the Compose KidsGalaxyTheme background (#0A0E2A).
+      Using a light platform theme here caused a white flash on cold start
+      before Compose drew its first frame.
+    -->
+    <style name="Theme.KidsGalaxy" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/space_background</item>
+        <item name="android:colorBackground">@color/space_background</item>
+        <item name="android:statusBarColor">@color/space_background</item>
+        <item name="android:navigationBarColor">@color/space_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

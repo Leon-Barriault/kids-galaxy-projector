@@ -1,37 +1,51 @@
 """
 Integration-only fixtures.
 
-Loads the FastAPI app and provides TestClient + image helpers.
-Unit tests never import this module.
+Builds a real application through the composition root, pointed at an isolated
+temp directory. Because the app is created per test, suites no longer share
+upload state or rate-limit state - which is what previously forced tests to
+clean up after themselves.
 """
 
 import io
-import os
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-# Ensure uploads dir exists before importing the app
-os.environ.setdefault("UPLOAD_DIR", "uploads")
-Path("uploads").mkdir(exist_ok=True)
-
-from main import _last_upload, app  # noqa: E402
+from app.config import Settings
+from app.factory import create_app
 
 
 @pytest.fixture
-def client():
-    """FastAPI TestClient for end-to-end API tests."""
+def settings(tmp_path):
+    """Isolated settings: uploads go to a temp dir, cooldown effectively off."""
+    return Settings(
+        upload_dir=tmp_path / "uploads",
+        static_dir=tmp_path / "static",
+        rate_limit_seconds=0.0,
+        environment="development",
+    )
+
+
+@pytest.fixture
+def app(settings):
+    return create_app(settings)
+
+
+@pytest.fixture
+def client(app):
     return TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def clear_rate_limit():
-    """Reset per-IP rate limit between integration tests."""
-    _last_upload.clear()
-    yield
-    _last_upload.clear()
+@pytest.fixture
+def repository(app):
+    return app.state.repository
+
+
+@pytest.fixture
+def publisher(app):
+    return app.state.publisher
 
 
 @pytest.fixture
@@ -54,3 +68,19 @@ def make_jpeg_bytes():
         return buf.getvalue()
 
     return _factory
+
+
+@pytest.fixture
+def upload_planet(client, make_png_bytes):
+    """Upload a planet and return the parsed response body."""
+
+    def _upload(name: str = "Test Planet", png: bytes | None = None):
+        response = client.post(
+            "/api/upload",
+            files={"file": ("planet.png", png or make_png_bytes(), "image/png")},
+            data={"name": name},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    return _upload

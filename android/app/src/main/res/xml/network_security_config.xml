@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is permitted ONLY for the Pi hotspot address, and only because
+  that network is closed and local. Everything else is HTTPS-only, so a
+  misconfigured URL cannot silently fall back to plaintext over the internet.
+
+  The host is injected from build.gradle.kts (kidsGalaxyServerHost).
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">${serverHost}</domain>
+        <!-- Android emulator loopback alias, for local development. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -2,9 +2,10 @@
 # Follows SDLC Test Phase principles:
 # - Lint every application layer (Python, Docker, shell, Android/Kotlin)
 # - Distinct unit and integration suites
+# - The Android app is compiled and its unit tests run (not merely present)
+# - Architecture boundaries are enforced automatically
 # - A red pipeline blocks merge / release
 # - Coverage is reported and enforced
-# - Docker image must build cleanly (production deps only)
 
 name: CI
 
@@ -59,23 +60,59 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Lint Kotlin (Android sources)
+      - name: Lint Kotlin (all Android sources)
         run: |
           curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
           chmod +x /tmp/ktlint
           cd android
-          # Full tree is ktlint-clean locally; CI path globs formatted packages.
+          # Whole tree, main and test sources - no path allowlist.
           /tmp/ktlint --relative --editorconfig=.editorconfig \
-            "app/src/main/kotlin/com/kidsgalaxy/*.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/data/**/*.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/network/**/*.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/ui/theme/**/*.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/utils/**/*.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/ui/DrawingCanvas.kt" \
-            "app/src/main/kotlin/com/kidsgalaxy/ui/PlanetDrawerScreen.kt"
+            "app/src/**/*.kt"
+
+  architecture:
+    name: Architecture boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kotlin domain must not import Android or Compose
+        run: |
+          if grep -rn "^import \(android\|androidx\)" \
+              android/app/src/main/kotlin/com/kidsgalaxy/domain/; then
+            echo "::error::The Kotlin domain layer must stay framework-free."
+            exit 1
+          fi
+          echo "Kotlin domain is framework-free."
+
+      - name: Kotlin domain must not depend on outer layers
+        run: |
+          if grep -rn "com\.kidsgalaxy\.\(data\|presentation\|ui\|di\)" \
+              android/app/src/main/kotlin/com/kidsgalaxy/domain/; then
+            echo "::error::Dependencies must point inwards, towards the domain."
+            exit 1
+          fi
+          echo "Kotlin dependency direction is correct."
+
+      - name: Python domain must not import the web framework
+        run: |
+          if grep -rn "^\(import\|from\) \(fastapi\|starlette\|PIL\)" \
+              pi-server/app/domain/ pi-server/app/application/; then
+            echo "::error::Python domain/application layers must not depend on FastAPI or Pillow."
+            exit 1
+          fi
+          echo "Python domain and application layers are framework-free."
+
+      - name: Projector must not depend on the public internet
+        run: |
+          # The field deployment is an offline Pi hotspot: no CDNs, no web fonts.
+          if grep -rnE "https?://" pi-server/static/index.html pi-server/static/galaxy.js; then
+            echo "::error::static/ must not reference remote resources (offline deployment)."
+            exit 1
+          fi
+          echo "Projector assets are fully self-hosted."
 
   unit-tests:
-    name: Unit tests
+    name: Unit tests (domain / application / infrastructure)
     runs-on: ubuntu-latest
     needs: lint
     defaults:
@@ -96,7 +133,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Run unit tests
-        run: pytest tests/unit/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-unit.xml
+        run: |
+          pytest tests/unit/ -v \
+            --cov=app --cov=main --cov-report=term-missing \
+            --cov-report=xml:coverage-unit.xml
       - name: Upload unit coverage
         uses: actions/upload-artifact@v4
         if: always()
@@ -127,13 +167,82 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Run integration tests
-        run: pytest tests/integration/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-integration.xml --cov-fail-under=50
+        # Timeout guards against a regression that hangs the SSE stream.
+        timeout-minutes: 5
+        run: |
+          pytest tests/integration/ -v \
+            --cov=app --cov=main --cov-report=term-missing \
+            --cov-report=xml:coverage-integration.xml \
+            --cov-fail-under=50
       - name: Upload integration coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-integration
           path: pi-server/coverage-integration.xml
+          if-no-files-found: ignore
+
+  certificates:
+    name: mTLS certificates are valid
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate and verify the certificate chain
+        working-directory: pi-server/certs
+        run: |
+          chmod +x generate_certs.sh
+          SERVER_IP=10.42.0.1 ./generate_certs.sh
+
+          # The chain must validate...
+          openssl verify -CAfile ca.crt server.crt
+          openssl verify -CAfile ca.crt client.crt
+
+          # ...and the server certificate must carry an IP SAN, because the
+          # tablet connects by address and Android ignores the Common Name.
+          openssl x509 -in server.crt -noout -ext subjectAltName \
+            | grep -q "IP Address:10.42.0.1"
+          echo "Certificate chain and SANs verified."
+
+  android:
+    name: Android build + unit tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Run JVM unit tests (domain + presentation)
+        working-directory: android
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-report
+          path: android/app/build/reports/tests/
           if-no-files-found: ignore
 
   docker-build:
@@ -147,20 +256,20 @@ jobs:
       - name: Smoke-test the image
         run: |
           docker run -d --name kg-test -p 8000:8000 kids-galaxy-pi-server:ci
-          sleep 3
-          curl -sf http://localhost:8000/health | grep -q '"status":"ok"'
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8000/health | grep -q '"status":"ok"'; then
+              echo "Health check passed."
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "::error::Server did not become healthy in time."
+              docker logs kg-test
+              exit 1
+            fi
+            sleep 1
+          done
+          # The projector page and its vendored Three.js must be served locally.
+          curl -sf -o /dev/null http://localhost:8000/static/vendor/three.module.js
+          echo "Vendored Three.js is served from the image."
           docker stop kg-test
           docker rm kg-test
-
-  android-sources:
-    name: Android sources present
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check Android kiosk sources
-        run: |
-          test -f android/app/src/main/kotlin/com/kidsgalaxy/MainActivity.kt
-          test -f android/app/src/main/AndroidManifest.xml
-          test -f android/app/src/main/kotlin/com/kidsgalaxy/DeviceAdminReceiver.kt
-          echo "Android kiosk sources present."

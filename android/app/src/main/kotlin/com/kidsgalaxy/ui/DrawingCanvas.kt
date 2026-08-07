@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -17,59 +18,80 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import com.kidsgalaxy.data.StrokePath
+import androidx.compose.ui.layout.onSizeChanged
+import com.kidsgalaxy.domain.model.Point
+import com.kidsgalaxy.domain.model.StrokePath
+
+/** Bridges the domain's framework-free [Point] and Compose's [Offset]. */
+private fun Offset.toPoint() = Point(x, y)
+
+private fun pathThrough(points: List<Point>): Path =
+    Path().apply {
+        moveTo(points.first().x, points.first().y)
+        for (i in 1 until points.size) {
+            lineTo(points[i].x, points[i].y)
+        }
+    }
 
 @Composable
 fun DrawingCanvas(
     strokes: List<StrokePath>,
-    currentColor: Color,
+    currentColorArgb: Int,
     currentStrokeWidth: Float,
-    onStartStroke: (Offset) -> Unit,
-    onContinueStroke: (Offset) -> Unit,
+    onStartStroke: (Point) -> Unit,
+    onContinueStroke: (Point) -> Unit,
     onEndStroke: () -> Unit,
+    onCanvasSizeChanged: (Float, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var currentPath by remember { mutableStateOf(Path()) }
-    var currentPoints by remember { mutableStateOf(listOf<Offset>()) }
+    // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
+    val livePoints = remember { mutableStateListOf<Point>() }
+    var measured by remember { mutableStateOf(0f to 0f) }
 
     Canvas(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(Color.White)
+                .onSizeChanged { size ->
+                    if (size.width > 0 && size.height > 0) {
+                        val next = size.width.toFloat() to size.height.toFloat()
+                        if (next != measured) {
+                            measured = next
+                            onCanvasSizeChanged(next.first, next.second)
+                        }
+                    }
+                }
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                            currentPoints = listOf(offset)
-                            onStartStroke(offset)
+                            livePoints.clear()
+                            livePoints.add(offset.toPoint())
+                            onStartStroke(offset.toPoint())
                         },
                         onDrag = { change, _ ->
-                            val newPoint = change.position
-                            currentPath.lineTo(newPoint.x, newPoint.y)
-                            currentPoints = currentPoints + newPoint
-                            onContinueStroke(newPoint)
+                            val point = change.position.toPoint()
+                            livePoints.add(point)
+                            onContinueStroke(point)
                             change.consume()
                         },
                         onDragEnd = {
                             onEndStroke()
-                            currentPath = Path()
-                            currentPoints = emptyList()
+                            livePoints.clear()
+                        },
+                        onDragCancel = {
+                            // Commit what was drawn so a cancelled gesture is not lost.
+                            onEndStroke()
+                            livePoints.clear()
                         },
                     )
                 },
     ) {
-        // Draw finished strokes
         strokes.forEach { stroke ->
-            if (stroke.points.size < 2) return@forEach
-            val path =
-                Path().apply {
-                    moveTo(stroke.points.first().x, stroke.points.first().y)
-                    stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
-                }
+            if (!stroke.isRenderable) return@forEach
             drawPath(
-                path = path,
-                color = stroke.color,
+                path = pathThrough(stroke.points),
+                color = Color(stroke.colorArgb),
                 style =
                     Stroke(
                         width = stroke.strokeWidth,
@@ -79,11 +101,10 @@ fun DrawingCanvas(
             )
         }
 
-        // Draw the stroke currently being drawn
-        if (currentPoints.size >= 2) {
+        if (livePoints.size >= 2) {
             drawPath(
-                path = currentPath,
-                color = currentColor,
+                path = pathThrough(livePoints),
+                color = Color(currentColorArgb),
                 style =
                     Stroke(
                         width = currentStrokeWidth,
