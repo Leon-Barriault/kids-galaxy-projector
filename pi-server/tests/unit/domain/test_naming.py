@@ -38,8 +38,15 @@ class TestSanitizeFilename:
         assert sanitize_filename("!@#$%") == "planet"
 
     def test_falls_back_for_empty_and_none(self):
-        assert sanitize_filename("") == "planet.png"
-        assert sanitize_filename(None) == "planet.png"
+        # A name fragment, not a filename: the ".png" extension is appended by
+        # build_stored_filename, so returning "planet.png" here produced
+        # "planet.png.png" on disk.
+        assert sanitize_filename("") == "planet"
+        assert sanitize_filename(None) == "planet"
+
+    def test_fallback_never_embeds_an_extension(self):
+        for value in ("", None, "!@#$%", "   "):
+            assert not sanitize_filename(value).endswith(".png")
 
 
 class TestNormalizeDisplayName:
@@ -62,6 +69,10 @@ class TestNormalizeDisplayName:
 class TestBuildStoredFilename:
     def test_combines_id_and_safe_name(self):
         assert build_stored_filename("abc123", "My Planet") == "abc123_My Planet.png"
+
+    def test_blank_name_produces_a_single_extension(self):
+        """Regression: the old fallback yielded 'abc123_planet.png.png'."""
+        assert build_stored_filename("abc123", "") == "abc123_planet.png"
 
     def test_uses_sanitized_form_of_the_name(self):
         name = build_stored_filename("abc123", "Alice's World!")

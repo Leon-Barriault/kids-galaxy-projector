@@ -46,13 +46,28 @@ class FakeEventPublisher:
 
 
 class AllowAllRateLimiter:
+    """Records calls so we can assert *when* the cooldown is consumed."""
+
+    def __init__(self):
+        self.checked: list[str] = []
+        self.recorded: list[str] = []
+
     def check(self, key):
-        return None
+        self.checked.append(key)
+
+    def record(self, key):
+        self.recorded.append(key)
 
 
 class DenyAllRateLimiter:
+    def __init__(self):
+        self.recorded: list[str] = []
+
     def check(self, key):
         raise RateLimitedError("Please wait a few seconds.")
+
+    def record(self, key):
+        self.recorded.append(key)
 
 
 class FakeImageProcessor:
@@ -136,6 +151,42 @@ class TestSubmitPlanet:
         assert deps["repository"].saved == []
         assert deps["publisher"].published == []
         assert deps["image_processor"].calls == 0
+
+    def test_cooldown_is_consumed_only_after_a_successful_upload(self, deps):
+        build(deps).execute(
+            image_bytes=PNG_BYTES,
+            content_type="image/png",
+            raw_name="Good",
+            client_key="10.0.0.1",
+        )
+        assert deps["rate_limiter"].checked == ["10.0.0.1"]
+        assert deps["rate_limiter"].recorded == ["10.0.0.1"]
+
+    def test_rejected_upload_does_not_consume_the_cooldown(self, deps):
+        """
+        A corrupt or oversized drawing must not make the child wait: nothing was
+        stored, so the cooldown should not start.
+        """
+        with pytest.raises(ImageValidationError):
+            build(deps).execute(
+                image_bytes=b"not an image at all",
+                content_type="image/png",
+                raw_name="Bad",
+                client_key="10.0.0.1",
+            )
+        assert deps["rate_limiter"].checked == ["10.0.0.1"]
+        assert deps["rate_limiter"].recorded == []
+
+    def test_processing_failure_does_not_consume_the_cooldown(self, deps):
+        use_case = build(deps, image_processor=FakeImageProcessor(fail=True))
+        with pytest.raises(ImageValidationError):
+            use_case.execute(
+                image_bytes=PNG_BYTES,
+                content_type="image/png",
+                raw_name="Corrupt",
+                client_key="10.0.0.1",
+            )
+        assert deps["rate_limiter"].recorded == []
 
     def test_bad_content_type_is_rejected(self, deps):
         with pytest.raises(ImageValidationError):

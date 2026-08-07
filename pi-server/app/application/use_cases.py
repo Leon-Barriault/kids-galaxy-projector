@@ -28,8 +28,11 @@ class SubmitPlanetUseCase:
     """
     Accept a drawing from a tablet.
 
-    Order matters: the cooldown is checked before any expensive work, and the
-    projector is notified only after the planet is durably stored.
+    Order matters:
+    * the cooldown is *checked* before any expensive work,
+    * but only *recorded* once the planet is stored - a rejected drawing must not
+      make the child wait,
+    * and the projector is notified only after the planet is durably stored.
     """
 
     def __init__(
@@ -57,6 +60,7 @@ class SubmitPlanetUseCase:
         target_size: int = DEFAULT_TARGET_SIZE,
     ) -> Planet:
         # 1. Cheapest rejection first - no image work for a throttled client.
+        #    This only queries; the cooldown starts at step 5.
         self._rate_limiter.check(client_key)
 
         # 2. Domain rules on the raw upload.
@@ -78,7 +82,11 @@ class SubmitPlanetUseCase:
             image_bytes=clean_png,
         )
 
-        # 5. Bound disk usage, then tell the projector - in that order, so a
+        # 5. The drawing is stored, so the cooldown may now start. Doing this
+        #    after storage means a rejected upload costs the child nothing.
+        self._rate_limiter.record(client_key)
+
+        # 6. Bound disk usage, then tell the projector - in that order, so a
         #    prune failure cannot leave the projector pointing at a deleted file.
         self._repository.prune(keep=self._retention)
         self._publisher.publish(planet.to_payload())

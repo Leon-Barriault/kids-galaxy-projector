@@ -108,6 +108,38 @@ class TestRateLimiting:
         )
         assert second.status_code == 429
 
+    def test_rejected_upload_does_not_start_the_cooldown(self, tmp_path, make_png_bytes):
+        """
+        A child whose drawing was rejected must be able to retry immediately -
+        nothing was stored, so nothing should be throttled.
+        """
+        from fastapi.testclient import TestClient
+
+        app = create_app(
+            Settings(
+                upload_dir=tmp_path / "uploads",
+                static_dir=tmp_path / "static",
+                rate_limit_seconds=60.0,
+            )
+        )
+        client = TestClient(app)
+
+        rejected = client.post(
+            "/api/upload",
+            files={"file": ("bad.png", b"not a real image", "image/png")},
+            data={"name": "Broken"},
+        )
+        assert rejected.status_code == 400
+
+        # Immediately afterwards, a valid drawing must still be accepted.
+        accepted = client.post(
+            "/api/upload",
+            files={"file": ("good.png", make_png_bytes(), "image/png")},
+            data={"name": "Second Try"},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["name"] == "Second Try"
+
 
 class TestServeUploadSecurity:
     def test_path_traversal_blocked(self, client):

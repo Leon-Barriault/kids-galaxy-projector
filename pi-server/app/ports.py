@@ -51,11 +51,20 @@ class EventPublisher(ABC):
 
 
 class RateLimiter(ABC):
-    """Per-client cooldown."""
+    """
+    Per-client cooldown, split into a pure query and an explicit mark.
+
+    Separating them means a rejected upload does not consume the client's
+    cooldown - nothing was stored, so nothing should be throttled.
+    """
 
     @abstractmethod
     def check(self, key: str) -> None:
         """Raise RateLimitedError if `key` is still within its cooldown."""
+
+    @abstractmethod
+    def record(self, key: str) -> None:
+        """Mark a successful upload, starting this client's cooldown."""
 
 
 class ImageProcessor(ABC):

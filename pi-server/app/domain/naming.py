@@ -17,20 +17,23 @@ MAX_FILENAME_NAME_LENGTH = 80
 MAX_DISPLAY_NAME_LENGTH = 120
 DEFAULT_DISPLAY_NAME = "My Planet"
 FILENAME_FALLBACK = "planet"
-EMPTY_NAME_FALLBACK = "planet.png"
 
 _ALLOWED_FILENAME_EXTRAS = "_- "
 
 
 def sanitize_filename(name: str | None) -> str:
     """
-    Reduce a user-supplied name to a filesystem-safe fragment.
+    Reduce a user-supplied name to a filesystem-safe *fragment*.
 
     Only alphanumerics, spaces, underscores and hyphens survive. Because dots
     and slashes are removed, path traversal cannot get through this filter.
+
+    The result is a name fragment, not a complete filename - the extension is
+    appended by `build_stored_filename`. The fallback is therefore "planet"
+    rather than "planet.png", which previously produced "planet.png.png".
     """
     if not name:
-        return EMPTY_NAME_FALLBACK
+        return FILENAME_FALLBACK
 
     safe = "".join(
         c for c in name if c.isalnum() or c in _ALLOWED_FILENAME_EXTRAS
