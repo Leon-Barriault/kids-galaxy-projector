@@ -5,10 +5,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +53,14 @@ val kidColorsArgb: List<Int> =
 
 private val brushSizes = listOf(16f, 28f, 48f)
 
+/**
+ * Minimum touch target. 48dp is the Android accessibility floor and matters
+ * doubly here - the users are small children with imprecise aim.
+ */
+private val TOUCH_TARGET = 48.dp
+private val SELECTED_TOUCH_TARGET = 56.dp
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawingControls(
     selectedColorArgb: Int,
@@ -63,21 +73,26 @@ fun DrawingControls(
     onUndo: () -> Unit,
     onClear: () -> Unit,
     onLaunch: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             stringResource(R.string.pick_a_color),
             style = MaterialTheme.typography.titleMedium,
         )
-        Row(
+
+        // FlowRow so the eight swatches wrap onto a second line on a narrow
+        // tablet instead of being clipped off the edge of the screen.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             kidColorsArgb.forEach { colorArgb ->
@@ -85,7 +100,7 @@ fun DrawingControls(
                 Box(
                     modifier =
                         Modifier
-                            .size(if (selected) 52.dp else 46.dp)
+                            .size(if (selected) SELECTED_TOUCH_TARGET else TOUCH_TARGET)
                             .clip(CircleShape)
                             .background(Color(colorArgb))
                             .then(
@@ -127,7 +142,11 @@ fun DrawingControls(
                                     MaterialTheme.colorScheme.surfaceVariant
                                 },
                         ),
-                    modifier = Modifier.weight(1f),
+                    contentPadding = ButtonDefaults.TextButtonContentPadding,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = TOUCH_TARGET),
                 ) {
                     Text(stringResource(labelFor(width)), fontSize = 16.sp)
                 }
@@ -141,7 +160,11 @@ fun DrawingControls(
             OutlinedButton(
                 onClick = onUndo,
                 enabled = canUndo,
-                modifier = Modifier.weight(1f),
+                contentPadding = ButtonDefaults.TextButtonContentPadding,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = TOUCH_TARGET),
             ) {
                 Icon(Icons.Default.Undo, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
@@ -151,7 +174,11 @@ fun DrawingControls(
             OutlinedButton(
                 onClick = onClear,
                 enabled = canUndo,
-                modifier = Modifier.weight(1f),
+                contentPadding = ButtonDefaults.TextButtonContentPadding,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = TOUCH_TARGET),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
@@ -169,7 +196,7 @@ fun DrawingControls(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(64.dp),
+                    .heightIn(min = 64.dp),
             shape = RoundedCornerShape(16.dp),
             colors =
                 ButtonDefaults.buttonColors(

@@ -5,21 +5,18 @@ Thin by design: read the request, call a use case, translate domain errors into
 status codes. No business rules live here.
 """
 
-import asyncio
-import json
 import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
+from app.api.sse import build_planet_event_response
 from app.application.use_cases import GetCurrentPlanetUseCase, SubmitPlanetUseCase
 from app.domain.errors import DomainError, RateLimitedError, ValidationError
 from app.domain.image_rules import ensure_size_within
 from app.ports import EventPublisher, PlanetRepository
 
 logger = logging.getLogger(__name__)
-
-SSE_KEEPALIVE_SECONDS = 15.0
 
 
 def _status_for(error: DomainError) -> int:
@@ -28,10 +25,6 @@ def _status_for(error: DomainError) -> int:
     if isinstance(error, ValidationError):
         return 400
     return 500
-
-
-def _sse_frame(event: str, payload: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
 def client_key(request: Request) -> str:
@@ -124,34 +117,10 @@ def build_router(
         Server-Sent Events stream: pushes each new planet immediately, so the
         projector celebrates without waiting for a poll tick. The front-end
         falls back to polling if this stream is unavailable.
+
+        The stream itself lives in app/api/sse.py so it can be tested directly.
         """
-
-        async def event_stream():
-            async with publisher.subscribe() as queue:
-                # Prime the client with whatever should be on screen right now.
-                yield _sse_frame("planet", get_current_planet.execute())
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        payload = await asyncio.wait_for(
-                            queue.get(), timeout=SSE_KEEPALIVE_SECONDS
-                        )
-                    except TimeoutError:
-                        # Comment frame keeps proxies and Chromium from closing.
-                        yield ": keep-alive\n\n"
-                        continue
-                    yield _sse_frame("planet", payload)
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        return build_planet_event_response(request, publisher, get_current_planet)
 
     return router
 

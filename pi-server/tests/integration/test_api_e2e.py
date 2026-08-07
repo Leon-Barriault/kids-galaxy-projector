@@ -10,9 +10,12 @@ underneath is verified without coupling the tests to internal structure.
 
 import asyncio
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.api.sse import build_planet_event_response
+from app.application.use_cases import GetCurrentPlanetUseCase
 from app.config import Settings
 from app.factory import create_app
 
@@ -270,13 +273,18 @@ class TestEventStream:
     """
 
     async def _open(self, app):
-        from unittest.mock import AsyncMock, MagicMock
-
+        """
+        Drive the stream directly. Introspecting app.routes proved brittle
+        across Starlette versions, and a blocking client would deadlock on an
+        endless response.
+        """
         request = MagicMock()
         request.is_disconnected = AsyncMock(return_value=False)
-        # Resolve the registered endpoint through the app's router.
-        route = next(r for r in app.routes if getattr(r, "path", "") == "/api/events")
-        response = await route.endpoint(request)
+        response = build_planet_event_response(
+            request,
+            app.state.publisher,
+            GetCurrentPlanetUseCase(app.state.repository),
+        )
         return response.body_iterator
 
     async def test_stream_primes_new_clients(self, app, client, upload_planet):
@@ -329,15 +337,37 @@ class TestEventsEndpointHeaders:
         Inspect the response object without consuming its body - streaming an
         endless response through a blocking test client would deadlock.
         """
-        from unittest.mock import AsyncMock, MagicMock
-
         request = MagicMock()
         request.is_disconnected = AsyncMock(return_value=True)
-        route = next(r for r in app.routes if getattr(r, "path", "") == "/api/events")
-        response = await route.endpoint(request)
+        response = build_planet_event_response(
+            request,
+            app.state.publisher,
+            GetCurrentPlanetUseCase(app.state.repository),
+        )
 
         assert response.media_type == "text/event-stream"
         assert response.headers["cache-control"] == "no-cache"
         # Disables proxy buffering, which would otherwise delay every event.
         assert response.headers["x-accel-buffering"] == "no"
         await response.body_iterator.aclose()
+
+
+class TestRoutesAreRegistered:
+    """
+    The SSE tests above bypass routing to avoid deadlocking on an endless
+    response, so assert separately that every endpoint is actually wired up.
+    Read from the OpenAPI schema rather than app.routes: route objects do not
+    expose `path` consistently across Starlette versions.
+    """
+
+    def test_all_endpoints_are_exposed(self, client):
+        paths = client.get("/openapi.json").json()["paths"]
+        for expected in (
+            "/",
+            "/health",
+            "/api/current-planet",
+            "/api/upload",
+            "/api/events",
+            "/uploads/{filename}",
+        ):
+            assert expected in paths, f"{expected} is not registered"
