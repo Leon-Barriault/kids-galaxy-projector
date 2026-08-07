@@ -7,6 +7,28 @@ A complete, kid-friendly system where children draw a planet on an Android table
 **Network**: Local only  
 **Auth**: Certificate-based (mTLS) – no password, no user, no token at runtime
 
+**Repository**: https://github.com/Leon-Barriault/kids-galaxy-projector
+
+---
+
+## Getting the code (download)
+
+### Option A — Clone with Git (recommended)
+
+```bash
+git clone https://github.com/Leon-Barriault/kids-galaxy-projector.git
+cd kids-galaxy-projector
+```
+
+### Option B — Download ZIP (no Git required)
+
+1. Open the repository: [https://github.com/Leon-Barriault/kids-galaxy-projector](https://github.com/Leon-Barriault/kids-galaxy-projector)
+2. Click the green **Code** button
+3. Choose **Download ZIP**
+4. Unzip the archive on your machine
+
+You will then have the full project tree (`android/`, `pi-server/`, `docker-compose.yml`, scripts, docs, etc.).
+
 ---
 
 ## Highlights (production-oriented, SDLC-aligned)
@@ -16,7 +38,7 @@ A complete, kid-friendly system where children draw a planet on an Android table
 | Local development without hardware | Docker Compose (`docker compose up --build`) |
 | Certificate authentication | Mutual TLS between tablet and server |
 | Android as the only app | Lock Task Mode + Device Owner / COSU support |
-| Code quality | Unit + integration tests (17+), GitHub Actions CI |
+| Code quality | Unit + integration tests (23+), GitHub Actions CI |
 | SDLC alignment | Automated tests gate every change; UNRELEASED.md; clear DoD-style checks; changelog-driven |
 
 See **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk setup, and project Definition of Done.
@@ -27,18 +49,18 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk 
 
 ```
 kids-galaxy-projector/
-├── android/                 # Native Android app (Kotlin + Jetpack Compose, kiosk-ready)
-├── pi-server/               # FastAPI backend + Three.js galaxy
-│   ├── main.py
-│   ├── Dockerfile
-│   ├── tests/               # Unit + integration tests
-│   ├── certs/               # mTLS certificate generation
-│   ├── static/              # Galaxy web page
+┌── android/                 # Native Android app (Kotlin + Jetpack Compose, kiosk-ready)
+┌── pi-server/               # FastAPI backend + Three.js galaxy
+│   ┌── main.py
+│   ┌── Dockerfile
+│   ┌── tests/               # Unit + integration tests
+│   ┌── certs/               # mTLS certificate generation
+│   ┌── static/              # Galaxy web page
 │   └── uploads/
-├── scripts/                 # Hotspot + Chromium kiosk helpers
-├── docker-compose.yml       # Full local stack (hardware-free)
-├── .github/workflows/ci.yml # CI pipeline (tests + Docker build)
-├── UNRELEASED.md            # Changelog staging (keep-a-changelog style)
+┌── scripts/                 # Hotspot + Chromium kiosk helpers
+┌── docker-compose.yml       # Full local stack (hardware-free)
+┌── .github/workflows/ci.yml # CI pipeline (tests + Docker build)
+┌── UNRELEASED.md            # Changelog staging (keep-a-changelog style)
 └── DEVELOPMENT.md           # Local + SDLC guidance
 ```
 
@@ -54,7 +76,10 @@ docker compose up --build
 Run tests:
 
 ```bash
-cd pi-server && pip install -r requirements.txt && pytest tests/ -v --cov=.
+cd pi-server
+pip install -r requirements-dev.txt
+pytest tests/unit/ -v          # unit tests
+pytest tests/integration/ -v   # integration / end-to-end
 ```
 
 ---
@@ -134,9 +159,10 @@ The app is designed to be the only foreground experience on the tablet (HOME cat
 
 ## 6. CI / Quality gates (Test Phase principle)
 
-Every push and pull request runs:
+Every push and pull request runs two distinct jobs:
 
-- Python unit + integration tests with coverage
+- **Unit tests** (mock isolation, pure functions)
+- **Integration tests** (end-to-end: upload → current-planet → serve texture)
 - Docker image build check
 
 A red pipeline blocks merge / release candidate creation.
@@ -146,5 +172,3 @@ A red pipeline blocks merge / release candidate creation.
 ## License
 
 MIT License – free for personal and commercial use. See [LICENSE](LICENSE).
-
-**Repository**: https://github.com/Leon-Barriault/kids-galaxy-projector
