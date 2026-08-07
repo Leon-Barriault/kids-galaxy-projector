@@ -1,5 +1,6 @@
-# Continuous Integration – Kids Galaxy Projector
+# Continuous Integration - Kids Galaxy Projector
 # Follows SDLC Test Phase principles:
+# - Lint every application layer (Python, Docker, shell, Android/Kotlin)
 # - Distinct unit and integration suites
 # - A red pipeline blocks merge / release
 # - Coverage is reported and enforced
@@ -18,9 +19,58 @@ env:
   PYTHONPATH: ${{ github.workspace }}/pi-server
 
 jobs:
+  lint:
+    name: Lint (all layers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python lint tools
+        run: pip install "ruff==0.12.0"
+
+      - name: Lint Python (pi-server)
+        working-directory: pi-server
+        run: ruff check . --config ruff.toml
+
+      - name: Install hadolint
+        run: |
+          curl -sL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
+            -o /usr/local/bin/hadolint
+          chmod +x /usr/local/bin/hadolint
+
+      - name: Lint Dockerfile
+        run: hadolint --config .hadolint.yaml pi-server/Dockerfile
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: Lint shell scripts
+        run: |
+          shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
+            pi-server/certs/generate_certs.sh
+
+      - name: Set up Java (for ktlint)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Lint Kotlin (Android sources)
+        run: |
+          curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
+          chmod +x /tmp/ktlint
+          cd android
+          /tmp/ktlint --relative --editorconfig=.editorconfig "app/src/main/kotlin/**/*.kt"
+
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
+    needs: lint
     defaults:
       run:
         working-directory: pi-server
@@ -57,6 +107,7 @@ jobs:
   integration-tests:
     name: Integration tests (end-to-end)
     runs-on: ubuntu-latest
+    needs: lint
     defaults:
       run:
         working-directory: pi-server
@@ -93,6 +144,7 @@ jobs:
   docker-build:
     name: Docker image builds
     runs-on: ubuntu-latest
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 
@@ -110,6 +162,7 @@ jobs:
   android-sources:
     name: Android sources present
     runs-on: ubuntu-latest
+    needs: lint
     steps:
       - uses: actions/checkout@v4
       - name: Check Android kiosk sources
