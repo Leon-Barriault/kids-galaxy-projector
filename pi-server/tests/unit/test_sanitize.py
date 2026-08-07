@@ -1,5 +1,5 @@
 """
-Unit tests for sanitize_filename – pure function, no mocks required.
+Unit tests for sanitize_filename - pure function, no mocks required.
 """
 
 from main import sanitize_filename
@@ -16,8 +16,8 @@ class TestSanitizeFilename:
         assert "etc" in result or result == "planet"
 
     def test_empty_and_none_fallback(self):
-        assert sanitize_filename("") == "planet.png"
-        assert sanitize_filename(None) == "planet.png"
+        assert sanitize_filename("") == "planet"
+        assert sanitize_filename(None) == "planet"
 
     def test_length_limit(self):
         long_name = "A" * 200
