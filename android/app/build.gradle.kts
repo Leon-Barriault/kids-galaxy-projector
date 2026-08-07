@@ -91,13 +91,13 @@ android {
 dependencies {
     // The BOM pins every androidx.compose.* artifact, so those are declared
     // without versions below.
-    val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
 
-    implementation("androidx.core:core-ktx:1.19.0")
-    implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -105,10 +105,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Networking. Retrofit 3 requires OkHttp 5; keep the two in step.
-    implementation("com.squareup.retrofit2:retrofit:3.0.0")
-    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
+    // Networking. Retrofit 3 / OkHttp 5 are available and should be adopted
+    // together, but only once the Android build is actually being compiled and
+    // verified somewhere - see the toolchain note in the root build file.
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

@@ -1,7 +1,12 @@
-// Toolchain versions. AGP 9.3 requires Gradle >= 9.5 (see gradle-wrapper.properties,
-// pinned to 9.7.0) and the Compose compiler plugin tracks the Kotlin version.
+// Toolchain versions.
+//
+// NOTE: deliberately still on AGP 8.x. AGP 9 enables built-in Kotlin *and* a new
+// DSL, and the org.jetbrains.kotlin.android plugin is incompatible with both -
+// moving to 9.x is a migration (Compose compiler plugin interaction, KGP version
+// alignment), not a version bump, and it needs someone who can run Gradle
+// locally. See UNRELEASED.md.
 plugins {
-    id("com.android.application") version "9.3.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.4.10" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.4.10" apply false
+    id("com.android.application") version "8.9.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.1.10" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.10" apply false
 }
