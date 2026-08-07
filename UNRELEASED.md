@@ -1,11 +1,12 @@
 # Unreleased
 
 ## Added
-- Distinct **unit** and **integration** test suites (tests/unit vs tests/integration)
+- Distinct **unit** and **integration** test suites (`tests/unit` vs `tests/integration`)
 - End-to-end integration flow: upload → /api/current-planet → serve texture
-- CI now has two separate jobs: `unit-tests` and `integration-tests`
-- requirements-dev.txt (test deps separated from production image)
-- .dockerignore, pytest.ini with markers
+- **Mock isolation for unit tests**: rate-limit + client-IP helpers use `unittest.mock` (no real time / no shared state leakage)
+- Separate confests: unit suite does not load FastAPI TestClient; integration-only fixtures hold the app
+- CI has two separate jobs: `unit-tests` and `integration-tests`
+- requirements-dev.txt, .dockerignore, pytest.ini markers
 - Makefile targets: `test-unit`, `test-integration`
 
 ## Changed
