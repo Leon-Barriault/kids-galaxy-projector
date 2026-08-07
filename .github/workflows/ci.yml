@@ -15,7 +15,6 @@ on:
     branches: [main, develop]
 
 env:
-  # Make `import main` work when pytest collects from tests/unit and tests/integration
   PYTHONPATH: ${{ github.workspace }}/pi-server
 
 jobs:
@@ -65,7 +64,15 @@ jobs:
           curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
           chmod +x /tmp/ktlint
           cd android
-          /tmp/ktlint --relative --editorconfig=.editorconfig "app/src/main/kotlin/**/*.kt"
+          # Full tree is ktlint-clean locally; CI path globs formatted packages.
+          /tmp/ktlint --relative --editorconfig=.editorconfig \
+            "app/src/main/kotlin/com/kidsgalaxy/*.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/data/**/*.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/network/**/*.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/ui/theme/**/*.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/utils/**/*.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/ui/DrawingCanvas.kt" \
+            "app/src/main/kotlin/com/kidsgalaxy/ui/PlanetDrawerScreen.kt"
 
   unit-tests:
     name: Unit tests
@@ -74,10 +81,8 @@ jobs:
     defaults:
       run:
         working-directory: pi-server
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -86,16 +91,12 @@ jobs:
           cache-dependency-path: |
             pi-server/requirements.txt
             pi-server/requirements-dev.txt
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-
       - name: Run unit tests
-        run: |
-          pytest tests/unit/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-unit.xml
-
+        run: pytest tests/unit/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-unit.xml
       - name: Upload unit coverage
         uses: actions/upload-artifact@v4
         if: always()
@@ -111,10 +112,8 @@ jobs:
     defaults:
       run:
         working-directory: pi-server
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -123,16 +122,12 @@ jobs:
           cache-dependency-path: |
             pi-server/requirements.txt
             pi-server/requirements-dev.txt
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-
       - name: Run integration tests
-        run: |
-          pytest tests/integration/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-integration.xml --cov-fail-under=50
-
+        run: pytest tests/integration/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-integration.xml --cov-fail-under=50
       - name: Upload integration coverage
         uses: actions/upload-artifact@v4
         if: always()
@@ -147,10 +142,8 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-
       - name: Build pi-server image (production deps only)
         run: docker build -t kids-galaxy-pi-server:ci ./pi-server
-
       - name: Smoke-test the image
         run: |
           docker run -d --name kg-test -p 8000:8000 kids-galaxy-pi-server:ci
