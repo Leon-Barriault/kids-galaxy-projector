@@ -9,13 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
+# Runtime dependencies only (test deps stay out of the image)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Application code (see .dockerignore – tests and artifacts are excluded)
 COPY . .
 
 # Non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/uploads \
+    && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
