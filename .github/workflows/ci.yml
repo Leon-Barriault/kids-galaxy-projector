@@ -1,8 +1,9 @@
 # Continuous Integration – Kids Galaxy Projector
 # Follows SDLC Test Phase principles:
-# - Unit and integration suites run on every push / PR
+# - Distinct unit and integration suites
 # - A red pipeline blocks merge / release
-# - Coverage is reported
+# - Coverage is reported and enforced
+# - Docker image must build cleanly (production deps only)
 
 name: CI
 
@@ -13,8 +14,11 @@ on:
     branches: [main, develop]
 
 jobs:
-  python-tests:
-    name: Python unit + integration
+  # ------------------------------------------------------------------
+  # 1. Unit tests – pure functions, no HTTP, fast feedback
+  # ------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -28,41 +32,97 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pi-server/requirements.txt
+          cache-dependency-path: |
+            pi-server/requirements.txt
+            pi-server/requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      - name: Run tests with coverage
+      - name: Run unit tests
         run: |
-          pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=xml
+          pytest tests/unit/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-unit.xml
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
+      - name: Upload unit coverage
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          files: pi-server/coverage.xml
-          fail_ci_if_error: false
+          name: coverage-unit
+          path: pi-server/coverage-unit.xml
+          if-no-files-found: ignore
 
+  # ------------------------------------------------------------------
+  # 2. Integration / end-to-end tests – full API flow via TestClient
+  # ------------------------------------------------------------------
+  integration-tests:
+    name: Integration tests (end-to-end)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pi-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pi-server/requirements.txt
+            pi-server/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v --cov=main --cov-report=term-missing --cov-report=xml:coverage-integration.xml --cov-fail-under=50
+
+      - name: Upload integration coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-integration
+          path: pi-server/coverage-integration.xml
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  # 3. Docker image build + smoke test
+  # ------------------------------------------------------------------
   docker-build:
     name: Docker image builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build pi-server image
-        run: docker build -t kids-galaxy-pi-server ./pi-server
+      - name: Build pi-server image (production deps only)
+        run: docker build -t kids-galaxy-pi-server:ci ./pi-server
 
-  android-lint:
-    name: Android lint (placeholder)
+      - name: Smoke-test the image
+        run: |
+          docker run -d --name kg-test -p 8000:8000 kids-galaxy-pi-server:ci
+          sleep 3
+          curl -sf http://localhost:8000/health | grep -q '"status":"ok"'
+          docker stop kg-test
+          docker rm kg-test
+
+  # ------------------------------------------------------------------
+  # 4. Android sources present (placeholder until full Gradle CI)
+  # ------------------------------------------------------------------
+  android-sources:
+    name: Android sources present
     runs-on: ubuntu-latest
-    # Full Android build requires more setup (SDK, etc.).
-    # This job documents the intent; expand when Android CI is fully wired.
     steps:
       - uses: actions/checkout@v4
-      - name: Check Android sources present
+      - name: Check Android kiosk sources
         run: |
           test -f android/app/src/main/kotlin/com/kidsgalaxy/MainActivity.kt
-          echo "Android sources present. Full Gradle CI can be added later."
+          test -f android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/kotlin/com/kidsgalaxy/DeviceAdminReceiver.kt
+          echo "Android kiosk sources present."
