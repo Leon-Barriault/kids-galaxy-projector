@@ -1,16 +1,16 @@
 # Unreleased
 
 ## Added
-- Docker Compose stack for hardware-free local development
-- Unit and integration test suite (pytest) for the FastAPI server
-- GitHub Actions CI pipeline (tests + Docker build)
-- Certificate generation script for mTLS (passwordless tablet auth)
-- Device Admin + Lock Task Mode support for Android kiosk / single-app use
-- DEVELOPMENT.md with local testing, cert, and kiosk instructions
+- Distinct **unit** and **integration** test suites (tests/unit vs tests/integration)
+- End-to-end integration flow: upload → /api/current-planet → serve texture
+- CI now has two separate jobs: `unit-tests` and `integration-tests`
+- requirements-dev.txt (test deps separated from production image)
+- .dockerignore, pytest.ini with markers
+- Makefile targets: `test-unit`, `test-integration`
 
 ## Changed
-- README updated for production-oriented workflow and mTLS
-- AndroidManifest: lockTaskMode, HOME category, Device Admin receiver
+- CI workflow: clear separation of unit vs integration, coverage artifacts, Docker smoke test
+- Dockerfile installs runtime deps only
 
 ## Fixed
-- (none yet)
+- Codecov / coverage path handling for working-directory jobs
