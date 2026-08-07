@@ -18,9 +18,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.RocketLaunch
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -166,7 +166,7 @@ fun DrawingControls(
                         .weight(1f)
                         .heightIn(min = TOUCH_TARGET),
             ) {
-                Icon(Icons.Default.Undo, contentDescription = null)
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.undo))
             }
