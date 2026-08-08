@@ -1,5 +1,6 @@
 package com.kidsgalaxy.domain.render
 
+import com.kidsgalaxy.domain.model.PlanetGuide
 import com.kidsgalaxy.domain.model.Point
 import com.kidsgalaxy.domain.model.StrokePath
 import kotlin.math.max
@@ -41,6 +42,22 @@ class TextureProjection(
             x = point.x * scale + offsetX,
             y = point.y * scale + offsetY,
         )
+
+    /**
+     * Projects a canvas-space [PlanetGuide] into texture-pixel coordinates so
+     * the disc clip and the polar sphere mapping share one geometry.
+     */
+    fun mapGuide(guide: PlanetGuide): PlanetGuide {
+        if (!guide.isValid) {
+            return PlanetGuide(centreX = 0f, centreY = 0f, radius = 0f)
+        }
+        val centre = map(Point(guide.centreX, guide.centreY))
+        return PlanetGuide(
+            centreX = centre.x,
+            centreY = centre.y,
+            radius = guide.radius * scale,
+        )
+    }
 
     /** Brush width must scale with the drawing so line weight stays proportional. */
     fun scaleStrokeWidth(width: Float): Float = width * scale

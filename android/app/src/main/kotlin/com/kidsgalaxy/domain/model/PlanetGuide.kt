@@ -33,11 +33,11 @@ data class PlanetGuide(
         const val RADIUS_FRACTION = 0.42f
 
         /**
- * Builds a centred guide for [size].
- *
- * Unmeasured canvases produce a degenerate guide (radius 0) so callers can
- * detect the condition instead of dividing by zero or crashing.
- */
+         * Builds a centred guide for [size].
+         *
+         * Unmeasured canvases produce a degenerate guide (radius 0) so callers can
+         * detect the condition instead of dividing by zero or crashing.
+         */
         fun forCanvas(size: CanvasSize): PlanetGuide {
             if (!size.isMeasured) {
                 return PlanetGuide(centreX = 0f, centreY = 0f, radius = 0f)

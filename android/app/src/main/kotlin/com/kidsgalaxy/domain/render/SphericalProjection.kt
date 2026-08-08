@@ -32,17 +32,17 @@ class SphericalProjection(
     }
 
     /**
- * Maps an output texel (integer pixel coords) to a continuous source-disc point.
- *
- * ```
- * v = (y + 0.5) / H   // colatitude fraction, 0 at north pole
- * u = (x + 0.5) / W   // longitude fraction
- * θ = v · π
- * φ = u · 2π
- * r = v               // radial distance on the disc, 0..1
- * source = centre + r · R · (cos φ, sin φ)
- * ```
- */
+     * Maps an output texel (integer pixel coords) to a continuous source-disc point.
+     *
+     * ```
+     * v = (y + 0.5) / H   // colatitude fraction, 0 at north pole
+     * u = (x + 0.5) / W   // longitude fraction
+     * θ = v · π
+     * φ = u · 2π
+     * r = v               // radial distance on the disc, 0..1
+     * source = centre + r · R · (cos φ, sin φ)
+     * ```
+     */
     fun sourcePoint(x: Int, y: Int): Point {
         val v = (y + 0.5f) / outputHeight
         val u = (x + 0.5f) / outputWidth
