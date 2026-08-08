@@ -21,6 +21,15 @@ DEFAULT_MAX_STORED_PLANETS = 30
 #: more than the sky shows, so raising this needs no re-upload.
 DEFAULT_GALLERY_SIZE = 12
 
+#: How an uploaded drawing is turned into a planet surface.
+#:   "terrain" - the palette becomes water, forest, lava, gas and so on
+#:   "blend"   - the colours are diffused across the sphere, no terrain
+#:   "off"     - the drawing is stored exactly as it arrived
+#: Kept as a choice rather than a flag so a bad night at an event is one
+#: restart away from the simpler look.
+DEFAULT_SURFACE_STYLE = "terrain"
+SURFACE_STYLES = ("terrain", "blend", "off")
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -32,7 +41,7 @@ class Settings:
     rate_limit_seconds: float = DEFAULT_RATE_LIMIT_SECONDS
     max_stored_planets: int = DEFAULT_MAX_STORED_PLANETS
     gallery_size: int = DEFAULT_GALLERY_SIZE
-    surface_blend: bool = True
+    surface_style: str = DEFAULT_SURFACE_STYLE
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
 
@@ -53,11 +62,11 @@ class Settings:
             except ValueError:
                 return default
 
-        def _flag(key: str, *, default: bool) -> bool:
-            raw = source.get(key)
-            if raw is None or not raw.strip():
-                return default
-            return raw.strip().lower() not in {"0", "false", "no", "off"}
+        def _choice(key: str, allowed: tuple[str, ...], default: str) -> str:
+            raw = (source.get(key) or "").strip().lower()
+            # An unrecognised value falls back rather than raising: a typo in a
+            # systemd unit should not stop the projector serving planets.
+            return raw if raw in allowed else default
 
         origins_raw = (source.get("ALLOWED_ORIGINS") or "*").strip()
         origins = (
@@ -77,7 +86,7 @@ class Settings:
             ),
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
             gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
-            surface_blend=_flag("SURFACE_BLEND", default=True),
+            surface_style=_choice("SURFACE_STYLE", SURFACE_STYLES, DEFAULT_SURFACE_STYLE),
             allowed_origins=origins,
             environment=source.get("ENVIRONMENT") or "production",
         )

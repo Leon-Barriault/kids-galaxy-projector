@@ -26,8 +26,18 @@ from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
 from app.infrastructure.surface_styler import PillowSurfaceStyler
+from app.infrastructure.terrain_styler import TerrainSurfaceStyler
 
 logger = logging.getLogger("kids-galaxy")
+
+
+def _styler_for(style: str):
+    """Settings.from_env has already validated the name."""
+    if style == "terrain":
+        return TerrainSurfaceStyler()
+    if style == "blend":
+        return PillowSurfaceStyler()
+    return PillowSurfaceStyler(enabled=False)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -39,10 +49,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     publisher = InMemoryEventPublisher()
     rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
     image_processor = PillowImageProcessor()
-    # The look of a planet is tuned here, in the composition root, rather
-    # than inside the styler - so it can be changed without touching the
-    # code that implements the effect.
-    surface_styler = PillowSurfaceStyler(enabled=settings.surface_blend)
+    # The look of a planet is chosen and tuned here, in the composition
+    # root, rather than inside any styler - so it can change without
+    # touching the code that implements an effect.
+    surface_styler = _styler_for(settings.surface_style)
 
     # ---- use cases (application) ----
     submit_planet = SubmitPlanetUseCase(

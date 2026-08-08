@@ -3,4 +3,8 @@ fastapi==0.141.1
 uvicorn[standard]==0.35.0
 python-multipart==0.0.20
 Pillow==11.3.0
+# Terrain styling classifies every texel against the palette and generates
+# eight procedural surfaces - array work that Pillow alone does slowly and
+# verbosely. Standard aarch64 wheel, so it installs on a Pi without a build.
+numpy==2.4.4
 pydantic==2.11.7

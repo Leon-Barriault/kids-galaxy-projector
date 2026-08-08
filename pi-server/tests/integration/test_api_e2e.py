@@ -678,7 +678,7 @@ class TestSurfaceBlending:
             upload_dir=tmp_path / "uploads",
             static_dir=tmp_path / "static",
             rate_limit_seconds=0.0,
-            surface_blend=False,
+            surface_style="off",
         )
         client = TestClient(create_app(settings))
 

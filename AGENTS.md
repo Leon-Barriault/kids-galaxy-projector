@@ -178,6 +178,52 @@ Also dropped `optimize=True` from both PNG saves: it was ~700ms of zlib
 strategy search per upload for a few percent of size, on the one path where a
 child is watching a spinner. Styling now costs ~170ms total.
 
+## 3.7 Session six: terrain
+
+The eight tablet colours now become eight kinds of surface, chosen by the
+owner: blue water, green forest, orange lava, red volcanic rupture, purple gas
+bands, pink cloud pockets, plus yellow desert and black basalt for the two the
+request did not name.
+
+`TerrainSurfaceStyler` is a second `SurfaceStyler`, not a replacement - the
+composition root picks one from `SURFACE_STYLE` (`terrain` | `blend` | `off`,
+default `terrain`). An unrecognised value falls back rather than raising: a
+typo in a systemd unit should not stop the projector serving planets. Keeping
+`blend` alive means a bad night at an event is one restart from the simpler
+look.
+
+How it works, and what not to break:
+
+- It **composes the blend's diffusion** rather than reimplementing it. That
+  pass is what turns a few strokes into regions of colour; classify a raw
+  scribble and you get white paper with thin ribbons of terrain on it.
+- Classification is nearest-palette in plain RGB. A perceptual space would
+  handle the in-between pixels better, but they sit on a boundary either way
+  and the ink line drawn along it hides the difference.
+- **The ink outline does most of the cartoon work.** Remove it and the whole
+  thing reads as an airbrush again.
+- Lava's hot channels have to be genuinely bright *in the albedo*, because the
+  projector reuses the albedo as its emissive map. There is no second texture
+  carrying the glow. A test pins this.
+- Terrain is generated at **half resolution** and scaled up: 750ms became
+  225ms, and at projector distance nobody can tell.
+
+This needs **numpy** (pinned in requirements.txt). Classifying every texel and
+generating eight procedural surfaces is array work; Pillow alone does it
+slowly and at roughly triple the code. Standard aarch64 wheel, so it installs
+on a Pi without a build.
+
+### Not done: the separate emissive and cloud layers
+
+The demo that got this approved had three textures per planet - albedo, an
+emissive map, and a translucent cloud sphere floating above the surface. What
+shipped bakes all of it into one texture, because the extra maps need
+`Planet`, the payload, the repository and `prune`/`delete`/`clear` to all learn
+about companion files. Worth doing; nothing depends on it.
+
+Before starting, measure on the actual Pi: three textures times twelve planets
+is 36 live on a GPU that also has to composite a star field.
+
 ## 4. What is left
 
 Nothing is broken. In rough order of value:
