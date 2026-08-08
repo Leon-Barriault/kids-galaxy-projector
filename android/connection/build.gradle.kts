@@ -28,5 +28,8 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.squareup.okhttp3:okhttp-bom:5.4.0"))
+    implementation("com.squareup.okhttp3:okhttp")
+
     testImplementation("junit:junit:4.13.2")
 }
