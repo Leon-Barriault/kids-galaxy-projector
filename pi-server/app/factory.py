@@ -6,6 +6,7 @@ application layer depends on. Swapping storage or transport is a change here
 and nowhere else.
 """
 
+import contextlib
 import logging
 
 from fastapi import FastAPI
@@ -21,10 +22,15 @@ from app.application.use_cases import (
     SubmitPlanetUseCase,
 )
 from app.config import Settings
+from app.domain.galaxy import Galaxy
 from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
+from app.infrastructure.service_advertiser import (
+    NullServiceAdvertiser,
+    ZeroconfServiceAdvertiser,
+)
 from app.infrastructure.surface_styler import PillowSurfaceStyler
 from app.infrastructure.terrain_styler import TerrainSurfaceStyler
 
@@ -73,8 +79,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
     clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
 
+    # ---- identity and discovery ----
+    galaxy = Galaxy(name=settings.galaxy_name)
+    advertiser = (
+        ZeroconfServiceAdvertiser(galaxy, settings.port)
+        if settings.advertise
+        else NullServiceAdvertiser()
+    )
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        # Advertising is started here rather than at import time so a test
+        # that builds an app never touches the network, and so the socket
+        # is closed when the server stops rather than lingering as a stale
+        # record that points tablets at a projector that is gone.
+        advertiser.start()
+        try:
+            yield
+        finally:
+            advertiser.stop()
+
     # ---- transport (API) ----
     app = FastAPI(
+        lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
         version="1.1.0",
@@ -108,6 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             clear_planets=clear_planets,
             repository=repository,
             publisher=publisher,
+            settings_galaxy=galaxy,
             settings=settings,
         )
     )
@@ -116,5 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.repository = repository
     app.state.publisher = publisher
     app.state.rate_limiter = rate_limiter
+    app.state.galaxy = galaxy
+    app.state.advertiser = advertiser
 
     return app

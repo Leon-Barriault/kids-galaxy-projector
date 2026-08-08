@@ -1,6 +1,6 @@
 .PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
         arch test test-unit test-integration test-android build-android \
-        docker-up docker-down dev-up certs vendor-three verify check-projector
+        docker-up docker-down pi-up dev-up certs vendor-three verify check-projector
 
 help:
 	@echo "Kids Galaxy Projector - common targets"
@@ -16,6 +16,7 @@ help:
 	@echo "  make check-projector  - drive static/galaxy.js in headless Chromium"
 	@echo "  make dev-up           - full debug environment: server + emulator"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
+	@echo "  make pi-up            - deploy on the Pi, discoverable over mDNS"
 	@echo "  make docker-down"
 	@echo "  make certs            - generate mTLS certificates"
 	@echo "  make vendor-three     - refresh the vendored Three.js build"
@@ -98,6 +99,13 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# The Pi deployment. The override switches to host networking, which is
+# what lets tablets discover this galaxy - mDNS is multicast and Docker's
+# default bridge does not carry it to the LAN. Set GALAXY_NAME to whatever
+# should appear in the tablet's picker.
+pi-up:
+	docker compose -f docker-compose.yml -f docker-compose.pi.yml up -d --build
 
 certs:
 	cd pi-server/certs && chmod +x generate_certs.sh && ./generate_certs.sh

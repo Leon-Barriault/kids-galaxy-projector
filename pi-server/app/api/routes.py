@@ -27,6 +27,7 @@ from app.application.use_cases import (
     SubmitPlanetUseCase,
 )
 from app.domain.errors import DomainError, NotFoundError, RateLimitedError, ValidationError
+from app.domain.galaxy import Galaxy
 from app.domain.image_rules import ensure_size_within
 from app.ports import EventPublisher, PlanetRepository
 
@@ -56,6 +57,7 @@ def build_router(
     clear_planets: ClearPlanetsUseCase,
     repository: PlanetRepository,
     publisher: EventPublisher,
+    settings_galaxy: Galaxy,
     settings,
 ) -> APIRouter:
     router = APIRouter()
@@ -73,6 +75,22 @@ def build_router(
     @router.get("/health")
     async def health():
         return {"status": "ok", "service": "kids-galaxy-projector"}
+
+    @router.get("/api/galaxy")
+    async def galaxy_identity():
+        """
+        Who this projector is.
+
+        Two callers. A tablet that found the service over mDNS confirms it
+        here before connecting; a tablet falling back to scanning the LAN
+        probes this on every address, which is why the payload leads with a
+        service marker - without one a scan cannot tell a galaxy from a
+        router's admin page and the picker fills with noise.
+
+        Deliberately unauthenticated and cheap: it is the one endpoint a
+        device hits before it knows what it is talking to.
+        """
+        return settings_galaxy.to_payload()
 
     @router.get("/api/current-planet")
     async def current_planet():

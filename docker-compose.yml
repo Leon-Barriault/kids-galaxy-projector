@@ -3,6 +3,9 @@
 #
 # Usage:
 #   docker compose up --build
+#
+# On the Pi, add the override so tablets can discover this galaxy:
+#   docker compose -f docker-compose.yml -f docker-compose.pi.yml up -d
 #   Server: http://localhost:8000
 #   Health: http://localhost:8000/health
 
@@ -29,6 +32,14 @@ services:
       - RATE_LIMIT_SECONDS=${RATE_LIMIT_SECONDS:-3}
       # Comma-separated origins, or "*" for the closed local network.
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      # What this projector calls itself when a tablet goes looking. A
+      # school running one per classroom wants "Room 3", not three
+      # identical rows in a picker.
+      - GALAXY_NAME=${GALAXY_NAME:-Kids Galaxy}
+      # mDNS advertising. On this bridged network it will log a warning and
+      # carry on: multicast does not reach the LAN through Docker's default
+      # bridge, so discovery needs docker-compose.pi.yml (see below).
+      - ADVERTISE=${ADVERTISE:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

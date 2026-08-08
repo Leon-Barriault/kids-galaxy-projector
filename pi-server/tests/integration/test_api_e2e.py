@@ -697,3 +697,52 @@ class TestSurfaceBlending:
         greyscale = list(stored.convert("L").getdata())
         white = sum(1 for p in greyscale if p >= 238) / len(greyscale)
         assert white > 0.9, "with blending off a white drawing should stay white"
+
+
+class TestGalaxyIdentity:
+    """
+    How a tablet works out what it is talking to, before it talks to it.
+
+    Two callers: one that found the service over mDNS and is confirming, and
+    one that is scanning the LAN address by address because multicast was
+    blocked. The second is why the payload carries a marker.
+    """
+
+    def test_reports_the_configured_name(self, tmp_path):
+        from fastapi.testclient import TestClient
+
+        settings = Settings(
+            upload_dir=tmp_path / "uploads",
+            static_dir=tmp_path / "static",
+            galaxy_name="Alice's Playroom",
+            advertise=False,
+        )
+        client = TestClient(create_app(settings))
+
+        assert client.get("/api/galaxy").json() == {
+            "service": "kids-galaxy-projector",
+            "name": "Alice's Playroom",
+        }
+
+    def test_an_unnamed_galaxy_still_has_a_name(self, client):
+        """A blank row in a picker is a row a volunteer cannot choose."""
+        body = client.get("/api/galaxy").json()
+        assert body["name"].strip()
+
+    def test_the_marker_is_present_so_a_scan_can_recognise_it(self, client):
+        assert client.get("/api/galaxy").json()["service"] == "kids-galaxy-projector"
+
+    def test_needs_no_authentication(self, client):
+        """
+        It is the one endpoint a device hits before it knows what it is
+        talking to, so it must answer plainly.
+        """
+        assert client.get("/api/galaxy").status_code == 200
+
+    def test_it_is_cheap_enough_to_scan_a_whole_subnet_with(self, client):
+        """
+        The fallback probes up to 254 addresses. If this endpoint touched disk
+        or the planet store, a scan would hammer the Pi it is looking for.
+        """
+        body = client.get("/api/galaxy").content
+        assert len(body) < 200

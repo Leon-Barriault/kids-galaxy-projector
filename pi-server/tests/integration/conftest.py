@@ -25,6 +25,11 @@ def settings(tmp_path):
         static_dir=tmp_path / "static",
         rate_limit_seconds=0.0,
         environment="development",
+        # No mDNS in tests. The app lifespan starts the advertiser, which binds
+        # a multicast socket - that makes the suite depend on the machine's
+        # network, and on a CI runner it is either slow or blocked. The
+        # advertiser has its own unit tests with the library faked.
+        advertise=False,
     )
 
 

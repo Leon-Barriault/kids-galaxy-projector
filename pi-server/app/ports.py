@@ -114,6 +114,24 @@ class SurfaceStyler(ABC):
         """
 
 
+class ServiceAdvertiser(ABC):
+    """
+    Announces this galaxy on the local network so tablets can find it.
+
+    A port rather than a direct zeroconf call because advertising is optional
+    and failure-prone - multicast is often blocked - and the application must
+    be able to run with it switched off entirely.
+    """
+
+    @abstractmethod
+    def start(self) -> None:
+        """Begin advertising. Must never raise: discovery is not the service."""
+
+    @abstractmethod
+    def stop(self) -> None:
+        """Withdraw the advertisement. Must never raise."""
+
+
 class ImageProcessor(ABC):
     """Normalise uploaded images into a safe, fixed-size PNG texture."""
 

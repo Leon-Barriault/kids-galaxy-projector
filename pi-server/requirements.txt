@@ -7,4 +7,8 @@ Pillow==11.3.0
 # eight procedural surfaces - array work that Pillow alone does slowly and
 # verbosely. Standard aarch64 wheel, so it installs on a Pi without a build.
 numpy==2.4.4
+# mDNS, so tablets find the projector without anyone typing an IP. Optional
+# at runtime - the advertiser degrades to a warning if it cannot bind - but
+# pinned here because the deployed Pi is expected to be discoverable.
+zeroconf==0.150.0
 pydantic==2.11.7

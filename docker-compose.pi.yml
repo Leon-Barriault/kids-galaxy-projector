@@ -1,0 +1,29 @@
+# Deployment override for the Raspberry Pi.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.pi.yml up -d --build
+#
+# The single thing this changes is the network mode, and it is the difference
+# between tablets finding the projector by themselves and someone having to
+# read an IP address off a screen.
+#
+# mDNS is multicast. Docker's default bridge does not carry multicast out to
+# the LAN, so with port mapping the server works perfectly and is simply never
+# discovered - the worst kind of failure, because nothing looks broken. Host
+# networking puts the container directly on the Pi's interfaces.
+#
+# Deliberately a separate file rather than the default. Host networking behaves
+# differently under Docker Desktop on macOS and Windows, where developers run
+# `docker compose up` against localhost, and breaking everyone's laptop to make
+# one Pi discoverable would be a poor trade. The base compose file stays
+# portable; this override is for the machine that ships.
+#
+# Consequences worth knowing:
+#   * `ports:` no longer applies - the app binds the host's 8000 directly.
+#   * Anything else on the Pi using 8000 will collide, loudly.
+#   * ALLOWED_ORIGINS matters more, since the service is now on every interface.
+
+services:
+  pi-server:
+    network_mode: host
+    # Meaningless under host networking, and Compose rejects the combination.
+    ports: !reset []

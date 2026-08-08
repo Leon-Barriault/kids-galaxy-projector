@@ -31,6 +31,16 @@ DEFAULT_GALLERY_SIZE = 12
 #: that *replaced* the drawn colours was rejected for looking generated;
 #: the one behind this setting only modulates them. If terrain is ever
 #: made louder again, expect this default to move back to "blend".
+#: What this projector calls itself on the network. A school might run one
+#: per classroom, and a blank row in a tablet's picker is unchoosable.
+DEFAULT_GALAXY_NAME = "Kids Galaxy"
+
+#: mDNS is multicast, and Docker's default bridge does not carry it out to
+#: the LAN. With port mapping the server works and is simply never found,
+#: so the compose file puts the container on host networking. Switch this
+#: off if the deployment cannot.
+DEFAULT_ADVERTISE = True
+
 DEFAULT_SURFACE_STYLE = "terrain"
 SURFACE_STYLES = ("terrain", "blend", "off")
 
@@ -46,6 +56,9 @@ class Settings:
     max_stored_planets: int = DEFAULT_MAX_STORED_PLANETS
     gallery_size: int = DEFAULT_GALLERY_SIZE
     surface_style: str = DEFAULT_SURFACE_STYLE
+    galaxy_name: str = DEFAULT_GALAXY_NAME
+    advertise: bool = DEFAULT_ADVERTISE
+    port: int = 8000
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
 
@@ -65,6 +78,12 @@ class Settings:
                 return int(raw)
             except ValueError:
                 return default
+
+        def _flag(key: str, *, default: bool) -> bool:
+            raw = (source.get(key) or "").strip().lower()
+            if not raw:
+                return default
+            return raw not in {"0", "false", "no", "off"}
 
         def _choice(key: str, allowed: tuple[str, ...], default: str) -> str:
             raw = (source.get(key) or "").strip().lower()
@@ -91,6 +110,10 @@ class Settings:
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
             gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
             surface_style=_choice("SURFACE_STYLE", SURFACE_STYLES, DEFAULT_SURFACE_STYLE),
+            galaxy_name=(source.get("GALAXY_NAME") or DEFAULT_GALAXY_NAME).strip()
+            or DEFAULT_GALAXY_NAME,
+            advertise=_flag("ADVERTISE", default=DEFAULT_ADVERTISE),
+            port=_int("PORT", 8000),
             allowed_origins=origins,
             environment=source.get("ENVIRONMENT") or "production",
         )
