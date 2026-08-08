@@ -13,11 +13,10 @@ import java.util.concurrent.TimeUnit
 object ApiFactory {
     private const val MANAGER_CERT_ASSET = "manager.p12"
 
-    fun create(
+    fun httpClient(
         context: Context,
-        baseUrl: String = BuildConfig.SERVER_BASE_URL,
         useMutualTls: Boolean = BuildConfig.USE_MTLS,
-    ): ManagerApi {
+    ): OkHttpClient {
         val builder =
             OkHttpClient
                 .Builder()
@@ -41,12 +40,19 @@ object ApiFactory {
             )
         }
 
-        return Retrofit
+        return builder.build()
+    }
+
+    fun create(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+        useMutualTls: Boolean = BuildConfig.USE_MTLS,
+    ): ManagerApi =
+        Retrofit
             .Builder()
             .baseUrl(baseUrl.trimEnd('/') + "/")
-            .client(builder.build())
+            .client(httpClient(context, useMutualTls))
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ManagerApi::class.java)
-    }
 }
