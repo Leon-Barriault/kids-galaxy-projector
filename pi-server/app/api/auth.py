@@ -14,6 +14,8 @@ from app.config import Settings
 
 ROLE_HEADER = "x-kids-galaxy-role"
 VERIFIED_HEADER = "x-kids-galaxy-client-verified"
+PROXY_HEADER = "x-kids-galaxy-proxy"
+PROXY_MARKER = "mtls-gateway"
 
 
 class ClientRole(StrEnum):
@@ -40,19 +42,25 @@ class AuthorizationPolicy:
         if host not in self._trusted_proxy_hosts:
             return None
 
-        forwarded = request.headers.get(ROLE_HEADER)
-        if forwarded:
-            # A role forwarded by the mTLS proxy is meaningful only when the
-            # proxy also says certificate verification succeeded.
+        came_through_gateway = request.headers.get(PROXY_HEADER) == PROXY_MARKER
+        if came_through_gateway:
             if request.headers.get(VERIFIED_HEADER) != "SUCCESS":
+                return None
+            forwarded = request.headers.get(ROLE_HEADER)
+            if not forwarded:
                 return None
             try:
                 return ClientRole(forwarded.strip().lower())
             except ValueError:
                 return None
 
-        # The projector Chromium talks directly to FastAPI over loopback and
-        # carries no client certificate. It is read-only by route policy.
+        # A role header outside the explicitly-marked gateway path is always
+        # suspicious, even on loopback. Do not let a local process self-promote.
+        if request.headers.get(ROLE_HEADER) or request.headers.get(VERIFIED_HEADER):
+            return None
+
+        # Projector Chromium talks directly to FastAPI over loopback. It carries
+        # no gateway marker and receives only read/render capabilities.
         return ClientRole.PROJECTOR
 
     def require(
@@ -66,7 +74,10 @@ class AuthorizationPolicy:
 
         role = self.role_for(request)
         if role not in allowed:
-            raise HTTPException(status_code=403, detail="This client is not allowed to do that")
+            raise HTTPException(
+                status_code=403,
+                detail="This client is not allowed to do that",
+            )
         return role
 
     def dependency(self, *allowed: ClientRole):
