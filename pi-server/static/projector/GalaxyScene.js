@@ -1,5 +1,40 @@
 import * as THREE from 'three';
 
+const THEMES = {
+  default: {
+    background: 0x050818,
+    ambient: 0x8090c0,
+    ambientIntensity: 0.85,
+    fill: 0xaabbff,
+    fillIntensity: 0.55,
+    particles: null,
+  },
+  halloween: {
+    background: 0x10051d,
+    ambient: 0x8d6bbd,
+    ambientIntensity: 0.7,
+    fill: 0xff7a2f,
+    fillIntensity: 0.75,
+    particles: [0xff8a2b, 0xa66cff, 0x75ff76],
+  },
+  easter: {
+    background: 0x11172f,
+    ambient: 0xb9b7ff,
+    ambientIntensity: 1.0,
+    fill: 0xffb7d9,
+    fillIntensity: 0.65,
+    particles: [0xffb7d9, 0xffe69a, 0xaeefff, 0xc8f7b2],
+  },
+  christmas: {
+    background: 0x03120f,
+    ambient: 0x8fcbb0,
+    ambientIntensity: 0.8,
+    fill: 0xffd27a,
+    fillIntensity: 0.75,
+    particles: [0xff4f4f, 0x63df84, 0xffd66b, 0xf4f8ff],
+  },
+};
+
 /** Owns Three.js scene construction, ambient bodies, lights, and rendering. */
 export class GalaxyScene {
   constructor(container, animator) {
@@ -7,8 +42,10 @@ export class GalaxyScene {
 
     this.animator = animator;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x050818);
-    this.scene.fog = new THREE.FogExp2(0x050818, 0.001);
+    this.scene.background = new THREE.Color(THEMES.default.background);
+    this.scene.fog = new THREE.FogExp2(THEMES.default.background, 0.001);
+    this.seasonalParticles = null;
+    this.starRotationSpeed = 0.0002;
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -34,10 +71,11 @@ export class GalaxyScene {
   }
 
   addLights() {
-    this.scene.add(new THREE.AmbientLight(0x8090c0, 0.85));
-    const fillLight = new THREE.DirectionalLight(0xaabbff, 0.55);
-    fillLight.position.set(0, 8, 20);
-    this.scene.add(fillLight);
+    this.ambientLight = new THREE.AmbientLight(0x8090c0, 0.85);
+    this.scene.add(this.ambientLight);
+    this.fillLight = new THREE.DirectionalLight(0xaabbff, 0.55);
+    this.fillLight.position.set(0, 8, 20);
+    this.scene.add(this.fillLight);
   }
 
   createStarField(count = 3200) {
@@ -161,6 +199,66 @@ export class GalaxyScene {
     });
   }
 
+  applyBehavior(behavior) {
+    const selected = THEMES[behavior?.theme] || THEMES.default;
+    this.scene.background.setHex(selected.background);
+    this.scene.fog.color.setHex(selected.background);
+    this.ambientLight.color.setHex(selected.ambient);
+    this.ambientLight.intensity = selected.ambientIntensity;
+    this.fillLight.color.setHex(selected.fill);
+    this.fillLight.intensity = selected.fillIntensity;
+    this.starRotationSpeed = behavior?.ambient_effects === false ? 0.0002 : 0.00035;
+
+    this.disposeSeasonalParticles();
+    if (behavior?.ambient_effects !== false && selected.particles) {
+      this.seasonalParticles = this.createSeasonalParticles(selected.particles);
+      this.scene.add(this.seasonalParticles);
+    }
+  }
+
+  createSeasonalParticles(palette, count = 420) {
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const color = new THREE.Color();
+
+    for (let i = 0; i < count; i++) {
+      const r = 18 + Math.random() * 45;
+      const theta = Math.random() * Math.PI * 2;
+      const y = (Math.random() - 0.5) * 30;
+      positions[i * 3] = Math.cos(theta) * r;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = Math.sin(theta) * r;
+
+      color.setHex(palette[i % palette.length]);
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({
+        size: 0.28,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.78,
+        sizeAttenuation: true,
+        depthWrite: false,
+      }),
+    );
+  }
+
+  disposeSeasonalParticles() {
+    if (!this.seasonalParticles) return;
+    this.scene.remove(this.seasonalParticles);
+    this.seasonalParticles.geometry.dispose();
+    this.seasonalParticles.material.dispose();
+    this.seasonalParticles = null;
+  }
+
   add(object) {
     this.scene.add(object);
   }
@@ -178,7 +276,11 @@ export class GalaxyScene {
       companion.mesh.rotation.y += 0.01;
     }
 
-    this.stars.rotation.y += 0.0002;
+    this.stars.rotation.y += this.starRotationSpeed;
+    if (this.seasonalParticles) {
+      this.seasonalParticles.rotation.y -= 0.0008;
+      this.seasonalParticles.rotation.x = Math.sin(t * 0.08) * 0.04;
+    }
   }
 
   render(camera) {
