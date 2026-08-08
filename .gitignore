@@ -41,9 +41,11 @@ venv/
 dist/
 build/
 
-# Uploads (runtime)
+# Runtime data
 pi-server/uploads/*
 !pi-server/uploads/.gitkeep
+pi-server/state/*
+!pi-server/state/.gitkeep
 
 # IDE
 .vscode/
