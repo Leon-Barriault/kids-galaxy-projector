@@ -3,6 +3,7 @@ package com.kidsgalaxy.connection
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /** Result of probing a candidate galaxy's public identity endpoint. */
 data class GalaxyVerification(
@@ -18,8 +19,14 @@ data class GalaxyVerification(
  * `verify` is blocking and must be called away from the Android main thread.
  */
 class GalaxyTargetVerifier(
-    private val client: OkHttpClient,
+    client: OkHttpClient,
 ) {
+    private val probeClient =
+        client
+            .newBuilder()
+            .callTimeout(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .build()
+
     fun verify(target: GalaxyTarget): GalaxyVerification {
         val request =
             Request
@@ -29,7 +36,7 @@ class GalaxyTargetVerifier(
                 .build()
 
         return try {
-            client.newCall(request).execute().use { response ->
+            probeClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     return GalaxyVerification(
                         reachable = false,
@@ -64,6 +71,7 @@ class GalaxyTargetVerifier(
         private const val IDENTITY_PATH = "api/galaxy"
         private const val SERVICE_MARKER = "kids-galaxy-projector"
         private const val MAX_IDENTITY_BYTES = 4096L
+        private const val PROBE_TIMEOUT_SECONDS = 5L
 
         internal fun hasGalaxyMarker(payload: String): Boolean {
             val compact = payload.filterNot(Char::isWhitespace)
