@@ -32,9 +32,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kidsgalaxy.R
+import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.di.ServiceLocator
 import com.kidsgalaxy.presentation.DrawingViewModel
 
@@ -47,10 +49,19 @@ private val MIN_CANVAS_HEIGHT = 220.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanetDrawerScreen(
-    // Obtained through the factory so the ViewModel is properly scoped and
-    // survives configuration changes (including rotation on a tablet).
+    galaxy: GalaxyTarget,
+    onConfigureGalaxy: () -> Unit,
+    // The target is part of the key. Changing galaxies replaces the outer
+    // network graph instead of mutating an in-flight repository under a VM.
     viewModel: DrawingViewModel =
-        viewModel(factory = ServiceLocator.viewModelFactory(LocalContext.current)),
+        viewModel(
+            key = "drawing:${galaxy.baseUrl}",
+            factory =
+                ServiceLocator.viewModelFactory(
+                    LocalContext.current,
+                    galaxy.baseUrl,
+                ),
+        ),
 ) {
     val state by viewModel.uiState.collectAsState()
     // rememberSaveable so the typed name survives rotation and process death.
@@ -61,6 +72,15 @@ fun PlanetDrawerScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.screen_title)) },
+                actions = {
+                    TextButton(onClick = onConfigureGalaxy) {
+                        Text(
+                            text = "🌌 ${galaxy.name}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
