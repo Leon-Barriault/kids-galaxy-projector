@@ -4,6 +4,11 @@
  *
  * Multi-planet: every drawing becomes its own body. Gallery loads on
  * page open; live SSE arrivals celebrate; oldest past GALLERY_SIZE is disposed.
+ *
+ * Wire format (shared by GET /api/planets, GET /api/current-planet, SSE):
+ *   { has_planet, id, url, name, timestamp }
+ * Gallery response: { planets: [ ... ] }
+ * SSE event type: "planet"
  */
 
 import * as THREE from './vendor/three.module.js';
@@ -82,14 +87,29 @@ function disposeOldestIfNeeded() {
   }
 }
 
+/**
+ * Server payload uses `url` and `name` (see Planet.to_payload).
+ * Accept legacy aliases so a mismatched client still works during rollout.
+ */
+function textureUrlOf(payload) {
+  return payload.url || payload.texture_url || null;
+}
+
+function displayNameOf(payload) {
+  return payload.name || payload.display_name || 'New planet!';
+}
+
 function addKidPlanet(payload, celebrate) {
-  if (!payload || !payload.id || !payload.texture_url) return;
+  if (!payload || !payload.id) return;
+  const textureUrl = textureUrlOf(payload);
+  if (!textureUrl) return;
   if (kidPlanets.has(payload.id)) return;
+
   disposeOldestIfNeeded();
   const params = orbitParamsForIndex(nextOrbitIndex++);
   const loader = new THREE.TextureLoader();
   loader.load(
-    payload.texture_url,
+    textureUrl,
     (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       const geom = new THREE.SphereGeometry(0.85, 32, 32);
@@ -109,12 +129,16 @@ function addKidPlanet(payload, celebrate) {
         celebrate: !!celebrate,
       });
       if (celebrate) {
-        showCelebration(payload.display_name || 'New planet!');
+        showCelebration(displayNameOf(payload));
+        setPlanetName(displayNameOf(payload), true);
         animateScaleIn(mesh);
+      } else {
+        // Quiet restore on page load — still surface the newest name.
+        setPlanetName(displayNameOf(payload), false);
       }
     },
     undefined,
-    (err) => console.warn('texture load failed', err),
+    (err) => console.warn('texture load failed', textureUrl, err),
   );
 }
 
@@ -133,13 +157,30 @@ function animateScaleIn(mesh) {
   requestAnimationFrame(tick);
 }
 
+function setPlanetName(name, celebrate) {
+  const el = document.getElementById('planet-name');
+  if (!el) return;
+  el.textContent = name;
+  el.classList.add('visible');
+  if (celebrate) {
+    el.classList.remove('celebrate');
+    // Force reflow so the animation can re-trigger.
+    void el.offsetWidth;
+    el.classList.add('celebrate');
+  }
+}
+
 function showCelebration(name) {
   const el = document.getElementById('celebration');
   if (!el) return;
-  el.textContent = name + ' joined the sky!';
+  const msg = el.querySelector('.msg');
+  if (msg) {
+    msg.textContent = name + ' joined the sky!';
+  } else {
+    el.textContent = name + ' joined the sky!';
+  }
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2800);
-  // sparkles left as optional DOM if present
 }
 
 function kepler(M, e) {
@@ -167,8 +208,10 @@ async function loadInitialGallery() {
   try {
     const res = await fetch('/api/planets?limit=' + GALLERY_SIZE);
     if (!res.ok) return;
-    const list = await res.json();
-    // server returns newest first; load oldest-first so orbit indices feel stable
+    const body = await res.json();
+    // Server returns { planets: [...] }, newest first.
+    const list = Array.isArray(body) ? body : body.planets || [];
+    // Load oldest-first so orbit indices feel stable across reloads.
     for (let i = list.length - 1; i >= 0; i--) {
       addKidPlanet(list[i], false);
     }
@@ -179,12 +222,24 @@ async function loadInitialGallery() {
 
 function connectSSE() {
   const es = new EventSource('/api/events');
-  es.onmessage = (ev) => {
+
+  // Server emits named events: event: planet\ndata: {...}\n\n
+  // EventSource.onmessage only receives events with no type (or type "message").
+  const onPlanet = (ev) => {
     try {
       const data = JSON.parse(ev.data);
-      if (data && data.id) addKidPlanet(data, true);
+      if (!data || !data.id || data.has_planet === false) return;
+      // Celebrate only for true live arrivals (not the connect-time prime
+      // and not a body already restored by the gallery load).
+      const isNew = !kidPlanets.has(data.id);
+      addKidPlanet(data, isNew);
     } catch (_) {}
   };
+
+  es.addEventListener('planet', onPlanet);
+  // Fallback if a proxy strips the event field.
+  es.onmessage = onPlanet;
+
   es.onerror = () => {
     es.close();
     setTimeout(connectSSE, 3000);
