@@ -25,9 +25,12 @@ class SphericalProjectionTest {
 
     @Test
     fun northPoleMapsToDiscCentre() {
+        // Half-pixel centre of the first row sits slightly off the true pole
+        // (v = 0.5 / H). That is intentional for dense sampling; the sample
+        // must still land very near the disc centre.
         val p = projection().sourcePoint(256, 0)
-        assertEquals(guide.centreX, p.x, tolerance)
-        assertEquals(guide.centreY, p.y, tolerance)
+        val r = hypot(p.x - guide.centreX, p.y - guide.centreY)
+        assertTrue("north sample too far from centre: r=$r", r < 1f)
     }
 
     @Test
@@ -52,10 +55,14 @@ class SphericalProjectionTest {
     @Test
     fun longitudeWraps() {
         val proj = projection()
+        // Full-width samples (x=0 and x=W-1) land on nearly the same longitude
+        // because of the 2π wrap; opposite sides are half a turn apart.
         val a = proj.sourcePoint(0, 128)
-        val b = proj.sourcePoint(511, 128)
-        // opposite sides of the disc at mid-latitude
-        assertTrue(abs(a.x - b.x) > 50f || abs(a.y - b.y) > 50f)
+        val b = proj.sourcePoint(256, 128)
+        assertTrue(
+            "opposite longitudes should be far apart on the disc",
+            abs(a.x - b.x) > 50f || abs(a.y - b.y) > 50f,
+        )
     }
 
     @Test
