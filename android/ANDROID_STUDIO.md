@@ -40,6 +40,34 @@ First sync downloads Gradle 9.6.1 and the whole dependency graph; expect a few
 minutes. If the sync fails, check that first, before anything else — nearly every
 problem in this project so far has been a configuration problem, not a code one.
 
+### Run configurations come with the project
+
+Three entries appear in the toolbar dropdown once the sync finishes. They are
+committed under `android/.idea/runConfigurations/`, so there is nothing to set
+up by hand:
+
+| Configuration | What it does |
+|---|---|
+| **App (local debug)** | Installs the debug variant on the selected device or emulator |
+| **Unit tests** | `:app:testDebugUnitTest` — the JVM suites, no device needed |
+| **Pre push check** | `assembleDebug` + the JVM tests, i.e. what CI will do to your commit |
+
+Each file carries a comment explaining what it covers and, where it matters,
+the production equivalent. There is deliberately **no release configuration**:
+a field build needs the certificate material staged and both the server host
+and certificate password passed explicitly, and wiring that behind a one-click
+Run button is how a release quietly ends up pointing at a developer's laptop.
+Section 7 has the real command.
+
+The rest of `.idea/` is gitignored by an allowlist in `android/.idea/.gitignore`
+— `gradle.xml` holds your JDK path and `workspace.xml` your open tabs, and
+neither should follow the repository.
+
+If **App (local debug)** shows *"Module is not specified"*, pick
+`KidsGalaxy.app.main` from the Module dropdown and save. Studio's generated
+module name varies slightly between versions; that is the one line in these
+files that can need a local correction.
+
 ## 3. Run the unit tests first
 
 Do this before touching a device. These are plain JVM tests — no emulator, no

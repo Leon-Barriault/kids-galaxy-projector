@@ -1,0 +1,60 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    Unit tests
+
+    Run this before anything else after opening the project. Plain JVM tests,
+    no emulator and no device, covering the parts most likely to be wrong:
+
+      domain/TextureProjectionTest   canvas to texture mapping
+      domain/DrawingTest             stroke history, undo, clear
+      domain/SendPlanetUseCaseTest   upload rules against a fake repository
+      presentation/DrawingViewModelTest   the whole state machine
+
+    Because this runs through Studio's own Gradle integration it needs no
+    JAVA_HOME, no PATH entry and no local.properties. That is why it is the
+    recommended first step: if it passes, the toolchain is fine and anything
+    that fails afterwards is a real problem rather than a setup one.
+
+    Equivalent from a terminal, which does need both of those things set:
+
+        ./gradlew testDebugUnitTest
+
+    HTML report lands in app/build/reports/tests/testDebugUnitTest/index.html.
+
+    Breakpoints work normally here. Use Debug rather than Run and step through
+    like any JVM test.
+
+    Production note
+    ===============
+    CI runs exactly this task, on JDK 17, gated behind the lint job. There is
+    no separate release test task; the domain and presentation layers are
+    variant independent, so testing debug tests the shipped logic. What debug
+    does not cover is the mTLS path in ApiClient, which has no unit test and is
+    only exercised by an actual release build against a real Pi.
+  -->
+  <configuration default="false" name="Unit tests" type="GradleRunConfiguration" factoryName="Gradle">
+    <ExternalSystemSettings>
+      <option name="env">
+        <map />
+      </option>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value=":app:testDebugUnitTest" />
+        </list>
+      </option>
+      <option name="vmOptions" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <RunAsTest>true</RunAsTest>
+    <method v="2" />
+  </configuration>
+</component>

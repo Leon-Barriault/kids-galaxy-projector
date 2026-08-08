@@ -1,0 +1,66 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    App (local debug)
+
+    The default way to run the app. Pick it in the toolbar dropdown, press Run,
+    and it installs the debug variant on whatever device or emulator is
+    selected. Nothing here needs editing.
+
+    Where it points
+    ===============
+    The debug variant builds its URL from `kidsGalaxyServerHost`. Copy
+    local.properties.example to local.properties once and that is already set
+    to 10.0.2.2, the emulator's alias for this machine's loopback, so the app
+    finds a server started with `docker compose up` at the repo root.
+
+    On a physical tablet, 10.0.2.2 is meaningless. Set your machine's LAN
+    address in local.properties instead:
+
+        kidsGalaxyServerHost=192.168.1.50
+
+    Debug builds talk plain HTTP and attach an OkHttp logging interceptor at
+    BASIC level. Watch Logcat filtered to KidsGalaxyApi or KidsGalaxyRepo.
+
+    Running production instead
+    =========================
+    There is deliberately no run configuration for release. A field build is
+    certificate authenticated and must not pick up a developer's local host or
+    the placeholder certificate password, both of which would happen silently
+    if release were wired into a one click Run button.
+
+    Build it explicitly, from a terminal, stating both values:
+
+        cd pi-server/certs
+        SERVER_IP=10.42.0.1 ./generate_certs.sh
+        cp client.p12 ca.crt ../../android/app/src/main/assets/
+        cd ../../android
+        ./gradlew assembleRelease -PkidsGalaxyServerHost=10.42.0.1 -PkidsGalaxyCertPassword=INSTALL_TIME_PASSWORD
+
+    That produces app/build/outputs/apk/release/app-release.apk, pinned to the
+    project CA and presenting client.p12 on every request. Release builds
+    attach no logging interceptor, by design.
+
+    If Studio says "Module is not specified"
+    =======================================
+    Pick KidsGalaxy.app.main from the Module dropdown and save. The module
+    name Studio generates varies slightly between versions, so this one line
+    is the only part of this file that may need a local correction.
+  -->
+  <configuration default="false" name="App (local debug)" type="AndroidRunConfigurationType" factoryName="Android App">
+    <module name="KidsGalaxy.app.main" />
+    <option name="DEPLOY" value="true" />
+    <option name="DEPLOY_APK_FROM_BUNDLE" value="false" />
+    <option name="DEPLOY_AS_INSTANT" value="false" />
+    <option name="ARTIFACT_NAME" value="" />
+    <option name="PM_INSTALL_OPTIONS" value="" />
+    <option name="ALL_USERS" value="false" />
+    <option name="ALWAYS_INSTALL_WITH_PM" value="false" />
+    <option name="CLEAR_APP_STORAGE" value="false" />
+    <option name="DYNAMIC_FEATURES_DISABLED_LIST" value="" />
+    <option name="ACTIVITY_EXTRA_FLAGS" value="" />
+    <option name="MODE" value="default_activity" />
+    <method v="2">
+      <option name="Android.Gradle.BeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

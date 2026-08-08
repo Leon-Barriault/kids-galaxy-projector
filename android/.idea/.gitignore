@@ -1,0 +1,13 @@
+# Almost everything Android Studio writes into .idea/ is machine specific -
+# gradle.xml records your Gradle JDK path, misc.xml your SDK, workspace.xml
+# your window layout and open tabs. None of that should follow the repository.
+#
+# The exception is runConfigurations/, which is the supported way to share Run
+# and Debug entries with everyone who opens the project. Those are committed
+# on purpose, so this file is an allowlist rather than a list of exclusions:
+# anything Studio invents later is ignored by default instead of turning up
+# as an unexpected diff.
+
+/*
+!/.gitignore
+!/runConfigurations/

@@ -1,0 +1,57 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    Pre push check
+
+    What CI will do to your commit, minus the parts that need the network.
+    Assembles the debug APK and runs the JVM tests in one pass, so a broken
+    build or a failing test shows up here rather than three minutes into a
+    GitHub Actions run.
+
+    Not covered by this configuration
+    =================================
+    Two CI gates run outside Gradle and have to be run by hand. Both commands
+    are written out in full in ANDROID_STUDIO.md, section 9. In short:
+
+    ktlint over app/src, using the project .editorconfig, at version 1.5.0
+    exactly. The sources are formatted with that version and a different one
+    reports spurious diffs. Running it with the format flag fixes everything
+    it reports.
+
+    `make arch`, from the repository root, enforcing that the domain package
+    imports nothing from android, androidx or the outer layers. Break it and
+    the JVM tests above stop being runnable without an emulator, which is the
+    whole reason they are fast.
+
+    Production note
+    ===============
+    This assembles debug only. assembleRelease is deliberately absent: it needs
+    client.p12 and ca.crt present in app/src/main/assets, and both the server
+    host and the certificate password passed explicitly. See the comment in
+    "App (local debug)" for the full release command.
+  -->
+  <configuration default="false" name="Pre push check" type="GradleRunConfiguration" factoryName="Gradle">
+    <ExternalSystemSettings>
+      <option name="env">
+        <map />
+      </option>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value=":app:assembleDebug" />
+          <option value=":app:testDebugUnitTest" />
+        </list>
+      </option>
+      <option name="vmOptions" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <method v="2" />
+  </configuration>
+</component>
