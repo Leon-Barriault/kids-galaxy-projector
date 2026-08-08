@@ -8,6 +8,8 @@ publish -> prune) is verified in isolation and runs in microseconds.
 
 import pytest
 
+from app.application.event_types import ApplicationEvent
+from app.application.events import GalaxyCleared, PlanetCreated, PlanetRemoved
 from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
@@ -65,10 +67,10 @@ class FakePlanetRepository:
 
 class FakeEventPublisher:
     def __init__(self):
-        self.published: list[dict] = []
+        self.published: list[ApplicationEvent] = []
 
-    def publish(self, payload):
-        self.published.append(payload)
+    def publish(self, event: ApplicationEvent):
+        self.published.append(event)
 
 
 class AllowAllRateLimiter:
@@ -156,8 +158,9 @@ class TestSubmitPlanet:
             client_key="10.0.0.1",
         )
         assert len(deps["publisher"].published) == 1
-        assert deps["publisher"].published[0]["name"] == "Pushed World"
-        assert deps["publisher"].published[0]["has_planet"] is True
+        event = deps["publisher"].published[0]
+        assert isinstance(event, PlanetCreated)
+        assert event.planet.display_name == "Pushed World"
 
     def test_prunes_after_storing(self, deps):
         build(deps).execute(
@@ -377,8 +380,7 @@ class TestDeletePlanet:
     """
     A volunteer taking a drawing down mid-event. The use case owns two things
     the HTTP layer cannot: that nothing is announced when nothing was removed,
-    and that the announcement rides the arrivals channel rather than a channel
-    of its own.
+    and that the announcement rides the application event bus.
     """
 
     def test_removes_the_planet_and_returns_it(self):
@@ -392,22 +394,14 @@ class TestDeletePlanet:
         assert removed == doomed
         assert [p.id for p in repo.saved] == ["keep1"]
 
-    def test_announces_the_removal_on_the_arrivals_channel(self):
-        """
-        Same payload channel as a new planet, discriminated by `removed`. A
-        dedicated event type would be dropped by any projector subscribed only
-        to `planet`, and the drawing would stay on the wall after deletion -
-        which is the failure this whole feature exists to prevent.
-        """
+    def test_announces_the_removal_as_a_typed_event(self):
         repo = FakePlanetRepository()
         repo.save("gone1", "Gone", b"x")
         publisher = FakeEventPublisher()
 
         DeletePlanetUseCase(repo, publisher).execute("gone1")
 
-        assert publisher.published == [
-            {"has_planet": False, "id": "gone1", "removed": True}
-        ]
+        assert publisher.published == [PlanetRemoved("gone1")]
 
     def test_an_unknown_id_raises_rather_than_pretending_to_succeed(self):
         repo = FakePlanetRepository()
@@ -513,10 +507,7 @@ class TestClearPlanets:
         assert repo.saved == []
 
     def test_announces_one_event_not_one_per_planet(self):
-        """
-        Thirty separate removals would make the projector flicker through a
-        cascade of disposals; one `cleared` empties it in a frame.
-        """
+        """One GalaxyCleared event empties the projector in a frame."""
         repo = FakePlanetRepository()
         for i in range(10):
             repo.save(f"id{i}", f"Planet {i}", b"x")
@@ -524,12 +515,12 @@ class TestClearPlanets:
 
         ClearPlanetsUseCase(repo, publisher).execute()
 
-        assert publisher.published == [{"has_planet": False, "cleared": True}]
+        assert publisher.published == [GalaxyCleared()]
 
     def test_announces_even_when_the_store_was_already_empty(self):
         """
         A projector that has drifted out of step - a missed removal, a tab left
-        open since yesterday - is put right by this. A "clear" that visibly
+        open since yesterday - is put right by this. A clear event that visibly
         does nothing is worse than one that does.
         """
         publisher = FakeEventPublisher()
@@ -537,7 +528,7 @@ class TestClearPlanets:
         removed = ClearPlanetsUseCase(FakePlanetRepository(), publisher).execute()
 
         assert removed == 0
-        assert publisher.published == [{"has_planet": False, "cleared": True}]
+        assert publisher.published == [GalaxyCleared()]
 
     def test_the_gallery_is_empty_afterwards(self):
         repo = FakePlanetRepository()
