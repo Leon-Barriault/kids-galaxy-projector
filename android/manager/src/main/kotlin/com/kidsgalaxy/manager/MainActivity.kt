@@ -54,7 +54,11 @@ class MainActivity : ComponentActivity() {
             val managerViewModel: ManagerViewModel =
                 viewModel(
                     key = "manager:${selectedGalaxy.baseUrl}",
-                    factory = ManagerViewModel.factory(selectedGalaxy.baseUrl),
+                    factory =
+                        ManagerViewModel.factory(
+                            context = this,
+                            baseUrl = selectedGalaxy.baseUrl,
+                        ),
                 )
             val state by managerViewModel.uiState.collectAsState()
 
