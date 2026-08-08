@@ -9,11 +9,16 @@ publish -> prune) is verified in isolation and runs in microseconds.
 import pytest
 
 from app.application.use_cases import (
+    DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
-from app.domain.errors import ImageValidationError, RateLimitedError
+from app.domain.errors import (
+    ImageValidationError,
+    NotFoundError,
+    RateLimitedError,
+)
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n valid-enough-for-the-fake"
@@ -41,6 +46,12 @@ class FakePlanetRepository:
         if limit <= 0:
             return []
         return list(reversed(self.saved))[:limit]
+
+    def delete(self, planet_id):
+        for index, planet in enumerate(self.saved):
+            if planet.id == planet_id:
+                return self.saved.pop(index)
+        return None
 
     def prune(self, keep):
         self.pruned_to = keep
@@ -335,3 +346,87 @@ class TestListRecentPlanets:
         result = ListRecentPlanetsUseCase(repo, max_limit=5).execute(limit=None)
 
         assert len(result["planets"]) == 5
+
+
+class TestDeletePlanet:
+    """
+    A volunteer taking a drawing down mid-event. The use case owns two things
+    the HTTP layer cannot: that nothing is announced when nothing was removed,
+    and that the announcement rides the arrivals channel rather than a channel
+    of its own.
+    """
+
+    def test_removes_the_planet_and_returns_it(self):
+        repo = FakePlanetRepository()
+        repo.save("keep1", "Keep", b"x")
+        doomed = repo.save("drop1", "Drop", b"x")
+        publisher = FakeEventPublisher()
+
+        removed = DeletePlanetUseCase(repo, publisher).execute("drop1")
+
+        assert removed == doomed
+        assert [p.id for p in repo.saved] == ["keep1"]
+
+    def test_announces_the_removal_on_the_arrivals_channel(self):
+        """
+        Same payload channel as a new planet, discriminated by `removed`. A
+        dedicated event type would be dropped by any projector subscribed only
+        to `planet`, and the drawing would stay on the wall after deletion -
+        which is the failure this whole feature exists to prevent.
+        """
+        repo = FakePlanetRepository()
+        repo.save("gone1", "Gone", b"x")
+        publisher = FakeEventPublisher()
+
+        DeletePlanetUseCase(repo, publisher).execute("gone1")
+
+        assert publisher.published == [
+            {"has_planet": False, "id": "gone1", "removed": True}
+        ]
+
+    def test_an_unknown_id_raises_rather_than_pretending_to_succeed(self):
+        repo = FakePlanetRepository()
+        repo.save("real1", "Real", b"x")
+        publisher = FakeEventPublisher()
+
+        with pytest.raises(NotFoundError):
+            DeletePlanetUseCase(repo, publisher).execute("ghost")
+
+        assert [p.id for p in repo.saved] == ["real1"]
+
+    def test_a_failed_delete_announces_nothing(self):
+        """
+        Order matters: publish only after the store confirms. Announcing a
+        removal that did not happen would clear the planet from every
+        projector while the file is still on disk, and nothing would ever put
+        it back.
+        """
+        repo = FakePlanetRepository()
+        publisher = FakeEventPublisher()
+
+        with pytest.raises(NotFoundError):
+            DeletePlanetUseCase(repo, publisher).execute("never-existed")
+
+        assert publisher.published == []
+
+    def test_deleting_the_same_planet_twice_raises_the_second_time(self):
+        repo = FakePlanetRepository()
+        repo.save("once1", "Once", b"x")
+        publisher = FakeEventPublisher()
+        use_case = DeletePlanetUseCase(repo, publisher)
+
+        use_case.execute("once1")
+
+        with pytest.raises(NotFoundError):
+            use_case.execute("once1")
+        assert len(publisher.published) == 1
+
+    def test_the_deleted_planet_leaves_the_gallery_listing(self):
+        repo = FakePlanetRepository()
+        repo.save("a", "Alpha", b"x")
+        repo.save("b", "Beta", b"x")
+
+        DeletePlanetUseCase(repo, FakeEventPublisher()).execute("a")
+
+        listing = ListRecentPlanetsUseCase(repo).execute(limit=12)
+        assert [p["name"] for p in listing["planets"]] == ["Beta"]

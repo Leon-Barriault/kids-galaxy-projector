@@ -169,3 +169,96 @@ class TestPathTraversalSafety:
 
     def test_resolve_returns_none_for_missing_image(self, repo):
         assert repo.resolve_image("nope.png") is None
+
+
+class TestDelete:
+    """
+    Backs the manager app. Deleting has to take the sidecar with the image -
+    an orphaned .json is not just litter, it is a name that would reappear if
+    a later planet ever landed on the same filename.
+    """
+
+    def test_returns_none_when_nothing_matches(self, repo):
+        repo.save("real1", "Real", PNG)
+        assert repo.delete("ghost") is None
+
+    def test_returns_none_on_an_empty_store(self, repo):
+        assert repo.delete("anything") is None
+
+    def test_removes_the_image_and_the_sidecar(self, repo, tmp_path):
+        planet = repo.save("drop1", "Drop Me", PNG)
+
+        removed = repo.delete("drop1")
+
+        assert removed.id == "drop1"
+        assert removed.display_name == "Drop Me"
+        assert not (tmp_path / planet.filename).exists()
+        assert not (tmp_path / planet.metadata_filename).exists()
+
+    def test_leaves_every_other_planet_alone(self, repo):
+        repo.save("keep1", "Keep One", PNG)
+        repo.save("drop1", "Drop", PNG)
+        repo.save("keep2", "Keep Two", PNG)
+
+        repo.delete("drop1")
+
+        assert sorted(p.id for p in repo.recent(10)) == ["keep1", "keep2"]
+
+    def test_matches_on_the_id_not_the_display_name(self, repo):
+        """
+        Two children can name a planet the same thing; ids are what the
+        projector and the manager both key on.
+        """
+        first = repo.save("id0001", "Mars", PNG)
+        repo.save("id0002", "Mars", PNG)
+
+        repo.delete("id0001")
+
+        remaining = repo.recent(10)
+        assert [p.id for p in remaining] == ["id0002"]
+        assert first.filename not in [p.filename for p in remaining]
+
+    def test_a_deleted_planet_stops_being_the_latest(self, repo, tmp_path):
+        import os
+
+        older = repo.save("old1", "Older", PNG)
+        newer = repo.save("new1", "Newer", PNG)
+        os.utime(tmp_path / older.filename, (1000, 1000))
+        os.utime(tmp_path / newer.filename, (2000, 2000))
+        assert repo.latest().id == "new1"
+
+        repo.delete("new1")
+
+        assert repo.latest().id == "old1"
+
+    def test_deleting_twice_reports_the_second_attempt_as_missing(self, repo):
+        repo.save("once1", "Once", PNG)
+
+        assert repo.delete("once1") is not None
+        assert repo.delete("once1") is None
+
+    def test_survives_a_missing_sidecar(self, repo, tmp_path):
+        """Legacy planets predate the sidecar; deleting must not raise."""
+        planet = repo.save("legacy", "Legacy", PNG)
+        (tmp_path / planet.metadata_filename).unlink()
+
+        removed = repo.delete("legacy")
+
+        assert removed is not None
+        assert not (tmp_path / planet.filename).exists()
+
+    def test_an_id_containing_path_separators_matches_nothing(self, repo, tmp_path):
+        """
+        The id is compared against a filename prefix, never joined into a path.
+        A traversal attempt has to come back as a plain miss with the store
+        untouched.
+        """
+        repo.save("safe01", "Safe", PNG)
+        outside = tmp_path.parent / "outside.png"
+        outside.write_bytes(PNG)
+
+        assert repo.delete("../outside") is None
+        assert repo.delete("/etc/passwd") is None
+
+        assert outside.exists()
+        assert len(list(tmp_path.glob("*.png"))) == 1

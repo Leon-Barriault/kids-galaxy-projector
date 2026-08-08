@@ -8,6 +8,7 @@ they can be fully tested with in-memory doubles.
 
 import uuid
 
+from app.domain.errors import NotFoundError
 from app.domain.image_rules import (
     ensure_content_type_allowed,
     ensure_not_empty,
@@ -15,7 +16,6 @@ from app.domain.image_rules import (
     ensure_size_within,
 )
 from app.domain.naming import normalize_display_name
-from app.domain.errors import NotFoundError
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
 from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter
 
