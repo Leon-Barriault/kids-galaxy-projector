@@ -1,5 +1,6 @@
 package com.kidsgalaxy.manager
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -20,12 +21,11 @@ data class ManagerUiState(
     val errorMessage: String? = null,
     val statusMessage: String? = null,
 ) {
-    /** Nothing to clear, and no second clear while one is in flight. */
     val canClearAll: Boolean get() = planets.isNotEmpty() && !isClearing && !isLoading
 }
 
 class ManagerViewModel(
-    private val api: ManagerApi = ApiFactory.create(),
+    private val api: ManagerApi,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ManagerUiState())
     val uiState: StateFlow<ManagerUiState> = _uiState.asStateFlow()
@@ -56,11 +56,11 @@ class ManagerViewModel(
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = e.message ?: "Network error",
+                        errorMessage = error.message ?: "Network error",
                     )
                 }
             }
@@ -95,24 +95,17 @@ class ManagerViewModel(
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
                         deletingIds = it.deletingIds - id,
-                        errorMessage = e.message ?: "Network error",
+                        errorMessage = error.message ?: "Network error",
                     )
                 }
             }
         }
     }
 
-    /**
-     * Empties the gallery in one request.
-     *
-     * Deliberately not a loop over deletePlanet: that would be thirty round
-     * trips and thirty separate events, and the projector would flicker
-     * through the removals one at a time instead of emptying at once.
-     */
     fun clearAll() {
         if (_uiState.value.isClearing) return
         viewModelScope.launch {
@@ -137,11 +130,11 @@ class ManagerViewModel(
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
                         isClearing = false,
-                        errorMessage = e.message ?: "Network error",
+                        errorMessage = error.message ?: "Network error",
                     )
                 }
             }
@@ -153,15 +146,20 @@ class ManagerViewModel(
     }
 
     companion object {
-        fun factory(baseUrl: String = BuildConfig.SERVER_BASE_URL): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
+        fun factory(
+            context: Context,
+            baseUrl: String = BuildConfig.SERVER_BASE_URL,
+        ): ViewModelProvider.Factory {
+            val appContext = context.applicationContext
+            return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     require(modelClass.isAssignableFrom(ManagerViewModel::class.java)) {
                         "Unsupported ViewModel: ${modelClass.name}"
                     }
-                    return ManagerViewModel(ApiFactory.create(baseUrl)) as T
+                    return ManagerViewModel(ApiFactory.create(appContext, baseUrl)) as T
                 }
             }
+        }
     }
 }
