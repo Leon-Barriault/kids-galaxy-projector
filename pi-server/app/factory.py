@@ -9,6 +9,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import AuthorizationPolicy
 from app.api.routes import build_router
+from app.application.behavior_use_cases import (
+    GetGalaxyBehaviorUseCase,
+    UpdateGalaxyBehaviorUseCase,
+)
 from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
@@ -18,7 +22,10 @@ from app.application.use_cases import (
     SubmitPlanetUseCase,
 )
 from app.config import Settings
+from app.domain.behavior import SeasonalThemeResolver
 from app.domain.galaxy import Galaxy
+from app.infrastructure.behavior_repository import JsonBehaviorRepository
+from app.infrastructure.clock import SystemClock
 from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
@@ -46,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     logging.basicConfig(level=logging.INFO)
 
     repository = FileSystemPlanetRepository(settings.upload_dir)
+    behavior_repository = JsonBehaviorRepository(settings.state_dir)
     publisher = InMemoryEventPublisher()
     rate_limiter = InMemoryRateLimiter(
         cooldown_seconds=settings.rate_limit_seconds
@@ -53,6 +61,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     image_processor = PillowImageProcessor()
     surface_styler = _styler_for(settings.surface_style)
     authorizer = AuthorizationPolicy(settings)
+    clock = SystemClock()
+    seasonal_resolver = SeasonalThemeResolver()
 
     submit_planet = SubmitPlanetUseCase(
         repository=repository,
@@ -63,7 +73,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
-    get_current_scene = GetCurrentSceneUseCase(repository)
+    get_current_scene = GetCurrentSceneUseCase(
+        repository,
+        max_planets=settings.gallery_size,
+    )
     list_recent_planets = ListRecentPlanetsUseCase(
         repository,
         max_limit=settings.max_stored_planets,
@@ -73,6 +86,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     clear_planets = ClearPlanetsUseCase(
         repository=repository, publisher=publisher
+    )
+    get_behavior = GetGalaxyBehaviorUseCase(
+        behavior_repository,
+        clock,
+        seasonal_resolver,
+    )
+    update_behavior = UpdateGalaxyBehaviorUseCase(
+        behavior_repository,
+        publisher,
+        clock,
+        seasonal_resolver,
     )
 
     galaxy = Galaxy(name=settings.galaxy_name)
@@ -98,7 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.3.0",
+        version="1.4.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -107,7 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -128,6 +152,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
             clear_planets=clear_planets,
+            get_behavior=get_behavior,
+            update_behavior=update_behavior,
             repository=repository,
             publisher=publisher,
             settings_galaxy=galaxy,
@@ -138,6 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
     app.state.repository = repository
+    app.state.behavior_repository = behavior_repository
     app.state.publisher = publisher
     app.state.rate_limiter = rate_limiter
     app.state.galaxy = galaxy
