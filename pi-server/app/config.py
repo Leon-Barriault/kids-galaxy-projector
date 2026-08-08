@@ -22,12 +22,15 @@ DEFAULT_MAX_STORED_PLANETS = 30
 DEFAULT_GALLERY_SIZE = 12
 
 #: How an uploaded drawing is turned into a planet surface.
+#:   "blend"   - the colours are diffused across the sphere (the default)
 #:   "terrain" - the palette becomes water, forest, lava, gas and so on
-#:   "blend"   - the colours are diffused across the sphere, no terrain
 #:   "off"     - the drawing is stored exactly as it arrived
-#: Kept as a choice rather than a flag so a bad night at an event is one
-#: restart away from the simpler look.
-DEFAULT_SURFACE_STYLE = "terrain"
+#:
+#: The default is "blend" because the owner tried both and preferred it:
+#: terrain reads as generated, blend reads as the child's own drawing on a
+#: world. That is a judgement about a room full of children looking at a
+#: wall, not something the code can decide, so do not "fix" it back.
+DEFAULT_SURFACE_STYLE = "blend"
 SURFACE_STYLES = ("terrain", "blend", "off")
 
 

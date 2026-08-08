@@ -81,3 +81,28 @@ class TestEnvironmentFlag:
     def test_production_is_not_development(self):
         for value in ("production", "prod", "staging"):
             assert Settings.from_env({"ENVIRONMENT": value}).is_development is False
+
+
+class TestSurfaceStyle:
+    """
+    The default was moved from terrain to blend after both were seen on a
+    projector. Pinned because it is a taste decision that reads like an
+    arbitrary constant, and is exactly the sort of thing a later change
+    "tidies" back.
+    """
+
+    def test_defaults_to_blend(self):
+        assert Settings().surface_style == "blend"
+        assert Settings.from_env({}).surface_style == "blend"
+
+    def test_every_documented_style_is_accepted(self):
+        for style in ("blend", "terrain", "off"):
+            assert Settings.from_env({"SURFACE_STYLE": style}).surface_style == style
+
+    def test_case_and_padding_are_forgiven(self):
+        assert Settings.from_env({"SURFACE_STYLE": "  Terrain "}).surface_style == "terrain"
+
+    def test_an_unknown_style_falls_back_instead_of_raising(self):
+        """A typo in a systemd unit must not stop the projector serving planets."""
+        assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "blend"
+        assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "blend"

@@ -185,12 +185,18 @@ owner: blue water, green forest, orange lava, red volcanic rupture, purple gas
 bands, pink cloud pockets, plus yellow desert and black basalt for the two the
 request did not name.
 
-`TerrainSurfaceStyler` is a second `SurfaceStyler`, not a replacement - the
-composition root picks one from `SURFACE_STYLE` (`terrain` | `blend` | `off`,
-default `terrain`). An unrecognised value falls back rather than raising: a
-typo in a systemd unit should not stop the projector serving planets. Keeping
-`blend` alive means a bad night at an event is one restart from the simpler
-look.
+**It is built, tested and on main, but it is not the default.** Seen on an
+actual projector the owner preferred the plain blend: terrain reads as
+generated, the blend reads as the child's own drawing wrapped onto a world.
+That is a judgement about a room full of children looking at a wall, and it is
+not one the code can make - so `DEFAULT_SURFACE_STYLE` is `blend`, a test pins
+it, and it should not be quietly "tidied" back.
+
+Keeping both was what made that reversal a one-line change rather than a
+revert, which is the argument for having built it as a second `SurfaceStyler`
+rather than a replacement. `SURFACE_STYLE` picks between `blend`, `terrain`
+and `off`. An unrecognised value falls back rather than raising: a typo in a
+systemd unit should not stop the projector serving planets.
 
 How it works, and what not to break:
 
