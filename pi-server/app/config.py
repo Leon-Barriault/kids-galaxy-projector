@@ -2,8 +2,7 @@
 Configuration.
 
 All environment reading happens here, once, so the rest of the code takes
-explicit values instead of consulting os.environ at import time (which made the
-old module impossible to reconfigure under test).
+explicit values instead of consulting os.environ at import time.
 """
 
 import os
@@ -15,40 +14,14 @@ DEFAULT_MAX_DIMENSION = 2048
 DEFAULT_TEXTURE_SIZE = 1024
 DEFAULT_RATE_LIMIT_SECONDS = 3.0
 DEFAULT_MAX_STORED_PLANETS = 30
-
-#: How many planets orbit on the projector at once. Distinct from
-#: MAX_STORED_PLANETS, which is about disk: the store deliberately keeps
-#: more than the sky shows, so raising this needs no re-upload.
 DEFAULT_GALLERY_SIZE = 12
 
-#: How an uploaded drawing is turned into a planet surface.
-#:   "terrain" - the child's colours, given the character of water,
-#:               forest, lava, gas and so on (the default)
-#:   "blend"   - the colours diffused across the sphere, no character
-#:   "off"     - the drawing is stored exactly as it arrived
 DEFAULT_SURFACE_STYLE = "terrain"
 SURFACE_STYLES = ("terrain", "blend", "off")
-
-#: What this projector calls itself on the network. A school might run one
-#: per classroom, and a blank row in a tablet's picker is unchoosable.
 DEFAULT_GALAXY_NAME = "Kids Galaxy"
-
-#: mDNS is multicast, and Docker's default bridge does not carry it out to
-#: the LAN. With port mapping the server works and is simply never found,
-#: so the compose file puts the container on host networking. Switch this
-#: off if the deployment cannot.
 DEFAULT_ADVERTISE = True
-
-#: The protocol tablets should use for the endpoint announced over mDNS.
-#: Development normally advertises HTTP; field deployments using the mTLS
-#: gateway should set ADVERTISE_SCHEME=https and PORT=8443.
 DEFAULT_ADVERTISE_SCHEME = "http"
 ADVERTISE_SCHEMES = ("http", "https")
-
-#: Authorization is opt-in for backward-compatible desk/development setups.
-#: In a field deployment FastAPI binds to loopback, an mTLS gateway derives
-#: the role from the client certificate, and only that trusted local gateway
-#: may forward role headers.
 DEFAULT_AUTHORIZATION_ENABLED = False
 DEFAULT_TRUSTED_ROLE_PROXY_HOSTS = ("127.0.0.1", "::1")
 
@@ -56,6 +29,7 @@ DEFAULT_TRUSTED_ROLE_PROXY_HOSTS = ("127.0.0.1", "::1")
 @dataclass(frozen=True)
 class Settings:
     upload_dir: Path = Path("uploads")
+    state_dir: Path = Path("state")
     static_dir: Path = Path("static")
     max_file_size: int = DEFAULT_MAX_FILE_SIZE
     max_dimension: int = DEFAULT_MAX_DIMENSION
@@ -98,8 +72,6 @@ class Settings:
 
         def _choice(key: str, allowed: tuple[str, ...], default: str) -> str:
             raw = (source.get(key) or "").strip().lower()
-            # An unrecognised value falls back rather than raising: a typo in a
-            # systemd unit should not stop the projector serving planets.
             return raw if raw in allowed else default
 
         def _csv(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -118,6 +90,7 @@ class Settings:
 
         return cls(
             upload_dir=Path(source.get("UPLOAD_DIR") or "uploads"),
+            state_dir=Path(source.get("STATE_DIR") or "state"),
             static_dir=Path(source.get("STATIC_DIR") or "static"),
             max_file_size=_int("MAX_FILE_SIZE", DEFAULT_MAX_FILE_SIZE),
             max_dimension=_int("MAX_DIMENSION", DEFAULT_MAX_DIMENSION),
