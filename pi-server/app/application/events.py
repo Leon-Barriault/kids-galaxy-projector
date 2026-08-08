@@ -6,6 +6,7 @@ such as SSE decide how those events are serialized for clients.
 
 from dataclasses import dataclass
 
+from app.domain.behavior import GalaxyBehavior
 from app.domain.planet import Planet
 
 
@@ -22,3 +23,8 @@ class PlanetRemoved:
 @dataclass(frozen=True)
 class GalaxyCleared:
     """All planets were removed from the current galaxy scene."""
+
+
+@dataclass(frozen=True)
+class GalaxyBehaviorChanged:
+    behavior: GalaxyBehavior
