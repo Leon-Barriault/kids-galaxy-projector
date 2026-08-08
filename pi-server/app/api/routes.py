@@ -1,21 +1,8 @@
-"""
-HTTP layer.
-
-Thin by design: read the request, call a use case, translate domain errors into
-status codes. No business rules live here.
-"""
+"""HTTP layer: translate requests into application use cases."""
 
 import logging
 
-from fastapi import (
-    APIRouter,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    Request,
-    UploadFile,
-)
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.sse import build_planet_event_response
@@ -23,6 +10,7 @@ from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
+    GetCurrentSceneUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
@@ -52,6 +40,7 @@ def build_router(
     *,
     submit_planet: SubmitPlanetUseCase,
     get_current_planet: GetCurrentPlanetUseCase,
+    get_current_scene: GetCurrentSceneUseCase,
     list_recent_planets: ListRecentPlanetsUseCase,
     delete_planet: DeletePlanetUseCase,
     clear_planets: ClearPlanetsUseCase,
@@ -64,12 +53,9 @@ def build_router(
 
     @router.get("/", response_class=HTMLResponse)
     async def galaxy_page():
-        """Serve the Three.js galaxy visualization."""
         index_path = settings.static_dir / "index.html"
         if not index_path.exists():
-            return HTMLResponse(
-                "<h1>Galaxy visualization not found</h1>", status_code=404
-            )
+            return HTMLResponse("<h1>Galaxy visualization not found</h1>", status_code=404)
         return FileResponse(index_path)
 
     @router.get("/health")
@@ -78,42 +64,21 @@ def build_router(
 
     @router.get("/api/galaxy")
     async def galaxy_identity():
-        """
-        Who this projector is.
-
-        Two callers. A tablet that found the service over mDNS confirms it
-        here before connecting; a tablet falling back to scanning the LAN
-        probes this on every address, which is why the payload leads with a
-        service marker - without one a scan cannot tell a galaxy from a
-        router's admin page and the picker fills with noise.
-
-        Deliberately unauthenticated and cheap: it is the one endpoint a
-        device hits before it knows what it is talking to.
-        """
         return settings_galaxy.to_payload()
 
     @router.get("/api/current-planet")
     async def current_planet():
-        """The newest planet. Kept for the SSE fallback path and for probes."""
         return get_current_planet.execute()
+
+    @router.get("/api/scene")
+    async def current_scene():
+        scene = get_current_scene.execute()
+        return {"planets": [planet.to_payload() for planet in scene.planets]}
 
     @router.get("/api/planets")
     async def planet_gallery(
-        limit: int | None = Query(
-            default=None,
-            ge=1,
-            description=(
-                "How many planets to return, newest first. Clamped to retention; "
-                "omit it to get the configured maximum."
-            ),
-        ),
+        limit: int | None = Query(default=None, ge=1),
     ):
-        """
-        Stored planets, newest first.
-
-        The projector calls this on load with limit=GALLERY_SIZE. The manager
-        app lists up to retention so volunteers can remove any stored drawing.
-        """
         return list_recent_planets.execute(limit=limit)
 
     @router.post("/api/upload")
@@ -122,12 +87,9 @@ def build_router(
         file: UploadFile = File(...),
         name: str = Form("My Planet"),
     ):
-        """Receive a planet drawing from the Android app."""
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
-
         content = await file.read(settings.max_file_size + 1)
-
         try:
             planet = submit_planet.execute(
                 image_bytes=content,
@@ -139,17 +101,8 @@ def build_router(
                 target_size=settings.texture_size,
             )
         except DomainError as e:
-            raise HTTPException(
-                status_code=_status_for(e), detail=e.user_message
-            ) from e
-
-        logger.info(
-            "Planet received from %s: %s (%s)",
-            client_key(request),
-            planet.filename,
-            planet.display_name,
-        )
-
+            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        logger.info("Planet received from %s: %s (%s)", client_key(request), planet.filename, planet.display_name)
         return {
             "status": "success",
             "message": "Your planet is flying to the galaxy!",
@@ -160,39 +113,16 @@ def build_router(
 
     @router.delete("/api/planets")
     async def clear_planets_route():
-        """
-        Remove every stored planet.
-
-        Declared before the /{planet_id} route below because Starlette matches
-        in registration order and a path parameter would otherwise be a
-        candidate for the bare collection path too.
-
-        There is no confirmation here by design: confirming is the client's
-        job, and the manager app asks. An API that argues with its caller is
-        harder to script and no safer.
-        """
         removed = clear_planets.execute()
         return {"status": "cleared", "removed": removed}
 
     @router.delete("/api/planets/{planet_id}")
     async def delete_planet_route(planet_id: str):
-        """
-        Remove one planet from storage and the live sky.
-
-        Used by the separate manager Android app during an event so a
-        volunteer can take a drawing down without wiping the whole gallery.
-        """
         try:
             planet = delete_planet.execute(planet_id)
         except DomainError as e:
-            raise HTTPException(
-                status_code=_status_for(e), detail=e.user_message
-            ) from e
-        return {
-            "status": "deleted",
-            "planet_id": planet.id,
-            "name": planet.display_name,
-        }
+            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        return {"status": "deleted", "planet_id": planet.id, "name": planet.display_name}
 
     @router.get("/uploads/{filename}")
     async def serve_upload(filename: str):
@@ -203,20 +133,12 @@ def build_router(
 
     @router.get("/api/events")
     async def planet_events(request: Request):
-        """
-        Server-Sent Events stream: pushes each new planet immediately, so the
-        projector celebrates without waiting for a poll tick. The front-end
-        falls back to polling if this stream is unavailable.
-
-        The stream itself lives in app/api/sse.py so it can be tested directly.
-        """
         return build_planet_event_response(request, publisher, get_current_planet)
 
     return router
 
 
 def _guard(action) -> None:
-    """Run a domain rule, converting its error into an HTTP response."""
     try:
         action()
     except DomainError as e:
