@@ -178,57 +178,67 @@ Also dropped `optimize=True` from both PNG saves: it was ~700ms of zlib
 strategy search per upload for a few percent of size, on the one path where a
 child is watching a spinner. Styling now costs ~170ms total.
 
-## 3.7 Session six: terrain
+## 3.7 Sessions six and seven: terrain, twice
 
-The eight tablet colours now become eight kinds of surface, chosen by the
-owner: blue water, green forest, orange lava, red volcanic rupture, purple gas
-bands, pink cloud pockets, plus yellow desert and black basalt for the two the
-request did not name.
+The eight palette colours now carry the character of a kind of terrain: blue
+water, green forest, orange lava, red volcanic rupture, purple gas bands, pink
+cloud pockets, plus yellow desert and black basalt. `SURFACE_STYLE` picks
+`terrain` (default), `blend` or `off`; an unrecognised value falls back rather
+than raising.
 
-**It is built, tested and on main, but it is not the default.** Seen on an
-actual projector the owner preferred the plain blend: terrain reads as
-generated, the blend reads as the child's own drawing wrapped onto a world.
-That is a judgement about a room full of children looking at a wall, and it is
-not one the code can make - so `DEFAULT_SURFACE_STYLE` is `blend`, a test pins
-it, and it should not be quietly "tidied" back.
+**It took two attempts, and the first one is the lesson.** That version
+*replaced* the drawn colours - blue became a realistic deep navy, regions were
+separated by hard ink outlines and shaded in flat posterised bands. Rejected on
+sight: a planet stopped being the child's drawing and became a generated world
+that happened to be shaped like it. Nobody in the room could point at it and
+say "that is mine".
 
-Keeping both was what made that reversal a one-line change rather than a
-revert, which is the argument for having built it as a second `SurfaceStyler`
-rather than a replacement. `SURFACE_STYLE` picks between `blend`, `terrain`
-and `off`. An unrecognised value falls back rather than raising: a typo in a
-systemd unit should not stop the projector serving planets.
+What shipped modulates instead of substituting. The base is exactly the colour
+they drew; each region gains only a *signed* brightness pattern on top - slow
+swell in water, clumps in forest, ridged channels in lava - which averages near
+zero, so the colour stays put. Membership is a Gaussian over palette distance
+rather than a nearest-neighbour pick, so regions fade into one another. The
+first version needed ink lines precisely because nearest-neighbour left a seam;
+soft weights remove the seam instead of decorating it.
 
-How it works, and what not to break:
+Lava and volcano are the one exception, adding warmth on top. That does lighten
+the orange a child drew - known, accepted, and tested for so nobody "fixes" it.
 
-- It **composes the blend's diffusion** rather than reimplementing it. That
-  pass is what turns a few strokes into regions of colour; classify a raw
-  scribble and you get white paper with thin ribbons of terrain on it.
-- Classification is nearest-palette in plain RGB. A perceptual space would
-  handle the in-between pixels better, but they sit on a boundary either way
-  and the ink line drawn along it hides the difference.
-- **The ink outline does most of the cartoon work.** Remove it and the whole
-  thing reads as an airbrush again.
-- Lava's hot channels have to be genuinely bright *in the albedo*, because the
-  projector reuses the albedo as its emissive map. There is no second texture
-  carrying the glow. A test pins this.
-- Terrain is generated at **half resolution** and scaled up: 750ms became
-  225ms, and at projector distance nobody can tell.
+Strength is 0.32. 0.18 is invisible at projector distance and 0.48 starts to
+look mottled; both were seen on a real projector before choosing.
 
-This needs **numpy** (pinned in requirements.txt). Classifying every texel and
-generating eight procedural surfaces is array work; Pillow alone does it
-slowly and at roughly triple the code. Standard aarch64 wheel, so it installs
-on a Pi without a build.
+Needs **numpy** (pinned). Also used now by the plain blend - see below.
 
-### Not done: the separate emissive and cloud layers
+### Two real bugs found while doing it
 
-The demo that got this approved had three textures per planet - albedo, an
-emissive map, and a translucent cloud sphere floating above the surface. What
-shipped bakes all of it into one texture, because the extra maps need
-`Planet`, the payload, the repository and `prune`/`delete`/`clear` to all learn
-about companion files. Worth doing; nothing depends on it.
+**The diffusion never worked properly.** It blurred the whole image, which
+drags white paper inwards along with the colour; the two fight and converge on
+something close to white. A child who drew one small shape got a pale ghost of
+it on a still-white world. It is now a normalised convolution - blur the known
+colour, blur the record of where it is known, divide - so only drawn colour
+propagates.
 
-Before starting, measure on the actual Pi: three textures times twelve planets
-is 36 live on a GPU that also has to composite a star field.
+That bug hid behind a passing test. The check was "is any white left", and the
+grain pass darkens everything just enough to slip under the threshold, so it
+went green for entirely the wrong reason. Worth remembering: a test that
+asserts an *absence* can be satisfied by something unrelated.
+
+**Strokes had a white halo.** Feathering the strokes back from the original
+paints paper into the edge, because just outside a stroke the original is
+white. Fixed by compositing onto the wash with a hard edge first, and by
+eroding the mask so a stroke's anti-aliased outer ring is not treated as ink.
+Both worst on sparse drawings - three strokes on an empty canvas, which is most
+of what a child actually draws. A faint soft edge remains; it reads as a
+highlight, not an artifact.
+
+### Not done: separate emissive and cloud layers
+
+The demo that first sold terrain had three textures per planet - albedo, an
+emissive map, and a translucent cloud sphere. Everything is baked into one
+texture instead, because companion files need `Planet`, the payload, the
+repository and prune/delete/clear to all learn about siblings. Before starting,
+measure on the real Pi: three textures times twelve planets is 36 live on a GPU
+that also composites a star field.
 
 ## 4. What is left
 

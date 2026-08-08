@@ -6,9 +6,9 @@ that is exactly what it looks like: a white ball with a stripe on it. This
 takes the colours they actually used and spreads them across the whole world,
 then lays the strokes back on top so they still recognise their own planet.
 
-Pillow only, deliberately - the Pi already has it for the upload re-encode, and
-adding numpy to a Raspberry Pi image to blur a 1024x512 texture is not a trade
-worth making.
+Pillow does the blurring; numpy does the arithmetic the fill needs. That split
+is not cosmetic - see _diffuse, where dividing one blur by another is what
+stops white paper bleeding into the child's colours.
 """
 
 import hashlib
@@ -16,6 +16,7 @@ import io
 import logging
 import random
 
+import numpy as np
 from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 
 from app.ports import SurfaceStyler
@@ -109,16 +110,22 @@ class PillowSurfaceStyler(SurfaceStyler):
         """
         Bleed the drawn colours outwards until the paper is gone.
 
-        Coarse to fine: start with a blur radius a quarter of the texture and
-        halve it each round, running a few passes at each scale. Every pass
-        replaces the undrawn pixels with a blur of their neighbourhood while
-        pinning the drawn ones, so colour creeps outwards.
+        Normalised convolution, coarse to fine. Each round blurs the colour
+        that is *known*, blurs the record of where it is known, and divides one
+        by the other, so only drawn colour propagates.
 
-        The descending scale matters. A fixed small radius cannot cross a large
-        empty region in any sane number of passes - a child who draws one small
-        shape in the middle would still get a mostly white planet - and a fixed
-        large one smears the detail near the strokes into mud. Starting wide
-        fills the world; finishing narrow keeps the edges.
+        Plainly blurring the whole image is the obvious version and it is
+        wrong: it drags the white paper inwards along with the colour, the two
+        fight, and the result converges on something close to white. A child
+        who drew one small shape got a pale ghost of it on a still-white
+        world. Worse, that was invisible in testing - the grain pass darkens
+        everything just enough to slip under the "is any white left" threshold,
+        so the check passed for entirely the wrong reason.
+
+        The descending radius matters too. A fixed small one cannot cross a
+        large empty region in any sane number of rounds; a fixed large one
+        smears the detail near the strokes into mud. Starting wide fills the
+        world, finishing narrow keeps the edges.
         """
         # Computed at a quarter resolution and scaled back up. The wash is
         # low-frequency by construction, so the detail is not there to lose -
@@ -138,15 +145,33 @@ class PillowSurfaceStyler(SurfaceStyler):
         if not small_mask.getbbox():
             return image  # nothing was drawn; there is nothing to spread
 
-        result = image.resize(small, Image.Resampling.BILINEAR)
-        radius = max(small) / 4
-        while radius >= 1:
-            for _ in range(self._diffusion_passes):
-                blurred = result.filter(ImageFilter.GaussianBlur(radius))
-                result = Image.composite(result, blurred, small_mask)
-            radius /= 2
+        source = np.asarray(
+            image.resize(small, Image.Resampling.BILINEAR), dtype=np.float32
+        )
+        drawn = np.asarray(small_mask, dtype=np.float32) / 255.0
+        known = drawn > 0.5
 
-        return result.resize(full, Image.Resampling.BICUBIC)
+        filled = source * drawn[..., None]
+        weight = drawn.copy()
+        radius = max(small) / 4.0
+
+        while radius >= 1.0:
+            for _ in range(self._diffusion_passes):
+                numerator = _blur(filled, radius, "RGB")
+                denominator = _blur(weight * 255.0, radius, "L")
+                covered = denominator > 1.0
+
+                estimate = filled.copy()
+                estimate[covered] = (
+                    numerator[covered] * 255.0 / denominator[covered][..., None]
+                )
+
+                filled = np.where(known[..., None], source, estimate)
+                weight = np.maximum(drawn, covered.astype(np.float32))
+            radius /= 2.0
+
+        spread = Image.fromarray(np.clip(filled, 0, 255).astype(np.uint8), "RGB")
+        return spread.resize(full, Image.Resampling.BICUBIC)
 
     def _restore_strokes(
         self, original: Image.Image, wash: Image.Image, mask: Image.Image
@@ -157,11 +182,28 @@ class PillowSurfaceStyler(SurfaceStyler):
         Without this the planet is a pretty gradient that the child cannot
         recognise as the thing they drew, which rather defeats the point of
         letting them draw it.
+
+        The two-step composite is not redundant. Feathering straight from the
+        original paints a white halo around every stroke: just outside a
+        stroke the original *is* white paper, so a soft-edged mask blends that
+        white back in. Laying the strokes onto the wash with a hard edge first
+        means the feather has wash on both sides of the boundary and there is
+        no white left to find. It showed up worst on sparse drawings - three
+        strokes on an empty canvas, which is most of what a child actually
+        draws.
         """
-        feathered = mask.filter(ImageFilter.GaussianBlur(4)).point(
+        # Eroded first. A stroke is drawn anti-aliased, so its outermost ring
+        # of pixels is a blend of ink and paper - light, but still under the
+        # paper threshold, so it counts as drawn and gets painted back as a
+        # pale fringe tracing every line. MinFilter drops that ring, and the
+        # feather below re-softens the edge from the *stroke's* colour rather
+        # than from the paper's.
+        solid = mask.filter(ImageFilter.MinFilter(3))
+        strokes_on_wash = Image.composite(original, wash, solid)
+        feathered = solid.filter(ImageFilter.GaussianBlur(4)).point(
             lambda p: int(p * self._keep_strokes)
         )
-        return Image.composite(original, wash, feathered)
+        return Image.composite(strokes_on_wash, wash, feathered)
 
     def _add_grain(self, image: Image.Image, seed: int) -> Image.Image:
         """
@@ -215,3 +257,11 @@ class PillowSurfaceStyler(SurfaceStyler):
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         return buffer.getvalue()
+
+
+def _blur(values: np.ndarray, radius: float, mode: str) -> np.ndarray:
+    """Gaussian blur of a float array, via Pillow's fast integer implementation."""
+    image = Image.fromarray(np.clip(values, 0, 255).astype(np.uint8), mode)
+    return np.asarray(
+        image.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32
+    )

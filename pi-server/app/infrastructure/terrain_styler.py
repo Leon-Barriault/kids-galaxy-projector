@@ -1,28 +1,40 @@
 """
-Turns the eight tablet colours into eight kinds of terrain.
+Gives each palette colour the character of a kind of terrain.
 
-    blue   -> water        green  -> forest
-    orange -> lava         red    -> volcanic rupture
-    purple -> gas bands    pink   -> cloud pockets
-    yellow -> desert       black  -> basalt
+    blue   -> water swell     green  -> forest canopy
+    orange -> lava channels   red    -> volcanic rupture
+    purple -> gas bands       pink   -> cloud puffs
+    yellow -> desert dunes    black  -> basalt speckle
 
-The look is deliberately cartoonish: flat posterised bands rather than smooth
-shading, saturated colour, and dark ink where one terrain meets another. A
-child should be able to point at the projector and say "that green bit is my
-forest" - photorealism would lose exactly the thing that makes it theirs.
+Read this before changing it, because the obvious version is the wrong one.
 
-Runs after the same diffusion pass the plain blend uses, so a drawing of a few
-strokes becomes regions of colour before anything is classified. Without that
-step a scribble would classify as a scribble, and the planet would be white
-paper with thin ribbons of terrain on it.
+The first attempt *replaced* colours: blue became a realistic deep navy, green
+became forest-floor green, regions were separated by hard ink outlines and
+shaded in flat posterised bands. It was rejected on sight, and the reason is
+worth keeping. A planet stopped being the child's drawing and became a
+generated world that happened to be shaped like it. Nobody in the room could
+point at it and say "that is mine".
+
+So terrain here is a *modulation*, never a substitution. The base is exactly
+the colour they drew; each region only gains a signed brightness pattern on
+top - slow swell in water, clumps in forest, ridged channels in lava - plus a
+small additive glow for the two things that should look hot. Membership is
+soft and normalised, so regions fade into one another the way the plain blend
+already does rather than switching at a boundary.
+
+Runs after the blend's diffusion pass. Children draw strokes, not filled
+regions; classify a raw scribble and you get thin ribbons of texture on white
+paper. Diffusing first turns each colour into an area, and the area is what
+takes on a character.
 """
 
+import hashlib
 import io
 import logging
 import math
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image
 
 from app.infrastructure.surface_styler import PillowSurfaceStyler
 from app.ports import SurfaceStyler
@@ -41,27 +53,47 @@ TERRAINS: dict[str, tuple[int, int, int]] = {
     "basalt": (0x00, 0x00, 0x00),
 }
 TERRAIN_NAMES = list(TERRAINS)
-_PALETTE = np.array(list(TERRAINS.values()), dtype=np.int16)
+_PALETTE = np.array(list(TERRAINS.values()), dtype=np.float32)
 
-#: Terrain is generated at this fraction of the texture and scaled up. The
-#: cartoon look is all flat bands and blobs, so there is little fine detail to
-#: lose, and the noise generation is the expensive part.
+#: How far a colour can sit from a palette entry and still belong to it, in
+#: RGB distance. Wide on purpose: the diffusion creates a continuum, and hard
+#: membership is what produced visible seams in the rejected version.
+MEMBERSHIP_SIGMA = 95.0
+
+#: Generated at this fraction of the texture and scaled up. The patterns are
+#: low-frequency, so nothing is lost, and the noise is the expensive part.
 TERRAIN_DOWNSCALE = 2
+
+#: Only these two brighten. Everything else is pure modulation.
+GLOW_COLOURS = {
+    "lava": np.array([255, 150, 40], dtype=np.float32),
+    "volcano": np.array([255, 80, 20], dtype=np.float32),
+}
 
 
 class TerrainSurfaceStyler(SurfaceStyler):
     """
-    :param enabled: when false, returns the upload untouched
-    :param ink:     0..1 strength of the dark outline between terrains
+    :param strength:      how strongly terrain modulates the drawn colour.
+                          0.18 is invisible at projector distance, 0.48 starts
+                          to look mottled; 0.32 was chosen on a real projector.
+    :param glow_strength: additive warmth for lava and volcanic rupture. This
+                          does lighten the orange a child drew - a known and
+                          accepted trade, not an oversight.
     """
 
-    def __init__(self, *, enabled: bool = True, ink: float = 0.75, seed: int = 0):
+    def __init__(
+        self,
+        *,
+        enabled: bool = True,
+        strength: float = 0.32,
+        glow_strength: float = 0.67,
+    ):
         self._enabled = enabled
-        self._ink = ink
-        self._seed = seed
+        self._strength = strength
+        self._glow_strength = glow_strength
         # Flat settings: this pass exists only to spread the colours into
-        # regions. Grain, softening and saturation are the terrain renderer's
-        # job, and doing them twice muddies the classification.
+        # regions. Grain and saturation are handled here, and doing them twice
+        # muddies the membership weights.
         self._diffuser = PillowSurfaceStyler(
             mottle=0.0, soften=0.0, saturation=1.0, keep_strokes=1.0
         )
@@ -73,58 +105,62 @@ class TerrainSurfaceStyler(SurfaceStyler):
             spread = self._diffuser.style(png_bytes)
             with Image.open(io.BytesIO(spread)) as opened:
                 rgb = np.asarray(opened.convert("RGB"))
-            return self._encode(self._render(rgb, self._seed_for(png_bytes)))
+            seed = int.from_bytes(hashlib.sha256(png_bytes).digest()[:4], "big")
+            return self._encode(self._render(rgb, seed))
         except (OSError, ValueError) as e:
             # Cosmetic. A planet that looks like paper beats a failed upload.
             logger.warning("Terrain styling failed, using the raw drawing: %s", e)
             return png_bytes
 
-    # -------------------- classification --------------------
-
     @staticmethod
-    def classify(rgb: np.ndarray) -> np.ndarray:
+    def membership(rgb: np.ndarray, sigma: float = MEMBERSHIP_SIGMA) -> np.ndarray:
         """
-        Nearest palette colour per pixel, as an index into TERRAIN_NAMES.
+        Soft, normalised similarity to each palette colour.
 
-        Squared distance in plain RGB. A perceptual space would classify the
-        in-between pixels the diffusion creates more sensibly, but those sit on
-        a boundary either way, and the ink line drawn along that boundary hides
-        the difference entirely.
+        A Gaussian rather than a nearest-neighbour pick. Nearest-neighbour puts
+        a seam wherever two terrains meet, and the previous version had to draw
+        an ink line along that seam to make it look deliberate. Soft weights
+        remove the seam instead of decorating it.
         """
-        diff = rgb[:, :, None, :].astype(np.int16) - _PALETTE[None, None, :, :]
-        return np.argmin((diff.astype(np.int32) ** 2).sum(axis=3), axis=2)
-
-    # -------------------- rendering --------------------
+        distances = (
+            (rgb[:, :, None, :].astype(np.float32) - _PALETTE[None, None, :, :]) ** 2
+        ).sum(axis=3)
+        weights = np.exp(-distances / (2 * sigma * sigma))
+        return weights / np.clip(weights.sum(axis=2, keepdims=True), 1e-6, None)
 
     def _render(self, rgb: np.ndarray, seed: int) -> Image.Image:
-        full_h, full_w = rgb.shape[:2]
-        small = (
-            max(64, full_h // TERRAIN_DOWNSCALE),
-            max(128, full_w // TERRAIN_DOWNSCALE),
+        full_height, full_width = rgb.shape[:2]
+        shape = (
+            max(64, full_height // TERRAIN_DOWNSCALE),
+            max(128, full_width // TERRAIN_DOWNSCALE),
         )
-        scaled = np.asarray(
+        base = np.asarray(
             Image.fromarray(rgb).resize(
-                (small[1], small[0]), Image.Resampling.BILINEAR
-            )
+                (shape[1], shape[0]), Image.Resampling.BILINEAR
+            ),
+            dtype=np.float32,
         )
-        labels = self.classify(scaled)
+        weights = self.membership(base)
 
-        out = np.zeros((*small, 3), dtype=np.float32)
+        modulation = np.zeros(shape, dtype=np.float32)
+        warmth = np.zeros((*shape, 3), dtype=np.float32)
+
         for index, name in enumerate(TERRAIN_NAMES):
-            mask = labels == index
-            if mask.any():
-                out[mask] = _terrain(name, small, seed + index * 37)[mask]
+            weight = weights[:, :, index]
+            # Skip terrains the child did not use: each one costs several
+            # octaves of noise, and most drawings use three or four colours.
+            if weight.max() < 0.02:
+                continue
+            modulation += weight * _detail(name, shape, seed + index * 37)
+            glow = _glow(name, shape, seed + index * 37)
+            if glow is not None:
+                warmth += (weight * glow)[..., None] * GLOW_COLOURS[name]
 
-        out *= 1.0 - _outline(labels)[..., None] * self._ink
-        image = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
-        return image.resize((full_w, full_h), Image.Resampling.BICUBIC)
+        out = base * (1.0 + modulation[..., None] * self._strength)
+        out += warmth * self._glow_strength
 
-    @staticmethod
-    def _seed_for(png_bytes: bytes) -> int:
-        """Same drawing, same world - but two drawings differ."""
-        import hashlib
-
-        return int.from_bytes(hashlib.sha256(png_bytes).digest()[:4], "big")
+        styled = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+        return styled.resize((full_width, full_height), Image.Resampling.BICUBIC)
 
     @staticmethod
     def _encode(image: Image.Image) -> bytes:
@@ -158,85 +194,60 @@ def _fbm(shape, seed, octaves=5, base_cells=6) -> np.ndarray:
 
 
 def _ridged(shape, seed, octaves=5, base_cells=6) -> np.ndarray:
-    """Sharp creases - what cracks, channels and ruptures are made of."""
+    """Sharp creases - what channels and ruptures are made of."""
     return 1.0 - np.abs(2.0 * _fbm(shape, seed, octaves, base_cells) - 1.0)
-
-
-def _posterise(values: np.ndarray, levels: int) -> np.ndarray:
-    """Cel shading: continuous shading collapses into a few flat bands."""
-    return np.floor(np.clip(values, 0, 1) * levels) / (levels - 1)
-
-
-def _ramp(shade: np.ndarray, dark, light) -> np.ndarray:
-    dark = np.array(dark, dtype=np.float32)
-    light = np.array(light, dtype=np.float32)
-    weight = shade[..., None]
-    return dark * (1 - weight) + light * weight
-
-
-def _outline(labels: np.ndarray) -> np.ndarray:
-    """
-    Dark ink where one terrain meets another.
-
-    This single line does most of the cartoon work. Without it the terrains
-    fade into one another and the whole thing reads as an airbrush again.
-    """
-    edges = np.zeros(labels.shape, dtype=bool)
-    edges[:-1, :] |= labels[:-1, :] != labels[1:, :]
-    edges[:, :-1] |= labels[:, :-1] != labels[:, 1:]
-    thickened = Image.fromarray((edges * 255).astype(np.uint8)).filter(
-        ImageFilter.MaxFilter(3)
-    )
-    return np.asarray(thickened, dtype=np.float32) / 255.0
 
 
 # ---------------------------------------------------------------- terrain ----
 
 
-def _terrain(name: str, shape: tuple[int, int], seed: int) -> np.ndarray:
-    noise = _fbm(shape, seed)
+def _detail(name: str, shape: tuple[int, int], seed: int) -> np.ndarray:
+    """
+    Signed brightness modulation, roughly [-1, 1].
 
+    Signed matters: it averages to about zero, so a region keeps the colour the
+    child drew and only gains structure within it. A positive-only pattern
+    would drift the whole area lighter and undo the point of the exercise.
+    """
     if name == "water":
-        # Flat blue with lighter shallows; the bands read as depth contours.
-        return _ramp(_posterise(noise * 0.9 + 0.05, 4), (0x0D, 0x47, 0xA1), (0x64, 0xB5, 0xF6))
+        return (_fbm(shape, seed, base_cells=5) - 0.5) * 1.6  # slow swell
 
     if name == "forest":
-        canopy = _posterise(_fbm(shape, seed + 7, base_cells=14), 4)
-        return _ramp(canopy, (0x1B, 0x5E, 0x20), (0x81, 0xC7, 0x84))
+        return (_fbm(shape, seed + 7, base_cells=16) - 0.5) * 2.0  # canopy clumps
 
     if name == "desert":
-        dunes = _posterise(_fbm(shape, seed + 5, base_cells=8), 4)
-        return _ramp(dunes, (0xE6, 0x8A, 0x00), (0xFF, 0xE0, 0x82))
+        return (_fbm(shape, seed + 5, base_cells=9) - 0.5) * 1.5  # dunes
 
     if name == "lava":
-        # Cooled crust broken by glowing channels. The bright values matter:
-        # the projector feeds the albedo back in as its emissive map, so the
-        # channels light up without needing a second texture.
-        crust = _ramp(_posterise(noise, 3), (0x3E, 0x27, 0x23), (0x6D, 0x4C, 0x41))
-        glow = _posterise(np.clip((_ridged(shape, seed + 100) - 0.62) / 0.38, 0, 1), 4)[..., None]
-        hot = np.array([0xFF, 0xC1, 0x07], dtype=np.float32)
-        molten = np.array([0xFF, 0x57, 0x22], dtype=np.float32)
-        return crust * (1 - glow) + (molten * (1 - glow * 0.5) + hot * glow * 0.5) * glow
+        return (_ridged(shape, seed + 100, base_cells=7) - 0.45) * 2.0  # channels
 
     if name == "volcano":
-        rock = _ramp(_posterise(noise, 3), (0x26, 0x14, 0x12), (0x5D, 0x40, 0x37))
-        rupture = _posterise(
-            np.clip((_ridged(shape, seed + 31, base_cells=3) - 0.80) / 0.2, 0, 1), 3
-        )[..., None]
-        return rock * (1 - rupture) + np.array([0xFF, 0x3D, 0x00], dtype=np.float32) * rupture
+        return (_ridged(shape, seed + 31, base_cells=4) - 0.55) * 2.2  # ruptures
 
     if name == "gas":
-        # Latitude bands, warped by noise so they are not stripes on a ruler.
         height, width = shape
-        latitude = np.linspace(0, 1, height, dtype=np.float32)[:, None].repeat(width, axis=1)
+        latitude = np.linspace(0, 1, height, dtype=np.float32)[:, None].repeat(
+            width, axis=1
+        )
         warp = _fbm(shape, seed + 3, base_cells=4)
-        bands = np.sin((latitude * 14 + warp * 2.2) * math.pi) * 0.5 + 0.5
-        return _ramp(_posterise(bands, 5), (0x4A, 0x14, 0x8C), (0xE1, 0xBE, 0xE7))
+        return np.sin((latitude * 11 + warp * 2.0) * math.pi) * 0.9
 
     if name == "cloud":
-        puff = _posterise(np.clip(_fbm(shape, seed + 11, base_cells=10) * 1.35 - 0.2, 0, 1), 4)
-        return _ramp(puff, (0xF0, 0x6E, 0xA8), (0xFF, 0xFF, 0xFF))
+        return (_fbm(shape, seed + 11, base_cells=11) - 0.45) * 1.8  # puffs
 
-    # basalt
-    speckle = _posterise(_fbm(shape, seed + 13, base_cells=20), 3)
-    return _ramp(speckle, (0x21, 0x25, 0x21), (0x60, 0x6C, 0x71))
+    return (_fbm(shape, seed + 13, base_cells=22) - 0.5) * 1.4  # basalt speckle
+
+
+def _glow(name: str, shape: tuple[int, int], seed: int) -> np.ndarray | None:
+    """
+    Positive-only warmth, for the two terrains that should look hot.
+
+    Thresholded high so it appears as narrow channels rather than a wash - the
+    projector reuses the albedo as its emissive map, so whatever is bright here
+    is what lights up on the night side.
+    """
+    if name == "lava":
+        return np.clip((_ridged(shape, seed + 100, base_cells=7) - 0.72) / 0.28, 0, 1)
+    if name == "volcano":
+        return np.clip((_ridged(shape, seed + 31, base_cells=4) - 0.84) / 0.16, 0, 1)
+    return None

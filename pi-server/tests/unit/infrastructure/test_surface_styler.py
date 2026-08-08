@@ -139,3 +139,39 @@ class TestDisabled:
         """
         source = png(drawing)
         assert PillowSurfaceStyler(enabled=False).style(source) == source
+
+
+class TestNoHalo:
+    """
+    Regression: feathering the strokes straight from the original painted a
+    white outline around every one of them, because just outside a stroke the
+    original is white paper. Worst on sparse drawings - three strokes on an
+    empty canvas, which is most of what a child actually draws.
+    """
+
+    def test_a_stroke_has_no_white_outline(self, styler):
+        image = Image.new("RGB", SIZE, (255, 255, 255))
+        ImageDraw.Draw(image).line(
+            [(40, 64), (210, 64)], fill=(30, 120, 220), width=14
+        )
+
+        result = open_png(styler.style(png(image)))
+
+        # Sample a band just outside the stroke, where the halo appeared.
+        just_outside = [result.getpixel((x, 64 - 12)) for x in range(60, 190, 6)]
+        for pixel in just_outside:
+            # Not merely "not pure white": a pale fringe tracing the line is
+            # the artifact, and it reads as a highlight rather than terrain.
+            assert min(pixel) < 215, f"pale halo beside the stroke: {pixel}"
+
+    def test_the_stroke_itself_still_reads(self, styler):
+        """The fix must not achieve "no halo" by erasing the drawing."""
+        image = Image.new("RGB", SIZE, (255, 255, 255))
+        ImageDraw.Draw(image).line(
+            [(40, 64), (210, 64)], fill=(30, 120, 220), width=14
+        )
+
+        result = open_png(styler.style(png(image)))
+
+        on_stroke = result.getpixel((125, 64))
+        assert on_stroke[2] > on_stroke[0] + 40, f"stroke lost its colour: {on_stroke}"

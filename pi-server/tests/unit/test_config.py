@@ -85,15 +85,15 @@ class TestEnvironmentFlag:
 
 class TestSurfaceStyle:
     """
-    The default was moved from terrain to blend after both were seen on a
-    projector. Pinned because it is a taste decision that reads like an
-    arbitrary constant, and is exactly the sort of thing a later change
-    "tidies" back.
+    Pinned because it is a taste decision that reads like an arbitrary
+    constant, and is exactly the sort of thing a later change "tidies". It has
+    already moved twice: to terrain, back to blend when terrain replaced the
+    drawn colours, and to terrain again once terrain only modulated them.
     """
 
-    def test_defaults_to_blend(self):
-        assert Settings().surface_style == "blend"
-        assert Settings.from_env({}).surface_style == "blend"
+    def test_defaults_to_terrain(self):
+        assert Settings().surface_style == "terrain"
+        assert Settings.from_env({}).surface_style == "terrain"
 
     def test_every_documented_style_is_accepted(self):
         for style in ("blend", "terrain", "off"):
@@ -104,5 +104,5 @@ class TestSurfaceStyle:
 
     def test_an_unknown_style_falls_back_instead_of_raising(self):
         """A typo in a systemd unit must not stop the projector serving planets."""
-        assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "blend"
-        assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "blend"
+        assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "terrain"
+        assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "terrain"
