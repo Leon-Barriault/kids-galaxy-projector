@@ -1,10 +1,9 @@
 # AGENTS.md — handoff for the next agent
 
-Written mid-feature. Part one of three is committed and green; parts two and
-three are specified here but not written. Read this whole file before touching
-anything: several of the decisions below were made by the repository owner
-against explicit alternatives, and re-deriving them will produce a different
-and wrong answer.
+Features 1–3 from the original tablet/projector handoff are implemented and
+on main. Read this whole file before touching anything: several of the
+decisions below were made by the repository owner against explicit
+alternatives, and re-deriving them will produce a different and wrong answer.
 
 ---
 
@@ -67,129 +66,57 @@ raising the limit needs no re-upload).
 
 ## 3. What is done (committed, green)
 
-**The whole server side of feature 2.** 160 tests pass, ruff clean.
+**Feature 1 — fixed planet guide on the tablet.**
 
-- `Planet.to_payload()` gained `"id"`. The projector accumulates planets now,
-  so it needs a stable dedupe key. The id is already inside the URL, so this
-  leaks nothing new. One payload shape is shared by `/api/current-planet`,
-  `/api/planets` and the SSE stream — deliberately, so the projector has one
-  code path whether a planet arrives on load or arrives live.
-- `PlanetRepository.recent(limit)` — port + filesystem implementation. Newest
-  first, same ordering as `latest()`, non-positive limit returns `[]`.
-- `ListRecentPlanetsUseCase` — `max_limit` is a hard ceiling, not a default.
-  The query parameter behind it is caller-controlled.
-- `GET /api/planets?limit=N` — newest first. `limit` is optional, `ge=1`, and
-  clamped to the gallery size. Omitting it returns exactly the gallery size.
-- `Settings.gallery_size` (env `GALLERY_SIZE`, default 12), wired in the
-  factory as `min(gallery_size, max_stored_planets)` — showing more planets
-  than the store keeps would leave gaps the moment `prune` runs.
+- `PlanetGuide` in domain (pure JVM): centre + radius from `CanvasSize`
+  (radius ≈ 0.42 × min dimension). `contains()` inclusive on the rim.
+  Unmeasured canvas yields a degenerate guide (radius 0).
+- `DrawingCanvas` paints a soft blue outline (`GUIDE_OUTLINE_COLOR` /
+  `GUIDE_STROKE_WIDTH`) and clips all strokes to the guide via `clipPath`.
+  The guide is never stored as a stroke — undo / clear / canLaunch stay
+  driven by `drawing.isEmpty`.
 
-Nothing on the Android side or in `galaxy.js` has been touched yet.
+**Feature 2 — every drawing becomes its own planet.**
+
+Server (already green at 7d70397):
+
+- `Planet.to_payload()` gained `"id"`. Shared payload shape across
+  `/api/current-planet`, `/api/planets` and the SSE stream.
+- `PlanetRepository.recent(limit)`, `ListRecentPlanetsUseCase`,
+  `GET /api/planets?limit=N`, `Settings.gallery_size` (default 12).
+
+Projector (`pi-server/static/galaxy.js`):
+
+- `kidPlanets` Map keyed by id; SSE and gallery load share `addKidPlanet`.
+- `loadInitialGallery` fetches `GET /api/planets?limit=GALLERY_SIZE` on start
+  (newest first, no celebrate for restored bodies).
+- `disposeOldestIfNeeded` when past 12; deterministic `orbitParamsForIndex`.
+- Celebrate (scale-in + banner) only for live arrivals.
+
+**Feature 3 — the circle becomes the whole sphere.**
+
+- `SphericalProjection` (domain, pure JVM): polar reverse mapping —
+  equirectangular texel samples the source disc so centre = north pole,
+  rim = south pole. Property tests for poles, rim, monotonic r, longitude wrap.
+- `TextureProjection.mapGuide` so clip path and polar mapping share geometry.
+- Two-stage renderer: stage 1 draws strokes into a square disc clipped to
+  `PlanetGuide`; stage 2 resamples via `SphericalProjection` into 1024×512
+  equirectangular PNG (`IntArray` bulk pixel access).
+
+Architecture boundaries (`make arch`) and ktlint 1.5.0 hold. Domain stays
+free of Android/Compose imports.
 
 ---
 
-## 4. What is left
+## 4. What is left / known follow-ups
 
-### 4.1 Android domain — pure, framework-free, test first
-
-Two new types under `android/app/src/main/kotlin/com/kidsgalaxy/domain/`.
-Both must import nothing from `android.*` or `androidx.*`; `make arch`
-enforces this and the JVM tests depend on it.
-
-**`domain/model/PlanetGuide.kt`** — where the circle is.
-
-Derived from `CanvasSize`, not stored as a stroke. Suggested shape:
-
-```kotlin
-data class PlanetGuide(val centreX: Float, val centreY: Float, val radius: Float) {
-    fun contains(point: Point): Boolean
-    companion object {
-        fun forCanvas(size: CanvasSize): PlanetGuide   // radius ≈ 0.42 * min(w, h)
-    }
-}
-```
-
-Tests to write first: centred on any aspect ratio; radius scales with the
-smaller dimension so the circle always fits; `contains` is true at the centre
-and false outside the rim; an unmeasured canvas yields a degenerate guide that
-callers can detect rather than a crash.
-
-**`domain/render/SphericalProjection.kt`** — the polar mapping.
-
-Pure arithmetic mapping an *output* equirectangular texel back to the *source*
-disc point to sample. Reverse mapping, not forward — that is what makes it a
-simple resample loop with no gaps.
-
-Given output size `W × H` (use 2:1, e.g. 1024 × 512) and a source disc of
-centre `(cx, cy)` and radius `R`:
-
-```
-v = (y + 0.5) / H          colatitude fraction, 0 at the north pole
-u = (x + 0.5) / W          longitude fraction
-θ = v · π                  colatitude
-φ = u · 2π                 longitude
-r = θ / π  ( = v )         distance from the disc centre, 0..1
-sourceX = cx + r · R · cos(φ)
-sourceY = cy + r · R · sin(φ)
-```
-
-Tests to write first: the top row maps to the disc centre; the bottom row maps
-to the rim; `r` grows monotonically with `y`; longitude wraps so `u = 0` and
-`u = 1` land on the same source point; every returned point lies inside the
-disc. Property-style assertions are more useful here than fixed values.
-
-### 4.2 Android renderer
-
-`data/render/AndroidPlanetTextureRenderer.kt` becomes two stages:
-
-1. Render the strokes into a square disc bitmap as today, but with
-   `canvas.clipPath(circlePath)` from the `PlanetGuide` so anything drawn
-   outside the circle is dropped. Background stays white.
-2. Resample that bitmap into a `W × H` equirectangular bitmap through
-   `SphericalProjection`, then PNG-encode *that*.
-
-Use `IntArray` pixel access on both bitmaps, not `getPixel` per texel —
-1024 × 512 is 524k lookups and the per-call overhead dominates otherwise.
-Nearest-neighbour sampling is fine: the source is 1024² so there is plenty of
-detail, and the pole region oversamples anyway.
-
-This class is the only place in the app allowed to touch `android.graphics`.
-Keep it that way — the coordinate mathematics belongs in the domain, which is
-why the domain tests run without an emulator.
-
-### 4.3 Android UI
-
-`ui/DrawingCanvas.kt` paints the guide circle outline beneath the strokes and
-clips drawing to it, so the tablet shows exactly what becomes the planet. Use
-`PlanetGuide.forCanvas` on the measured size — do not duplicate the geometry.
-
-Watch out: `DrawingUiState.canUndo` and `canLaunch` are both driven by
-`drawing.isEmpty`. The guide is not a stroke, so they keep working unchanged.
-That is the intended behaviour — the kid must actually draw something before
-Launch lights up.
-
-### 4.4 Projector
-
-`pi-server/static/galaxy.js` currently creates one `kidBody` and swaps its
-material on every arrival (`applyPlanetTexture`). Replace that with a set:
-
-- On load, `GET /api/planets` and create one body per planet. Remember the
-  response is newest first — build orbits in reverse so arrival order matches.
-- On each SSE `planet` event, add a body. Dedupe on `payload.id`; the SSE
-  stream also emits the current planet on connect, so duplicates are normal
-  and must not produce two planets.
-- Past 12, shrink the oldest away and dispose its geometry, material *and*
-  texture. Three.js does not garbage-collect GPU resources; on a Pi running for
-  an afternoon this leak is the difference between working and not.
-- Give each planet a distinct orbit — vary semi-major axis, inclination and
-  initial mean anomaly deterministically from the index so a reload reproduces
-  the same sky rather than reshuffling it.
-- Keep the sun, the three decorative planets and the star field.
-- Keep `/api/current-planet` working; it is the SSE fallback path.
-
-The existing scale-in animation and the celebration burst should fire for a
-newly arrived planet, not for the ones restored on load — otherwise every page
-refresh sets off twelve celebrations at once.
+- Keep CI green on every push. The Android job is the long pole; ktlint and
+  `make arch` are the fast gates that catch most regressions before Gradle.
+- Dependency versions remain pinned to the set introduced at 7d70397 unless
+  the owner explicitly asks to bump them.
+- Optional polish (not blocking): richer arrival animations, per-planet labels
+  on the projector, or a tablet preview of the equirectangular texture before
+  launch. None of these change the domain contracts above.
 
 ---
 
@@ -247,7 +174,7 @@ used for every commit so far:
    with the returned `file_uuid` to write it into the owner's connected folder
    (`.../flyscan-cowork/Leon-Barriault/kids-galaxy-projector`).
 3. Via `mcp__remote-devices__Windows-MCP__PowerShell`, copy it into the working
-   clone at `C:\Users\LéonBarriault\AppData\Local\Temp\kg-push`, then
+   clone at `C:\\Users\\LéonBarriault\\AppData\\Local\\Temp\\kg-push`, then
    `git fetch <bundle> <branch>` and `git push origin FETCH_HEAD:main`.
 4. Confirm the CI run is green through the Chrome connector at
    `github.com/Leon-Barriault/kids-galaxy-projector/actions?query=branch:main`.
@@ -300,7 +227,5 @@ undo them.
 
 ## 7. Where to start
 
-Read `ARCHITECTURE.md`, then `android/ANDROID_STUDIO.md` section 4a. Then
-write `SphericalProjectionTest` and watch it fail. That single class is the
-heart of feature 3, it is pure arithmetic, it needs no emulator, and getting it
-right first makes the renderer change mechanical.
+Features 1–3 are on main. Prefer small, CI-green pushes. If something is red,
+fix the failing gate first (ktlint / arch / tests) before adding more surface.
