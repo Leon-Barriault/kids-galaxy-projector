@@ -12,7 +12,7 @@ not a regression check.
 | Requirement | Version | Why this exact thing |
 |---|---|---|
 | Android Studio | **Quail 3 (2026.1.3)** or newer | AGP 9.3 refuses to load in older Studio versions |
-| JDK | 17 (Studio's bundled JDK is fine) | `compileOptions` and `jvmTarget` are both 17 |
+| JDK | 17 or 21 — Studio's bundled JBR is fine | Bytecode target is 17 and CI builds on 17; 24+ runs ahead of AGP |
 | Android SDK Platform | **API 37** | `androidx.lifecycle` 2.11 requires compiling against 37 |
 | Android SDK Platform | API 26 | `minSdk`, needed for the oldest emulator you'll test |
 | Gradle | 9.6.1 — **don't install it** | The wrapper downloads it; use `./gradlew`, never a local `gradle` |
@@ -45,12 +45,63 @@ problem in this project so far has been a configuration problem, not a code one.
 Do this before touching a device. These are plain JVM tests — no emulator, no
 hardware — and they cover the parts most likely to be wrong.
 
+**From the IDE** (simplest — no environment setup at all): right-click
+`app/src/test/kotlin` → **Run 'Tests in kotlin'**. Studio supplies its own JDK
+and SDK configuration, so nothing needs to be on your `PATH`.
+
+**From a terminal:**
+
 ```bash
 cd android
-./gradlew testDebugUnitTest
+./gradlew testDebugUnitTest      # Windows: .\gradlew.bat testDebugUnitTest
 ```
 
-In the IDE: right-click `app/src/test/kotlin` → **Run 'Tests in kotlin'**.
+### If the terminal run fails before Gradle even starts
+
+Two errors are near-universal on a first terminal run. Neither means anything is
+wrong with the project.
+
+**`JAVA_HOME is not set and no 'java' command could be found`**
+
+Gradle needs a JDK. You don't have to install one — Android Studio bundles a
+runtime. Find its exact location in Studio under **Settings → Build, Execution,
+Deployment → Build Tools → Gradle → Gradle JDK**, then:
+
+```powershell
+# Windows (PowerShell), current session
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+
+# Windows, persist for future sessions (then reopen the terminal)
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
+```
+
+```bash
+# macOS
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+# Linux
+export JAVA_HOME="$HOME/android-studio/jbr"
+```
+
+Use JDK 17 or 21. CI builds on 17 and the project targets 17 bytecode; JDK 24+
+runs ahead of AGP's supported range and fails in ways that are tedious to
+diagnose.
+
+Note that installing a JDK does not update an already-open terminal — reopen it,
+or the `java` command will still appear missing.
+
+**`SDK location not found`**
+
+Gradle also needs the Android SDK path, which Studio knows but a bare terminal
+does not. Opening the project in Studio once writes `android/local.properties`
+for you. Otherwise create it by hand — backslashes must be escaped:
+
+```properties
+sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+```
+
+`local.properties` is gitignored on purpose: it is machine-specific and must
+never be committed.
 
 Four suites, all fast:
 
