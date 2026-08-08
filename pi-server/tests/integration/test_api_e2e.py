@@ -15,8 +15,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.sse import build_planet_event_response
+from app.application.events import PlanetCreated, PlanetRemoved
 from app.application.use_cases import GetCurrentPlanetUseCase
 from app.config import Settings
+from app.domain.planet import Planet
 from app.factory import create_app
 
 
@@ -356,9 +358,8 @@ class TestDeletePlanet:
     @pytest.mark.asyncio
     async def test_connected_projectors_are_told(self, app, publisher):
         """
-        The removal rides the same SSE channel as arrivals - the projector
-        keys on `removed`, so a separate event type would be silently ignored
-        by any client subscribed only to `planet`.
+        The application publishes a typed removal event. The SSE adapter is
+        responsible for turning that event into the stable projector payload.
 
         Driven through the use case rather than TestClient because the
         publisher is async and a subscriber has to be registered before the
@@ -373,11 +374,7 @@ class TestDeletePlanet:
             use_case.execute(planet.id)
             received = await asyncio.wait_for(stream.get(), timeout=1)
 
-        assert received == {
-            "has_planet": False,
-            "id": "abc123",
-            "removed": True,
-        }
+        assert received == PlanetRemoved("abc123")
 
     def test_an_unknown_id_is_404_not_500(self, client):
         response = client.delete("/api/planets/doesnotexist")
@@ -511,19 +508,27 @@ class TestEventStream:
             await asyncio.wait_for(stream.__anext__(), timeout=5)  # priming frame
 
             publisher.publish(
-                {
-                    "has_planet": True,
-                    "url": "/uploads/pushed.png",
-                    "name": "Pushed World",
-                    "timestamp": 1234.0,
-                }
+                PlanetCreated(
+                    Planet(
+                        id="pushed",
+                        filename="pushed.png",
+                        display_name="Pushed World",
+                        created_at=1234.0,
+                    )
+                )
             )
             pushed = await asyncio.wait_for(stream.__anext__(), timeout=5)
         finally:
             await stream.aclose()
 
         payload = _parse_sse(pushed)
-        assert payload["name"] == "Pushed World"
+        assert payload == {
+            "has_planet": True,
+            "id": "pushed",
+            "url": "/uploads/pushed.png",
+            "name": "Pushed World",
+            "timestamp": 1234.0,
+        }
 
     async def test_subscriber_is_released_on_disconnect(self, app, publisher):
         assert publisher.subscriber_count == 0
