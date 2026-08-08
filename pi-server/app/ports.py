@@ -1,22 +1,14 @@
-"""
-Ports: the abstractions the application layer depends on.
-
-Dependency inversion lives here. Use cases are written against these
-interfaces, and `app.infrastructure` supplies the concrete adapters, so the
-orchestration logic can be tested with fakes and the storage or transport can
-be swapped without touching business rules.
-"""
+"""Ports: abstractions the application layer depends on."""
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
 
+from app.application.event_types import ApplicationEvent
 from app.domain.planet import Planet
 
 
 class PlanetRepository(ABC):
-    """Persistence for planet drawings."""
-
     @abstractmethod
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
         """Store the image plus its display name and return the entity."""
@@ -27,23 +19,11 @@ class PlanetRepository(ABC):
 
     @abstractmethod
     def recent(self, limit: int) -> list[Planet]:
-        """
-        The newest `limit` planets, newest first.
-
-        The projector shows a gallery rather than a single planet, so it needs
-        the whole set on load - `latest()` alone would empty the sky on every
-        page reload. A limit of zero or less returns an empty list.
-        """
+        """Newest `limit` planets, newest first."""
 
     @abstractmethod
     def clear(self) -> list[Planet]:
-        """
-        Remove every stored planet and return what was removed.
-
-        Returning the planets rather than a count keeps the use case able to
-        report and log what actually went, and keeps the port symmetric with
-        delete().
-        """
+        """Remove every stored planet and return what was removed."""
 
     @abstractmethod
     def prune(self, keep: int) -> None:
@@ -51,45 +31,29 @@ class PlanetRepository(ABC):
 
     @abstractmethod
     def delete(self, planet_id: str) -> Planet | None:
-        """
-        Remove one planet by id.
-
-        Returns the deleted entity so callers can publish a removal event, or
-        None if no planet with that id exists.
-        """
+        """Remove one planet by id, returning it when found."""
 
     @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
-        """
-        Map a requested filename to a real path inside the store.
-
-        Returns None if it does not exist or would escape the directory.
-        """
+        """Resolve a public image filename inside the backing store."""
 
 
 class EventPublisher(ABC):
-    """Fan-out of planet updates to connected projectors."""
+    """Fan-out of typed application events to connected adapters."""
 
     @abstractmethod
-    def publish(self, payload: dict) -> None:
-        """Deliver a payload to all subscribers. Must never block the caller."""
+    def publish(self, event: ApplicationEvent) -> None:
+        """Deliver an event to all subscribers without blocking the caller."""
 
     @abstractmethod
     def subscribe(self) -> AbstractAsyncContextManager:
-        """Async context manager yielding a queue of payloads."""
+        """Async context manager yielding a queue of ApplicationEvent values."""
 
 
 class RateLimiter(ABC):
-    """
-    Per-client cooldown, split into a pure query and an explicit mark.
-
-    Separating them means a rejected upload does not consume the client's
-    cooldown - nothing was stored, so nothing should be throttled.
-    """
-
     @abstractmethod
     def check(self, key: str) -> None:
-        """Raise RateLimitedError if `key` is still within its cooldown."""
+        """Raise when `key` is still within its cooldown."""
 
     @abstractmethod
     def record(self, key: str) -> None:
@@ -97,44 +61,22 @@ class RateLimiter(ABC):
 
 
 class SurfaceStyler(ABC):
-    """
-    Cosmetic pass that turns a drawing into a planet surface.
-
-    Separate from ImageProcessor on purpose. That one is a security control -
-    re-encoding to strip anything smuggled inside the upload - and mixing a
-    look-and-feel decision into it would mean tuning the appearance of planets
-    inside the code that defends the server.
-    """
-
     @abstractmethod
     def style(self, png_bytes: bytes) -> bytes:
-        """
-        Return a styled PNG. Must never raise: styling is cosmetic, and a
-        planet that looks like paper beats an upload that fails.
-        """
+        """Return a styled PNG; styling is cosmetic and must be resilient."""
 
 
 class ServiceAdvertiser(ABC):
-    """
-    Announces this galaxy on the local network so tablets can find it.
-
-    A port rather than a direct zeroconf call because advertising is optional
-    and failure-prone - multicast is often blocked - and the application must
-    be able to run with it switched off entirely.
-    """
-
     @abstractmethod
     def start(self) -> None:
-        """Begin advertising. Must never raise: discovery is not the service."""
+        """Begin advertising the galaxy on the local network."""
 
     @abstractmethod
     def stop(self) -> None:
-        """Withdraw the advertisement. Must never raise."""
+        """Withdraw the local-network advertisement."""
 
 
 class ImageProcessor(ABC):
-    """Normalise uploaded images into a safe, fixed-size PNG texture."""
-
     @abstractmethod
     def normalize_to_png(
         self, content: bytes, max_dimension: int, target_size: int
