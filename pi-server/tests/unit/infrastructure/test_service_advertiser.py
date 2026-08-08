@@ -38,7 +38,15 @@ class FakeZeroconf:
 
 
 class FakeServiceInfo:
-    def __init__(self, type_, name, addresses=None, port=None, properties=None, server=None):
+    def __init__(
+        self,
+        type_,
+        name,
+        addresses=None,
+        port=None,
+        properties=None,
+        server=None,
+    ):
         self.type = type_
         self.name = name
         self.addresses = addresses
@@ -59,7 +67,9 @@ def fake_zeroconf(monkeypatch):
 
 class TestAdvertising:
     def test_registers_under_the_galaxy_name(self, fake_zeroconf):
-        advertiser = ZeroconfServiceAdvertiser(Galaxy(name="Playroom"), 8000, "10.0.0.5")
+        advertiser = ZeroconfServiceAdvertiser(
+            Galaxy(name="Playroom"), 8000, "10.0.0.5"
+        )
         advertiser.start()
 
         info = FakeZeroconf.instances[0].registered[0]
@@ -67,16 +77,27 @@ class TestAdvertising:
         assert info.name.startswith("Playroom.")
         assert info.port == 8000
 
-    def test_carries_the_name_in_the_txt_record(self, fake_zeroconf):
-        """
-        So a tablet can draw the whole picker from the browse result and only
-        make an HTTP call once a child has actually chosen one.
-        """
-        ZeroconfServiceAdvertiser(Galaxy(name="Attic"), 8000, "10.0.0.5").start()
+    def test_carries_connection_metadata_in_the_txt_record(self, fake_zeroconf):
+        """A tablet can build the picker without probing every discovered Pi."""
+        ZeroconfServiceAdvertiser(
+            Galaxy(name="Attic"),
+            8443,
+            "10.0.0.5",
+            scheme="https",
+        ).start()
 
         properties = FakeZeroconf.instances[0].registered[0].properties
         assert properties["name"] == "Attic"
         assert properties["service"] == "kids-galaxy-projector"
+        assert properties["scheme"] == "https"
+
+    def test_unknown_scheme_falls_back_to_http(self, fake_zeroconf):
+        ZeroconfServiceAdvertiser(
+            Galaxy(), 8000, "10.0.0.5", scheme="gopher"
+        ).start()
+
+        properties = FakeZeroconf.instances[0].registered[0].properties
+        assert properties["scheme"] == "http"
 
     def test_uses_the_address_it_was_given(self, fake_zeroconf):
         import socket
