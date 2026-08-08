@@ -100,6 +100,5 @@ class GalaxyTargetVerifierTest {
             .body(body.toResponseBody("application/json".toMediaType()))
             .build()
 
-    private fun target(): GalaxyTarget =
-        GalaxyTarget.create("Room A", "http://10.42.0.1:8000/")
+    private fun target(): GalaxyTarget = GalaxyTarget.create("Room A", "http://10.42.0.1:8000/")
 }
