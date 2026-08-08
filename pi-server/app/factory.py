@@ -22,7 +22,10 @@ from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
-from app.infrastructure.service_advertiser import NullServiceAdvertiser, ZeroconfServiceAdvertiser
+from app.infrastructure.service_advertiser import (
+    NullServiceAdvertiser,
+    ZeroconfServiceAdvertiser,
+)
 from app.infrastructure.surface_styler import PillowSurfaceStyler
 from app.infrastructure.terrain_styler import TerrainSurfaceStyler
 
@@ -43,7 +46,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     repository = FileSystemPlanetRepository(settings.upload_dir)
     publisher = InMemoryEventPublisher()
-    rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
+    rate_limiter = InMemoryRateLimiter(
+        cooldown_seconds=settings.rate_limit_seconds
+    )
     image_processor = PillowImageProcessor()
     surface_styler = _styler_for(settings.surface_style)
 
@@ -57,12 +62,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
     get_current_scene = GetCurrentSceneUseCase(repository)
-    list_recent_planets = ListRecentPlanetsUseCase(repository, max_limit=settings.max_stored_planets)
-    delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
-    clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
+    list_recent_planets = ListRecentPlanetsUseCase(
+        repository,
+        max_limit=settings.max_stored_planets,
+    )
+    delete_planet = DeletePlanetUseCase(
+        repository=repository, publisher=publisher
+    )
+    clear_planets = ClearPlanetsUseCase(
+        repository=repository, publisher=publisher
+    )
 
     galaxy = Galaxy(name=settings.galaxy_name)
-    advertiser = ZeroconfServiceAdvertiser(galaxy, settings.port) if settings.advertise else NullServiceAdvertiser()
+    advertiser = (
+        ZeroconfServiceAdvertiser(galaxy, settings.port)
+        if settings.advertise
+        else NullServiceAdvertiser()
+    )
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -90,7 +106,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     if settings.static_dir.is_dir():
-        app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
+        app.mount(
+            "/static",
+            StaticFiles(directory=settings.static_dir),
+            name="static",
+        )
     else:
         logger.warning("Static directory %s not found", settings.static_dir)
 
