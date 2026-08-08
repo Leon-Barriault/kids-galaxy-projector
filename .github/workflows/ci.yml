@@ -65,11 +65,11 @@ jobs:
           curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
           chmod +x /tmp/ktlint
           cd android
-          # Every module, main and test sources - no path allowlist. The
-          # manager module went in unlinted; a second app is exactly the
-          # kind of thing a path allowlist quietly forgets.
+          # Every module, main and test sources - no path allowlist. Shared
+          # connection code is used by both tablet apps and must be held to the
+          # same gate as their application code.
           /tmp/ktlint --relative --editorconfig=.editorconfig \
-            "app/src/**/*.kt" "manager/src/**/*.kt"
+            "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
 
   architecture:
     name: Architecture boundaries
@@ -231,7 +231,7 @@ jobs:
           key: gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Run JVM unit tests (domain + presentation)
+      - name: Run JVM unit tests (all Android modules)
         working-directory: android
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
