@@ -7,11 +7,23 @@ status codes. No business rules live here.
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.sse import build_planet_event_response
-from app.application.use_cases import GetCurrentPlanetUseCase, SubmitPlanetUseCase
+from app.application.use_cases import (
+    GetCurrentPlanetUseCase,
+    ListRecentPlanetsUseCase,
+    SubmitPlanetUseCase,
+)
 from app.domain.errors import DomainError, RateLimitedError, ValidationError
 from app.domain.image_rules import ensure_size_within
 from app.ports import EventPublisher, PlanetRepository
@@ -35,6 +47,7 @@ def build_router(
     *,
     submit_planet: SubmitPlanetUseCase,
     get_current_planet: GetCurrentPlanetUseCase,
+    list_recent_planets: ListRecentPlanetsUseCase,
     repository: PlanetRepository,
     publisher: EventPublisher,
     settings,
@@ -57,7 +70,29 @@ def build_router(
 
     @router.get("/api/current-planet")
     async def current_planet():
+        """The newest planet. Kept for the SSE fallback path and for probes."""
         return get_current_planet.execute()
+
+    @router.get("/api/planets")
+    async def planet_gallery(
+        limit: int | None = Query(
+            default=None,
+            ge=1,
+            description=(
+                "How many planets to return, newest first. Clamped to the "
+                "configured gallery size; omit it to get exactly that many."
+            ),
+        ),
+    ):
+        """
+        Every planet currently in orbit, newest first.
+
+        The projector calls this on load. /api/current-planet returns only
+        the newest, which was enough when a single planet was repainted in
+        place; now that each drawing gets its own planet, a refresh without
+        this endpoint would empty the sky.
+        """
+        return list_recent_planets.execute(limit=limit)
 
     @router.post("/api/upload")
     async def upload_planet(

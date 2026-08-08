@@ -26,6 +26,16 @@ class PlanetRepository(ABC):
         """Most recently stored planet, or None if there are none."""
 
     @abstractmethod
+    def recent(self, limit: int) -> list[Planet]:
+        """
+        The newest `limit` planets, newest first.
+
+        The projector shows a gallery rather than a single planet, so it needs
+        the whole set on load - `latest()` alone would empty the sky on every
+        page reload. A limit of zero or less returns an empty list.
+        """
+
+    @abstractmethod
     def prune(self, keep: int) -> None:
         """Delete all but the newest `keep` planets."""
 

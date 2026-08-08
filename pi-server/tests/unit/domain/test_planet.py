@@ -23,12 +23,23 @@ class TestPlanet:
         payload = make_planet().to_payload()
         assert payload == {
             "has_planet": True,
+            "id": "abc123",
             "url": "/uploads/abc123_My Planet.png",
             "name": "My Planet",
             "timestamp": 1234.5,
         }
 
-    def test_payload_never_leaks_the_internal_id(self):
+    def test_payload_carries_the_id_so_the_projector_can_deduplicate(self):
+        """
+        The projector now accumulates planets instead of replacing one, so it
+        needs a stable key to tell "already in orbit" from "just arrived". The
+        id is already visible inside the URL, so publishing it leaks nothing new.
+        """
+        payload = make_planet().to_payload()
+        assert payload["id"] == "abc123"
+        assert payload["id"] in payload["url"]
+
+    def test_payload_never_leaks_the_internal_id_into_the_name(self):
         """Regression: the projector used to render '<hex id> My Planet'."""
         planet = make_planet(id="f31fc218ce", filename="f31fc218ce_My Planet.png")
         assert planet.to_payload()["name"] == "My Planet"

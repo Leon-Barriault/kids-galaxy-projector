@@ -201,6 +201,79 @@ class TestEndToEndPlanetFlow:
         assert client.get("/api/current-planet").json() == {"has_planet": False}
 
 
+class TestPlanetGallery:
+    """
+    Every drawing becomes its own planet now, so the projector loads the whole
+    visible set on start. Before this endpoint existed, refreshing the page
+    emptied a sky that had taken an afternoon to fill.
+    """
+
+    def test_empty_before_any_upload(self, client):
+        assert client.get("/api/planets").json() == {"planets": []}
+
+    def test_lists_every_upload_newest_first(self, client, upload_planet):
+        upload_planet("First")
+        upload_planet("Second")
+        upload_planet("Third")
+
+        planets = client.get("/api/planets").json()["planets"]
+
+        assert [p["name"] for p in planets] == ["Third", "Second", "First"]
+
+    def test_each_entry_matches_the_single_planet_payload_shape(
+        self, client, upload_planet
+    ):
+        """One wire format, so the projector has one code path for both."""
+        upload_planet("Only One")
+
+        gallery = client.get("/api/planets").json()["planets"]
+        current = client.get("/api/current-planet").json()
+
+        assert gallery == [current]
+
+    def test_entries_carry_a_usable_texture_url(self, client, upload_planet):
+        upload_planet("Texturised")
+
+        planet = client.get("/api/planets").json()["planets"][0]
+        texture = client.get(planet["url"])
+
+        assert texture.status_code == 200
+        assert texture.headers.get("content-type", "").startswith("image/")
+
+    def test_ids_are_distinct_so_the_projector_can_deduplicate(
+        self, client, upload_planet
+    ):
+        upload_planet("One")
+        upload_planet("Two")
+
+        ids = [p["id"] for p in client.get("/api/planets").json()["planets"]]
+
+        assert len(set(ids)) == 2
+
+    def test_limit_narrows_the_result(self, client, upload_planet):
+        upload_planet("First")
+        upload_planet("Second")
+
+        planets = client.get("/api/planets?limit=1").json()["planets"]
+
+        assert [p["name"] for p in planets] == ["Second"]
+
+    def test_an_absurd_limit_is_clamped_not_honoured(self, client, upload_planet):
+        """The parameter is caller-controlled; it must not open the whole store."""
+        for i in range(4):
+            upload_planet(f"Planet {i}")
+
+        planets = client.get("/api/planets?limit=100000").json()["planets"]
+
+        assert len(planets) <= 12
+
+    def test_a_negative_limit_is_rejected_rather_than_guessed_at(self, client):
+        assert client.get("/api/planets?limit=-1").status_code == 422
+
+    def test_a_non_numeric_limit_is_rejected(self, client):
+        assert client.get("/api/planets?limit=all").status_code == 422
+
+
 class TestDisplayName:
     """
     The projector must show exactly what the child typed - never the internal

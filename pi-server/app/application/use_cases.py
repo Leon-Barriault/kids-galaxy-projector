@@ -23,6 +23,11 @@ DEFAULT_MAX_DIMENSION = 2048
 DEFAULT_TARGET_SIZE = 1024
 DEFAULT_RETENTION = 30
 
+#: How many planets orbit at once. Retention (30) is about disk; this is about
+#: what a projector can show and a room can follow. The store deliberately
+#: keeps more than the sky shows.
+DEFAULT_GALLERY_SIZE = 12
+
 
 class SubmitPlanetUseCase:
     """
@@ -103,3 +108,30 @@ class GetCurrentPlanetUseCase:
     def execute(self) -> dict:
         planet = self._repository.latest()
         return planet.to_payload() if planet else NO_PLANET_PAYLOAD
+
+
+class ListRecentPlanetsUseCase:
+    """
+    The projector's gallery.
+
+    Every drawing now becomes its own planet, so on load the projector needs
+    the whole visible set rather than only the newest one - otherwise
+    refreshing the page would empty a sky that took an afternoon to fill.
+
+    `max_limit` is a ceiling, not a suggestion. The query parameter behind it
+    is caller-controlled, and leaving it unbounded would turn this into a way
+    to enumerate and re-read the entire store in one request.
+    """
+
+    def __init__(
+        self,
+        repository: PlanetRepository,
+        max_limit: int = DEFAULT_GALLERY_SIZE,
+    ):
+        self._repository = repository
+        self._max_limit = max_limit
+
+    def execute(self, limit: int | None = None) -> dict:
+        effective = self._max_limit if limit is None else min(limit, self._max_limit)
+        planets = self._repository.recent(effective)
+        return {"planets": [planet.to_payload() for planet in planets]}

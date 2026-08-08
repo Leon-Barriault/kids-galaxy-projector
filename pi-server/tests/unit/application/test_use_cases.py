@@ -8,7 +8,11 @@ publish -> prune) is verified in isolation and runs in microseconds.
 
 import pytest
 
-from app.application.use_cases import GetCurrentPlanetUseCase, SubmitPlanetUseCase
+from app.application.use_cases import (
+    GetCurrentPlanetUseCase,
+    ListRecentPlanetsUseCase,
+    SubmitPlanetUseCase,
+)
 from app.domain.errors import ImageValidationError, RateLimitedError
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
 
@@ -32,6 +36,11 @@ class FakePlanetRepository:
 
     def latest(self):
         return self.saved[-1] if self.saved else None
+
+    def recent(self, limit):
+        if limit <= 0:
+            return []
+        return list(reversed(self.saved))[:limit]
 
     def prune(self, keep):
         self.pruned_to = keep
@@ -271,3 +280,58 @@ class TestGetCurrentPlanet:
         payload = GetCurrentPlanetUseCase(repo).execute()
         assert payload["has_planet"] is True
         assert payload["name"] == "Second"
+
+
+class TestListRecentPlanets:
+    """
+    Feeds the projector's gallery. Every drawing gets its own planet now, so
+    the projector needs the whole set on load - not just the newest - or a
+    refresh would empty the sky.
+    """
+
+    def test_returns_nothing_when_no_planet_has_been_drawn(self):
+        result = ListRecentPlanetsUseCase(FakePlanetRepository()).execute(limit=12)
+        assert result == {"planets": []}
+
+    def test_returns_payloads_newest_first(self):
+        repo = FakePlanetRepository()
+        repo.save("id1", "First", b"x")
+        repo.save("id2", "Second", b"x")
+
+        result = ListRecentPlanetsUseCase(repo).execute(limit=12)
+
+        assert [p["name"] for p in result["planets"]] == ["Second", "First"]
+        assert all(p["has_planet"] is True for p in result["planets"])
+
+    def test_uses_the_same_payload_shape_as_the_single_planet_endpoint(self):
+        """One wire format, so the projector has one code path for both."""
+        repo = FakePlanetRepository()
+        planet = repo.save("id1", "Only", b"x")
+
+        result = ListRecentPlanetsUseCase(repo).execute(limit=12)
+
+        assert result["planets"] == [planet.to_payload()]
+
+    def test_clamps_the_limit_to_the_configured_maximum(self):
+        """A projector asking for 10000 must not be able to walk the whole store."""
+        repo = FakePlanetRepository()
+        for i in range(20):
+            repo.save(f"id{i}", f"Planet {i}", b"x")
+
+        result = ListRecentPlanetsUseCase(repo, max_limit=12).execute(limit=10_000)
+
+        assert len(result["planets"]) == 12
+
+    def test_a_non_positive_limit_yields_nothing(self):
+        repo = FakePlanetRepository()
+        repo.save("id1", "First", b"x")
+        assert ListRecentPlanetsUseCase(repo).execute(limit=0) == {"planets": []}
+
+    def test_default_limit_is_applied_when_none_is_requested(self):
+        repo = FakePlanetRepository()
+        for i in range(20):
+            repo.save(f"id{i}", f"Planet {i}", b"x")
+
+        result = ListRecentPlanetsUseCase(repo, max_limit=5).execute(limit=None)
+
+        assert len(result["planets"]) == 5

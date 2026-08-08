@@ -70,6 +70,58 @@ class TestLatest:
         assert repo.latest() is None
 
 
+class TestRecent:
+    """
+    The projector shows a gallery now, not just the newest planet, so the
+    repository has to answer "the last N" and not only "the last one".
+    """
+
+    def test_returns_empty_when_there_are_no_planets(self, repo):
+        assert repo.recent(5) == []
+
+    def test_returns_newest_first(self, repo, tmp_path):
+        import os
+
+        for i in range(3):
+            planet = repo.save(f"id{i}", f"Planet {i}", PNG)
+            os.utime(tmp_path / planet.filename, (1000 + i * 10, 1000 + i * 10))
+
+        names = [p.display_name for p in repo.recent(10)]
+        assert names == ["Planet 2", "Planet 1", "Planet 0"]
+
+    def test_honours_the_limit(self, repo, tmp_path):
+        import os
+
+        for i in range(5):
+            planet = repo.save(f"id{i}", f"Planet {i}", PNG)
+            os.utime(tmp_path / planet.filename, (1000 + i * 10, 1000 + i * 10))
+
+        assert [p.display_name for p in repo.recent(2)] == ["Planet 4", "Planet 3"]
+
+    def test_a_non_positive_limit_returns_nothing(self, repo):
+        repo.save("id1", "Planet", PNG)
+        assert repo.recent(0) == []
+        assert repo.recent(-3) == []
+
+    def test_carries_display_names_from_the_sidecars(self, repo):
+        repo.save("id1", "Alice's World!", PNG)
+        assert repo.recent(1)[0].display_name == "Alice's World!"
+
+    def test_agrees_with_latest(self, repo, tmp_path):
+        import os
+
+        for i in range(3):
+            planet = repo.save(f"id{i}", f"Planet {i}", PNG)
+            os.utime(tmp_path / planet.filename, (1000 + i * 10, 1000 + i * 10))
+
+        assert repo.recent(1)[0] == repo.latest()
+
+    def test_ignores_non_png_files(self, repo, tmp_path):
+        (tmp_path / "notes.txt").write_text("ignore me", encoding="utf-8")
+        repo.save("id1", "Planet", PNG)
+        assert len(repo.recent(10)) == 1
+
+
 class TestPrune:
     def test_keeps_only_the_newest(self, repo, tmp_path):
         import os

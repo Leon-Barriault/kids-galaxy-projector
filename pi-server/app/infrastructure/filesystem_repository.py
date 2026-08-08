@@ -60,6 +60,15 @@ class FileSystemPlanetRepository(PlanetRepository):
             return None
         return self._to_planet(images[0])
 
+    def recent(self, limit: int) -> list[Planet]:
+        """
+        Newest first, from the same ordering `latest()` uses, so the two can
+        never disagree about which planet is the most recent one.
+        """
+        if limit <= 0:
+            return []
+        return [self._to_planet(image) for image in self._images_newest_first()[:limit]]
+
     def _images_newest_first(self) -> list[Path]:
         return sorted(
             self._directory.glob("*.png"),

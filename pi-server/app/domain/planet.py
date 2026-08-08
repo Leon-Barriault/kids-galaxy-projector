@@ -33,13 +33,21 @@ class Planet:
 
     def to_payload(self) -> dict:
         """
-        Wire format shared by GET /api/current-planet and the SSE stream.
+        Wire format shared by GET /api/current-planet, GET /api/planets and the
+        SSE stream. One shape means the projector needs one code path whether a
+        planet arrives on page load or arrives live.
 
-        Note that `name` is the display name - never the filename - so the
-        internal id is not exposed on the projector.
+        `id` is present because the projector accumulates planets rather than
+        replacing a single one, so it has to tell "already in orbit" from "just
+        arrived". The id is already visible inside the URL, so publishing it
+        exposes nothing new.
+
+        `name` is the display name - never the filename - so the internal id
+        does not reach the screen.
         """
         return {
             "has_planet": True,
+            "id": self.id,
             "url": self.url,
             "name": self.display_name,
             "timestamp": self.created_at,

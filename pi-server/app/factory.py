@@ -13,7 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import build_router
-from app.application.use_cases import GetCurrentPlanetUseCase, SubmitPlanetUseCase
+from app.application.use_cases import (
+    GetCurrentPlanetUseCase,
+    ListRecentPlanetsUseCase,
+    SubmitPlanetUseCase,
+)
 from app.config import Settings
 from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
@@ -42,6 +46,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
+    # The gallery ceiling is capped by retention as well: showing more
+    # planets than the store keeps would leave gaps the moment prune runs.
+    list_recent_planets = ListRecentPlanetsUseCase(
+        repository,
+        max_limit=min(settings.gallery_size, settings.max_stored_planets),
+    )
 
     # ---- transport (API) ----
     app = FastAPI(
@@ -75,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         build_router(
             submit_planet=submit_planet,
             get_current_planet=get_current_planet,
+            list_recent_planets=list_recent_planets,
             repository=repository,
             publisher=publisher,
             settings=settings,

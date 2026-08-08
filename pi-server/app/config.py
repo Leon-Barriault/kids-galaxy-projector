@@ -16,6 +16,11 @@ DEFAULT_TEXTURE_SIZE = 1024
 DEFAULT_RATE_LIMIT_SECONDS = 3.0
 DEFAULT_MAX_STORED_PLANETS = 30
 
+#: How many planets orbit on the projector at once. Distinct from
+#: MAX_STORED_PLANETS, which is about disk: the store deliberately keeps
+#: more than the sky shows, so raising this needs no re-upload.
+DEFAULT_GALLERY_SIZE = 12
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -26,6 +31,7 @@ class Settings:
     texture_size: int = DEFAULT_TEXTURE_SIZE
     rate_limit_seconds: float = DEFAULT_RATE_LIMIT_SECONDS
     max_stored_planets: int = DEFAULT_MAX_STORED_PLANETS
+    gallery_size: int = DEFAULT_GALLERY_SIZE
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
 
@@ -63,6 +69,7 @@ class Settings:
                 _int("RATE_LIMIT_SECONDS", int(DEFAULT_RATE_LIMIT_SECONDS))
             ),
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
+            gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
             allowed_origins=origins,
             environment=source.get("ENVIRONMENT") or "production",
         )
