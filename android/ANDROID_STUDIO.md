@@ -94,14 +94,47 @@ or the `java` command will still appear missing.
 
 Gradle also needs the Android SDK path, which Studio knows but a bare terminal
 does not. Opening the project in Studio once writes `android/local.properties`
-for you. Otherwise create it by hand — backslashes must be escaped:
+for you. Otherwise start from the committed template — it already carries the
+local-debug server defaults, so you only have to supply the SDK path:
+
+```powershell
+cd android
+Copy-Item local.properties.example local.properties   # macOS/Linux: cp
+```
+
+Java `.properties` escaping bites on Windows: both the backslashes *and* the
+colon after the drive letter need escaping.
 
 ```properties
 sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 ```
 
+Rather than counting backslashes, let PowerShell generate the line:
+
+```powershell
+"sdk.dir=" + ($env:LOCALAPPDATA + "\Android\Sdk").Replace("\", "\\").Replace(":", "\:") |
+    Add-Content local.properties
+```
+
+**If your Windows username contains an accented or non-ASCII character**, do not
+put it in this file. Gradle reads `.properties` as ISO-8859-1, so a UTF-8 `é`
+arrives as `Ã©` and the SDK is reported missing with a path that looks correct
+in your editor. Two ways round it — either set the environment variable and
+leave `sdk.dir` out of the file entirely:
+
+```powershell
+[Environment]::SetEnvironmentVariable("ANDROID_HOME", "$env:LOCALAPPDATA\Android\Sdk", "User")
+```
+
+or use the 8.3 short form of the path, which is pure ASCII (`dir /x %USERPROFILE%\..`
+shows it):
+
+```properties
+sdk.dir=C\:\\Users\\LONBAR~1\\AppData\\Local\\Android\\Sdk
+```
+
 `local.properties` is gitignored on purpose: it is machine-specific and must
-never be committed.
+never be committed. `local.properties.example` is the committed copy.
 
 Four suites, all fast:
 
@@ -127,16 +160,40 @@ which the build generates per variant:
 | `debug` | `http://<host>:8000/` | Cleartext, for the lab |
 | `release` | `https://<host>:8443/` | HTTPS + mTLS |
 
-`<host>` defaults to `10.42.0.1` (the Pi hotspot). Override it without editing
-source — put this in `android/local.properties` or `~/.gradle/gradle.properties`:
+`<host>` defaults to `10.42.0.1` — the Pi hotspot, i.e. the *deployed*
+configuration, which is not what you want at a desk. Override it without
+editing source: copy the template once and you have the local-debug setup
+already filled in.
 
-```properties
-kidsGalaxyServerHost=10.0.2.2
+```powershell
+cd android
+Copy-Item local.properties.example local.properties   # macOS/Linux: cp
 ```
 
-**`10.0.2.2` is how the Android emulator reaches your development machine's
-localhost.** Use it whenever you're running the server in Docker on the same
-machine. On a physical tablet, use your machine's LAN IP instead.
+That sets `kidsGalaxyServerHost=10.0.2.2`. **`10.0.2.2` is how the Android
+emulator reaches your development machine's localhost** — so it pairs with a
+server running in Docker on the same machine, and cleartext HTTP to it is
+already permitted. Nothing else to configure.
+
+On a *physical* tablet 10.0.2.2 means nothing; the tablet is a separate device.
+Uncomment the LAN line in the template and put your machine's address there:
+
+```properties
+kidsGalaxyServerHost=192.168.1.50
+```
+
+`~/.gradle/gradle.properties` works too, if you'd rather set it once for every
+checkout on the machine.
+
+One thing to keep in mind: this property feeds **both** variants — debug builds
+an `http://` URL from it, release an `https://` one. So a value you set here for
+local work would also follow a release build made on this machine. State the
+host explicitly when you build anything destined for the field:
+
+```bash
+./gradlew assembleRelease -PkidsGalaxyServerHost=10.42.0.1 \
+    -PkidsGalaxyCertPassword=<install-time password>
+```
 
 Start the server side first:
 

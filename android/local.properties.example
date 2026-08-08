@@ -1,0 +1,67 @@
+# Copy this file to `local.properties` (same directory) and adjust.
+#
+#   Windows:  Copy-Item local.properties.example local.properties
+#   macOS/Linux:  cp local.properties.example local.properties
+#
+# `local.properties` is gitignored deliberately - every value in it is
+# specific to one machine, and `sdk.dir` in particular will be wrong for
+# everyone else. `local.properties.example` is the committed copy.
+
+
+# ---------------------------------------------------------------------------
+# Android SDK location  (required when running ./gradlew from a terminal)
+# ---------------------------------------------------------------------------
+# Opening `android/` in Android Studio once writes this line for you, which is
+# the easiest way to get it right. If you need it by hand, note that Java
+# .properties escaping applies on Windows: backslashes are doubled AND the
+# colon after the drive letter is escaped.
+#
+# Windows:
+#   sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+# macOS:
+#   sdk.dir=/Users/<you>/Library/Android/sdk
+# Linux:
+#   sdk.dir=/home/<you>/Android/Sdk
+#
+# Setting the ANDROID_HOME environment variable works instead of this line, if
+# you prefer not to keep a machine path in the project directory at all.
+
+
+# ---------------------------------------------------------------------------
+# Which server the app talks to
+# ---------------------------------------------------------------------------
+# Default with no properties file at all is 10.42.0.1 - the Raspberry Pi's
+# hotspot address, i.e. the deployed configuration. For desk work you almost
+# always want one of the two below instead.
+
+# Emulator against a server on this same machine. 10.0.2.2 is the emulator's
+# fixed alias for the host's loopback, so this pairs with:
+#     docker compose up --build        # from the repo root, serves on :8000
+# Cleartext HTTP to 10.0.2.2 is permitted by network_security_config.xml, so
+# the debug build works with no further changes.
+kidsGalaxyServerHost=10.0.2.2
+
+# Physical tablet against a server on this machine: comment the line above and
+# use your machine's LAN address instead. The tablet is a separate device, so
+# 10.0.2.2 means nothing to it.
+#kidsGalaxyServerHost=192.168.1.50
+
+# Ports rarely need changing; listed so you know they are overridable.
+#kidsGalaxyHttpPort=8000
+#kidsGalaxyHttpsPort=8443
+
+
+# ---------------------------------------------------------------------------
+# One caveat worth reading
+# ---------------------------------------------------------------------------
+# kidsGalaxyServerHost feeds BOTH variants - debug builds an http:// URL from
+# it, release an https:// one. So a value set here for local debugging would
+# also follow a release build if you made one on this machine. Build release
+# artifacts for the field with the host stated explicitly, never relying on
+# whatever this file happens to say:
+#
+#   ./gradlew assembleRelease -PkidsGalaxyServerHost=10.42.0.1 \
+#       -PkidsGalaxyCertPassword=<install-time password>
+#
+# The same applies to the certificate password: it defaults to a placeholder
+# and must be passed on the command line for a real release build.
