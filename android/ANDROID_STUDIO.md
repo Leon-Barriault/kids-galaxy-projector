@@ -246,10 +246,20 @@ below). If you want it on its own:
 docker compose up --build      # from the repo root; serves on :8000
 ```
 
-Cleartext HTTP is only permitted for the configured host, `10.0.2.2` and
-`localhost` — see `res/xml/network_security_config.xml`. If you point the app at
-some other address over HTTP it will fail with a cleartext-not-permitted error.
-That's deliberate, not a bug.
+Cleartext HTTP is permitted in **debug builds only** — see
+`src/debug/res/xml/network_security_config.xml`, which overrides the strict
+release policy in `src/main`. Release is HTTPS-only and will refuse to
+downgrade, which is deliberate: a misconfigured field host should fail loudly
+rather than quietly send a child's drawing in plaintext.
+
+That split exists because of a trap worth knowing. **`manifestPlaceholders` do
+not reach resource XML.** The manifest merger rewrites `AndroidManifest.xml`
+and nothing else, so a `${serverHost}` written into
+`network_security_config.xml` stays there as literal text and matches no host
+at all — silently. The old config did exactly that, which is why pointing a
+debug build at a LAN address used to fail with an opaque
+`CLEARTEXT communication not permitted` that looked like a server fault.
+Source-set overrides are the mechanism that actually works.
 
 ## 4a. Starting a debugging session
 
@@ -420,8 +430,10 @@ Worth knowing, because each one cost a CI round-trip:
   incompatibility. Built-in Kotlin replaces it.
 - **`buildFeatures { buildConfig = true }` is required.** `ApiClient` reads four
   `BuildConfig` fields; turning it off makes the app fail to compile.
-- **`manifestPlaceholders["serverHost"]` is required** —
-  `network_security_config.xml` interpolates it.
+- **`manifestPlaceholders` never reach resource XML.** `network_security_config.xml`
+  carried a `${serverHost}` that was never substituted and therefore matched
+  nothing, for as long as the file has existed. Debug and release now have
+  separate copies via source sets. The placeholder itself has been removed.
 - **`compileSdk` must be at least 37** for `androidx.lifecycle` 2.11.
 - A missing launcher icon failed resource linking; the icon is vector XML in
   `res/mipmap*` so the repo needs no binary assets.

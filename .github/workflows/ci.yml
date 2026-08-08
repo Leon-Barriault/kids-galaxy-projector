@@ -65,9 +65,11 @@ jobs:
           curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
           chmod +x /tmp/ktlint
           cd android
-          # Whole tree, main and test sources - no path allowlist.
+          # Every module, main and test sources - no path allowlist. The
+          # manager module went in unlinted; a second app is exactly the
+          # kind of thing a path allowlist quietly forgets.
           /tmp/ktlint --relative --editorconfig=.editorconfig \
-            "app/src/**/*.kt"
+            "app/src/**/*.kt" "manager/src/**/*.kt"
 
   architecture:
     name: Architecture boundaries

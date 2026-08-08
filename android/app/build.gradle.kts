@@ -75,9 +75,6 @@ android {
         versionCode = 2
         versionName = "1.1.0"
 
-        // Consumed by res/xml/network_security_config.xml, so the hotspot host
-        // is defined in exactly one place.
-        manifestPlaceholders["serverHost"] = serverHost
         buildConfigField("String", "CLIENT_CERT_PASSWORD", "\"$certPassword\"")
     }
 
@@ -86,10 +83,6 @@ android {
             // Lab / development: plain HTTP against the Docker stack or the Pi.
             buildConfigField("String", "SERVER_BASE_URL", "\"http://$debugServerHost:$httpPort/\"")
             buildConfigField("boolean", "USE_MTLS", "false")
-
-            // Overrides the defaultConfig value so network_security_config.xml
-            // permits cleartext to whatever the debug build actually targets.
-            manifestPlaceholders["serverHost"] = debugServerHost
         }
         release {
             // Field deployment: certificate-authenticated HTTPS (mTLS).

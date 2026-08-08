@@ -110,7 +110,15 @@ class ManagerViewModel(
         fun factory(): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T = ManagerViewModel() as T
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    // Without the guard this hands back a ManagerViewModel for
+                    // any request at all, and the mistake surfaces as a
+                    // ClassCastException at the call site instead of here.
+                    require(modelClass.isAssignableFrom(ManagerViewModel::class.java)) {
+                        "Unsupported ViewModel: ${modelClass.name}"
+                    }
+                    return ManagerViewModel() as T
+                }
             }
     }
 }

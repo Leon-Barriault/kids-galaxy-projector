@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cleartext only for the local Pi / emulator hosts — same policy as the drawing app. -->
+<!--
+  The manager app is an event-floor tool: a volunteer's phone on the closed Pi
+  hotspot, used to take a drawing down without restarting the kiosk. It has no
+  mTLS yet - unlike the drawing app, which pins the project CA in ApiClient -
+  so cleartext to the local network is permitted in both variants and stated
+  here rather than left to be discovered.
+
+  Two consequences worth being explicit about. This app must never be pointed
+  at anything outside the event network. And until it gains mTLS, its release
+  variant is not a "field" build in the sense the drawing app's release is.
+
+  Note that a "${serverHost}" placeholder cannot be used in this file:
+  manifestPlaceholders are substituted into AndroidManifest.xml only, never
+  into resource XML, so it would remain literal text and match no host.
+-->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">${serverHost}</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

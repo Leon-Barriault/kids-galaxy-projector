@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug policy: cleartext allowed, because the whole point of a debug build is
+  to talk plain HTTP to a server on the bench - the emulator alias 10.0.2.2,
+  localhost, or this machine's LAN address when the app runs on a real tablet.
+
+  That last case is why this is a blanket permission rather than a host list.
+  The host is a build property (kidsGalaxyDebugServerHost) and can be any
+  address on the day; a fixed list would have to be edited in lockstep, and
+  when it was not, the failure is an opaque "CLEARTEXT communication not
+  permitted" that looks like a server problem rather than a config one.
+
+  This file is debug-only. Release keeps the strict policy in src/main.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

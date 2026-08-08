@@ -44,129 +44,119 @@ Implemented:
 
 ---
 
-## 3. What was added in this session (mostly on main)
+## 3. Session four: repair pass
 
-### 3.1 Brighter planets (projector) — **on main**
+The brighter-planets / manager-app / delete-API slice landed across eight
+commits that were all red in CI (#70 to #77, each failing inside twenty
+seconds at the lint gate). This section records what was wrong and what was
+done, because two of the causes are the kind that recur.
 
-`pi-server/static/galaxy.js`:
+### 3.1 Main was red for eight commits — fixed
 
-- Kid planet material: lower roughness, `emissive` + `emissiveMap` +
-  `emissiveIntensity: 0.55` so drawings stay vivid under the projector.
-- Stronger sun point light, brighter ambient, camera-side fill light.
-- Slightly larger spheres (`1.05` radius).
+`pi-server/tests/integration/test_api_e2e.py` had been overwritten with the
+literal text `PLACEHOLDER_WILL_FAIL`, destroying 446 lines and twelve test
+classes. Recovered verbatim from commit `7d70397` rather than rewritten, so the
+coverage is provably the same coverage.
 
-Hard-refresh the projector page (or restart the kiosk) to pick this up.
+Separately, `NotFoundError` was imported out of alphabetical order in
+`use_cases.py`, tripping ruff `I001`. That alone kept the whole pipeline red:
+**the lint job gates every other job**, which makes it the cheapest place to
+fail and the most expensive place to be careless.
 
-### 3.2 Delete API + live sky removal — **on main**
+### 3.2 Delete API and manager app — kept, with fixes
 
-Server (clean architecture, same ports pattern as the rest):
+The clean-architecture shape of the delete work was sound and is unchanged:
+`PlanetRepository.delete`, `DeletePlanetUseCase` publishing
+`{has_planet: false, id, removed: true}` on the arrivals channel,
+`DELETE /api/planets/{id}` mapping `NotFoundError` to 404, list ceiling raised
+from gallery size to retention so the manager can see everything stored.
 
-- `PlanetRepository.delete(planet_id) -> Planet | None`
-- `FileSystemPlanetRepository.delete` (image + sidecar)
-- `DeletePlanetUseCase` → publishes `{has_planet: false, id, removed: true}` on the
-  existing SSE channel
-- `DELETE /api/planets/{planet_id}` → 200 `{status, planet_id, name}` or 404
-- `NotFoundError` → HTTP 404
-- CORS allows `DELETE`
-- List ceiling is **retention** (`max_stored_planets`, default 30), not gallery
-  size 12, so the manager can list everything stored. Projector still requests
-  `limit=12`.
+Added the test coverage that had never been pushed: `TestDelete` against a real
+temp directory, `DeletePlanetUseCase` tests, and `TestDeletePlanet` over HTTP.
+Two of those assert things only the unit layer can see — that a *failed* delete
+publishes nothing, and that the removal rides the `planet` channel rather than
+a channel of its own.
 
-Projector (`galaxy.js`):
+Manager app fixes: wrapped in a `MaterialTheme` (its dialogs were rendering
+with the default *light* palette inside a dark app), `safeDrawingPadding` for
+the edge-to-edge window, the OkHttp logging interceptor gated on
+`BuildConfig.DEBUG`, and a guard on the `ViewModelProvider.Factory` cast. The
+release variant now uses HTTP rather than pretending to do HTTPS it cannot do:
+there is no mTLS here and the Pi's certificate is project-CA-signed, so every
+release request would have failed on a trust anchor.
 
-- `removeKidPlanet(id)` disposes mesh/materials
-- SSE `onPlanet` treats `removed: true` / `has_planet: false` as removal
-- Optional `planet-removed` listener kept as a fallback
+`io.coil-kt:coil-compose:2.7.0` is the final Coil 2 release and could not be
+verified against Compose BOM 2026.06 offline. Left as-is deliberately — CI
+builds `:manager`, so it answers definitively, and switching to Coil 3 blind
+would introduce two new failure modes (`coil3.compose.AsyncImage` and a
+required `coil-network-okhttp`). **If the Android job fails on Coil, that is
+the fix.**
 
-### 3.3 Manager Android app — **sources on main, not fully CI-green yet**
+### 3.3 The projector had eight real bugs — fixed
 
-Separate module `android/manager` (`include(":manager")` in `settings.gradle.kts`):
+`galaxy.js` had been rewritten rather than edited, and the rewrite dropped
+OrbitControls, the 3200-star coloured field, the fog, the orbit rings and the
+sparkle bursts. All restored, on top of the multi-planet work and the
+brightness changes.
 
-| Path | Role |
-|---|---|
-| `ManagerApi` / `ApiFactory` | Retrofit: `GET api/planets?limit=30`, `DELETE api/planets/{id}` |
-| `ManagerViewModel` | List + delete state |
-| `ManagerScreen` | Thumbnails (Coil), name, confirm dialog, delete |
-| `MainActivity` | Compose host |
+The correctness bugs shared one root cause: **the dedupe check ran before the
+async texture load, but the Map was only written after it.** Every entry is now
+inserted synchronously — mesh and orbit ring built immediately with a plain
+material, the drawing swapped in when it arrives. That single change is what
+makes dedupe, removal-while-loading and eviction all work, because each of them
+needs something concrete to act on.
 
-Same host settings as the drawing app (`kidsGalaxyDebugServerHost` /
-`kidsGalaxyServerHost` via `local.properties`). Debug uses cleartext HTTP to
-the local server; no mTLS on the manager yet (event LAN only).
+The rest: eviction now picks the oldest by arrival order rather than whichever
+PNG decoded first; orbits are derived from a hash of the planet id, so a reload
+or an earlier deletion no longer reshuffles the whole sky; the polling fallback
+was restored (it had been deleted, leaving a projector behind a
+stream-buffering proxy frozen forever); the fallback reconciles against
+`/api/planets` so it handles deletions as well as arrivals; celebrations no
+longer fire for planets restored on load.
 
-Build (once Android SDK is available):
+### 3.4 A pre-existing bug worth knowing
 
-```bash
-cd android && ./gradlew :manager:assembleDebug
-```
+**`manifestPlaceholders` are substituted into `AndroidManifest.xml` only, never
+into resource XML.** `network_security_config.xml` had carried a
+`${serverHost}` since the file was created; it was always literal text and
+always matched no host. The symptom is that a debug build pointed at a LAN
+address — the physical-tablet case — fails every request with an opaque
+`CLEARTEXT communication not permitted` that reads like a server fault.
 
----
+Now split by source set: `src/debug/res/xml` permits cleartext, `src/main`
+(release) is HTTPS-only. The dead placeholder is gone from both modules.
 
-## 4. What must be done next (priority order)
+### 3.5 New: a projector smoke test
 
-### 4.1 CRITICAL — restore integration tests (main is broken)
+`scripts/check_projector.py`, wired as `make check-projector`. It starts a real
+server, uploads real planets and drives the real page in headless Chromium via
+Playwright, asserting dedupe, live arrival, deletion, the gallery cap, eviction
+order, orbit determinism across a reload, and a clean console.
 
-**`pi-server/tests/integration/test_api_e2e.py` on main is currently the
-literal string `PLACEHOLDER_WILL_FAIL`.** That was an accidental bad push.
-CI integration tests cannot pass until this file is restored.
+`galaxy.js` is the one part of this project with no unit tests — it needs WebGL,
+a live server and a real EventSource, so there is nothing to fake it with. This
+is how it gets verified now. Running it against the previous version reproduces
+three of the bugs above, which is the point.
 
-The local working tree under `kids-galaxy-projector-live` has the correct full
-content, including:
+**Not a CI gate**: CI has no browser installed, and adding one to lint a
+projector is a poor trade. Run it locally before pushing anything that touches
+`static/`. It needs `pip install playwright httpx` and a Chromium.
 
-- Clamp assertion updated to `<= 30` (retention, not gallery size 12)
-- New class `TestDeletePlanet` (delete success, 404, texture 404 after delete)
+## 4. What is left
 
-**Action:** replace the remote file with the local good version and push.
-Do **not** push a placeholder. Verify with:
+Nothing is broken. In rough order of value:
 
-```bash
-cd pi-server && PYTHONPATH=. python -m pytest tests/integration/ -q
-```
+- **Manager app in CI.** `:manager` is built by `./gradlew assembleDebug` (no
+  module qualifier), and its sources are now under ktlint, but it has no unit
+  tests at all. `ManagerViewModel` is a plain `ViewModel` and is the obvious
+  first target.
+- **mTLS for the manager**, so it can be a genuine field build rather than a
+  closed-hotspot tool. `app/.../ApiClient.kt` already has the pattern.
+- **Document the manager** in `README.md` and `DEVELOPMENT.md`: how to install
+  the second APK on a volunteer's phone, and that it is LAN-only today.
+- Per-planet labels on the projector; richer arrival animations.
+- Dependency versions stay pinned to the set from `7d70397` unless asked.
 
-### 4.2 Push remaining local test + CI updates
-
-Still only local (or incomplete on main) last time this was written:
-
-- Unit tests: `FakePlanetRepository.delete`, `TestDeletePlanet` in
-  `tests/unit/application/test_use_cases.py`
-- Unit tests: `TestDelete` in
-  `tests/unit/infrastructure/test_filesystem_repository.py`
-- CI ktlint path should include manager sources:
-
-```yaml
-/tmp/ktlint --relative --editorconfig=.editorconfig \
-  "app/src/**/*.kt" "manager/src/**/*.kt"
-```
-
-(remote still only has `"app/src/**/*.kt"`).
-
-### 4.3 Verify CI green end-to-end
-
-After 4.1–4.2:
-
-```bash
-cd pi-server && ruff check . --config ruff.toml
-# ... hadolint, shellcheck ...
-cd android && ktlint --relative --editorconfig=.editorconfig \
-  "app/src/**/*.kt" "manager/src/**/*.kt"
-make arch
-cd pi-server && PYTHONPATH=. python -m pytest tests/ -q
-cd android && ./gradlew testDebugUnitTest assembleDebug
-# also: ./gradlew :manager:assembleDebug
-```
-
-Confirm the GitHub Actions run on main is fully green (lint, arch, unit,
-integration, Android, Docker).
-
-### 4.4 Optional polish (not blocking)
-
-- Manager mTLS for field use (today: cleartext debug / simple HTTPS release).
-- Document the manager app in `README.md` / `DEVELOPMENT.md` (how to install
-  the second APK on a volunteer phone/tablet).
-- Per-planet labels on the projector, richer arrival animations.
-- Dependency versions stay pinned to the set from `7d70397` unless the owner
-  asks to bump them.
-
----
 
 ## 5. How to work in this repository
 
@@ -187,18 +177,29 @@ cd android && ktlint --relative --editorconfig=.editorconfig \
     "app/src/**/*.kt" "manager/src/**/*.kt"
 make arch
 cd pi-server && python -m pytest tests/ -q          # PYTHONPATH=.
-cd android && ./gradlew testDebugUnitTest assembleDebug
-cd android && ./gradlew :manager:assembleDebug
+cd android && ./gradlew testDebugUnitTest assembleDebug   # builds :manager too
+```
+
+`assembleDebug` with no module qualifier builds **both** app modules, so a
+compile error in `:manager` fails the whole pipeline.
+
+Not a CI gate, but run it before touching `static/`:
+
+```bash
+make check-projector
 ```
 
 **ktlint must be exactly 1.5.0.**
 
 ### 5.3 Environment notes
 
-- Gradle often cannot run in constrained cloud agents; Kotlin changes are
-  verified by CI. Review Gradle Kotlin DSL carefully before pushing.
+- **Gradle cannot run in the Claude cloud container** - `services.gradle.org` is
+  blocked through the proxy. Kotlin and build-script changes are verified by CI
+  only. Read Gradle Kotlin DSL twice before pushing it.
+- Python tests, ruff, shellcheck, ktlint and the projector smoke test all *do*
+  run locally. Playwright and a Chromium are present.
 - Owner preference: **push straight to main** when the tree is green. Small
-  CI-green commits.
+  CI-green commits. Confirm before a push that could break it.
 - Conventional commits: prefix + *why*, not only *what*.
 
 ### 5.4 Payload / wire contracts (do not drift)
@@ -234,19 +235,29 @@ legacy `texture_url` / `display_name` alone — aliases exist only as fallback).
 - `StrokePath.strokeWidth` not `.width`.
 - Gallery JSON is an object with `planets`, not a bare array.
 - SSE uses named event `planet`; listen with `addEventListener('planet', …)`.
-- Never push placeholder content to a real source file on main.
+- Never push placeholder content to a real source file on main. It cost eight
+  red commits and destroyed 446 lines of test coverage; only git history got it
+  back.
 - List `max_limit` is retention (30) for the API ceiling; projector still uses 12.
+- `manifestPlaceholders` never reach resource XML - only `AndroidManifest.xml`.
+  Use source-set overrides for per-variant resources.
+- In `galaxy.js`, register a planet in the Map **synchronously**, before its
+  texture starts loading. Deferring the insert breaks dedupe, delete-while-
+  loading and eviction all at once, and each failure looks unrelated.
+- Rewriting a file to change one thing loses the rest of it. The projector
+  rewrite dropped OrbitControls, the star field, fog, orbit rings and sparkles
+  as collateral. Prefer targeted edits; diff against the previous version
+  before pushing a file you rewrote.
 
 ---
 
 ## 7. Suggested first actions for the next agent
 
-1. **Restore** `pi-server/tests/integration/test_api_e2e.py` from the local good
-   copy (see §4.1). Run the integration suite.
-2. Push unit-test updates for `delete` and the CI ktlint manager path (§4.2).
-3. Confirm Actions green on main (§4.3).
-4. Optionally document and smoke-test `:manager:assembleDebug` against a running
-   `docker compose` server.
+1. Run the gates in §5.2 and `make check-projector`. Everything should be
+   green; if it is not, fix that before anything else.
+2. Check the Actions run on main. If the Android job failed on Coil, see §3.2 -
+   the fix is Coil 3 plus `coil3.compose.AsyncImage` and `coil-network-okhttp`.
+3. Pick from §4. `ManagerViewModel` unit tests are the highest-value next step:
+   the manager is the only module with no tests at all.
 
-Stop and hand off again if anything above is still red before starting new
-feature work.
+Do not start new feature work while anything above is red.

@@ -1,6 +1,6 @@
 .PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
         arch test test-unit test-integration test-android build-android \
-        docker-up docker-down dev-up certs vendor-three verify
+        docker-up docker-down dev-up certs vendor-three verify check-projector
 
 help:
 	@echo "Kids Galaxy Projector - common targets"
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-android     - JVM unit tests for the Android app"
 	@echo "  make build-android    - assemble the debug APK"
 	@echo "  make verify           - lint + arch + all tests (what CI runs)"
+	@echo "  make check-projector  - drive static/galaxy.js in headless Chromium"
 	@echo "  make dev-up           - full debug environment: server + emulator"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make docker-down"
@@ -37,7 +38,7 @@ lint-shell:
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
-	cd android && ktlint --relative --editorconfig=.editorconfig "app/src/**/*.kt"
+	cd android && ktlint --relative --editorconfig=.editorconfig "app/src/**/*.kt" "manager/src/**/*.kt"
 
 # -------------------- architecture --------------------
 
@@ -75,6 +76,14 @@ build-android:
 	cd android && ./gradlew assembleDebug
 
 verify: lint arch test test-android
+
+# static/galaxy.js is the one part of the project with no unit tests - it
+# needs WebGL, a live server and a real EventSource, so there is nothing to
+# fake it with. This drives the real page instead. Not a CI gate: CI has no
+# browser installed, and adding one to lint a projector is a poor trade.
+check-projector:
+	@command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
+	python3 scripts/check_projector.py
 
 # -------------------- local stack --------------------
 

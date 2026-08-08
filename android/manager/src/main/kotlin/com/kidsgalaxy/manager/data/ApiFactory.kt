@@ -15,17 +15,24 @@ import java.util.concurrent.TimeUnit
  */
 object ApiFactory {
     fun create(): ManagerApi {
-        val logging =
-            HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            }
-        val client =
+        val builder =
             OkHttpClient
                 .Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
-                .addInterceptor(logging)
-                .build()
+
+        // Debug only, matching the drawing app. Request logging must never ship
+        // enabled: this app deletes things, and its traffic names the
+        // children's planets.
+        if (BuildConfig.DEBUG) {
+            builder.addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.BASIC
+                },
+            )
+        }
+
+        val client = builder.build()
 
         return Retrofit
             .Builder()

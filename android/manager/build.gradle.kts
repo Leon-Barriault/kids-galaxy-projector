@@ -24,7 +24,6 @@ fun setting(
 val debugServerHost: String = setting("kidsGalaxyDebugServerHost", "10.0.2.2")
 val serverHost: String = setting("kidsGalaxyServerHost", "10.42.0.1")
 val httpPort: String = setting("kidsGalaxyHttpPort", "8000")
-val httpsPort: String = setting("kidsGalaxyHttpsPort", "8443")
 
 android {
     namespace = "com.kidsgalaxy.manager"
@@ -36,16 +35,21 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
-        manifestPlaceholders["serverHost"] = serverHost
     }
 
     buildTypes {
         debug {
             buildConfigField("String", "SERVER_BASE_URL", "\"http://$debugServerHost:$httpPort/\"")
-            manifestPlaceholders["serverHost"] = debugServerHost
         }
         release {
-            buildConfigField("String", "SERVER_BASE_URL", "\"https://$serverHost:$httpsPort/\"")
+            // HTTP, not HTTPS, and deliberately so. The manager has no mTLS
+            // yet, and the Pi's certificate is signed by the project CA - a
+            // release build pointed at https:// would fail every request with
+            // a trust-anchor error, because unlike the drawing app there is
+            // no ApiClient here installing a pinned TrustManager. Until that
+            // exists this is a closed-hotspot tool over plain HTTP, and
+            // pretending otherwise would only hide the gap.
+            buildConfigField("String", "SERVER_BASE_URL", "\"http://$serverHost:$httpPort/\"")
             isMinifyEnabled = false
         }
     }
