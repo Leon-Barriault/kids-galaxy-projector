@@ -27,8 +27,6 @@ class FileSystemPlanetRepository(PlanetRepository):
     def directory(self) -> Path:
         return self._directory
 
-    # -------------------- writes --------------------
-
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
         filename = build_stored_filename(planet_id, display_name)
         image_path = self._directory / filename
@@ -44,15 +42,12 @@ class FileSystemPlanetRepository(PlanetRepository):
         return planet
 
     def _write_metadata(self, planet: Planet) -> None:
-        """Best effort: a missing sidecar degrades to the filename fallback."""
         path = self._directory / planet.metadata_filename
         try:
             with path.open("w", encoding="utf-8") as fh:
                 json.dump({"name": planet.display_name}, fh, ensure_ascii=False)
         except OSError as e:
             logger.warning("Could not write metadata for %s: %s", planet.filename, e)
-
-    # -------------------- reads --------------------
 
     def latest(self) -> Planet | None:
         images = self._images_newest_first()
@@ -61,18 +56,16 @@ class FileSystemPlanetRepository(PlanetRepository):
         return self._to_planet(images[0])
 
     def recent(self, limit: int) -> list[Planet]:
-        """
-        Newest first, from the same ordering `latest()` uses, so the two can
-        never disagree about which planet is the most recent one.
-        """
         if limit <= 0:
             return []
         return [self._to_planet(image) for image in self._images_newest_first()[:limit]]
 
     def _images_newest_first(self) -> list[Path]:
+        # Secondary key on name so two saves in the same second stay ordered
+        # deterministically (integration tests and the manager list both care).
         return sorted(
             self._directory.glob("*.png"),
-            key=lambda p: p.stat().st_mtime,
+            key=lambda p: (p.stat().st_mtime, p.name),
             reverse=True,
         )
 
@@ -87,7 +80,6 @@ class FileSystemPlanetRepository(PlanetRepository):
         )
 
     def _read_display_name(self, image_path: Path) -> str:
-        """Prefer the sidecar; fall back to de-prefixing the filename."""
         meta_path = self._directory / Path(image_path.name).with_suffix(".json").name
         if meta_path.exists():
             try:
@@ -103,14 +95,29 @@ class FileSystemPlanetRepository(PlanetRepository):
         stem = image_path.stem
         return stem.split("_", 1)[1] if "_" in stem else stem
 
-    def resolve_image(self, filename: str) -> Path | None:
+    def delete(self, planet_id: str) -> Planet | None:
         """
-        Resolve a requested filename inside the store.
+        Remove the image and its sidecar for `planet_id`.
 
-        Defence in depth: the basename is taken first, then the resolved path is
-        confirmed to sit inside the upload directory, so neither "../" nor a
-        symlink can escape.
+        Matching is by the id prefix of the stored filename (the same id the
+        projector and the manager app use), not by display name.
         """
+        for image_path in self._images_newest_first():
+            planet = self._to_planet(image_path)
+            if planet.id != planet_id:
+                continue
+            try:
+                image_path.unlink(missing_ok=True)
+                meta = self._directory / planet.metadata_filename
+                meta.unlink(missing_ok=True)
+                logger.info("Deleted planet %s (%s)", planet.id, planet.display_name)
+            except OSError as e:
+                logger.warning("Could not delete %s: %s", image_path.name, e)
+                return None
+            return planet
+        return None
+
+    def resolve_image(self, filename: str) -> Path | None:
         candidate = (self._directory / Path(filename).name).resolve()
         try:
             candidate.relative_to(self._directory.resolve())
@@ -120,8 +127,6 @@ class FileSystemPlanetRepository(PlanetRepository):
         if not candidate.is_file():
             return None
         return candidate
-
-    # -------------------- retention --------------------
 
     def prune(self, keep: int) -> None:
         if keep <= 0:
