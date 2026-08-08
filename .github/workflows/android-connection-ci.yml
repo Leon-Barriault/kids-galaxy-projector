@@ -1,0 +1,36 @@
+name: Android connection CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  connection:
+    name: Galaxy connection lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Lint connection Kotlin
+        run: |
+          curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
+          chmod +x /tmp/ktlint
+          cd android
+          /tmp/ktlint --relative --editorconfig=.editorconfig "connection/src/**/*.kt"
+
+      - name: Run connection JVM tests
+        working-directory: android
+        run: ./gradlew :connection:testDebugUnitTest --no-daemon --stacktrace
