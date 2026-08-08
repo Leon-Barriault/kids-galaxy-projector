@@ -30,7 +30,7 @@ import com.kidsgalaxy.domain.model.StrokePath
 /** Bridges the domain's framework-free [Point] and Compose's [Offset]. */
 private fun Offset.toPoint() = Point(x, y)
 
-private fun pathThrough(points: List\u003cPoint\u003e): Path =
+private fun pathThrough(points: List<Point>): Path =
     Path().apply {
         moveTo(points.first().x, points.first().y)
         for (i in 1 until points.size) {
@@ -44,7 +44,7 @@ private const val GUIDE_STROKE_WIDTH = 5f
 
 @Composable
 fun DrawingCanvas(
-    strokes: List\u003cStrokePath\u003e,
+    strokes: List<StrokePath>,
     currentColorArgb: Int,
     currentStrokeWidth: Float,
     onStartStroke: (Point) -> Unit,
@@ -54,7 +54,7 @@ fun DrawingCanvas(
     modifier: Modifier = Modifier,
 ) {
     // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
-    val livePoints = remember { mutableStateListOf\u003cPoint\u003e() }
+    val livePoints = remember { mutableStateListOf<Point>() }
     var measured by remember { mutableStateOf(0f to 0f) }
 
     Canvas(
@@ -78,6 +78,7 @@ fun DrawingCanvas(
                             onStartStroke(offset.toPoint())
                         },
                         onDrag = { change, _ ->
+                            change.consume()
                             livePoints.add(change.position.toPoint())
                             onContinueStroke(change.position.toPoint())
                         },
@@ -92,30 +93,21 @@ fun DrawingCanvas(
                     )
                 },
     ) {
-        val guide =
-            if (measured.first > 0f && measured.second > 0f) {
-                PlanetGuide.forCanvas(CanvasSize(measured.first, measured.second))
-            } else {
-                PlanetGuide.forCanvas(CanvasSize(0f, 0f))
-            }
+        val (w, h) = measured
+        val guide = if (w > 0f && h > 0f) PlanetGuide.forCanvas(CanvasSize(w, h)) else null
 
-        // Guide outline sits under the strokes so the kid sees the planet edge.
-        // It is not a stroke: undo/clear leave it alone and it does not arm Launch.
-        if (guide.isValid) {
+        // Fixed planet outline — not a stroke, never enters undo/clear/canLaunch.
+        if (guide != null && guide.isValid) {
             drawCircle(
                 color = GUIDE_OUTLINE_COLOR,
                 radius = guide.radius,
                 center = Offset(guide.centreX, guide.centreY),
-                style =
-                    Stroke(
-                        width = GUIDE_STROKE_WIDTH,
-                        cap = StrokeCap.Round,
-                    ),
+                style = Stroke(width = GUIDE_STROKE_WIDTH),
             )
         }
 
-        // Clip drawing to the circle so the tablet matches what becomes the sphere.
-        if (guide.isValid) {
+        // Clip all painting to the guide so the texture stage sees a clean disc.
+        if (guide != null && guide.isValid) {
             val clip =
                 Path().apply {
                     addOval(
