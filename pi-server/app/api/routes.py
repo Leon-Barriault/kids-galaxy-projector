@@ -20,11 +20,12 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.sse import build_planet_event_response
 from app.application.use_cases import (
+    DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
-from app.domain.errors import DomainError, RateLimitedError, ValidationError
+from app.domain.errors import DomainError, NotFoundError, RateLimitedError, ValidationError
 from app.domain.image_rules import ensure_size_within
 from app.ports import EventPublisher, PlanetRepository
 
@@ -36,6 +37,8 @@ def _status_for(error: DomainError) -> int:
         return 429
     if isinstance(error, ValidationError):
         return 400
+    if isinstance(error, NotFoundError):
+        return 404
     return 500
 
 
@@ -48,6 +51,7 @@ def build_router(
     submit_planet: SubmitPlanetUseCase,
     get_current_planet: GetCurrentPlanetUseCase,
     list_recent_planets: ListRecentPlanetsUseCase,
+    delete_planet: DeletePlanetUseCase,
     repository: PlanetRepository,
     publisher: EventPublisher,
     settings,
@@ -79,18 +83,16 @@ def build_router(
             default=None,
             ge=1,
             description=(
-                "How many planets to return, newest first. Clamped to the "
-                "configured gallery size; omit it to get exactly that many."
+                "How many planets to return, newest first. Clamped to retention; "
+                "omit it to get the configured maximum."
             ),
         ),
     ):
         """
-        Every planet currently in orbit, newest first.
+        Stored planets, newest first.
 
-        The projector calls this on load. /api/current-planet returns only
-        the newest, which was enough when a single planet was repainted in
-        place; now that each drawing gets its own planet, a refresh without
-        this endpoint would empty the sky.
+        The projector calls this on load with limit=GALLERY_SIZE. The manager
+        app lists up to retention so volunteers can remove any stored drawing.
         """
         return list_recent_planets.execute(limit=limit)
 
@@ -101,9 +103,6 @@ def build_router(
         name: str = Form("My Planet"),
     ):
         """Receive a planet drawing from the Android app."""
-        # Reject oversized uploads before buffering the body. Starlette fills in
-        # UploadFile.size from the multipart part length; the bounded read below
-        # covers a missing or dishonest length.
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
 
@@ -137,6 +136,26 @@ def build_router(
             "planet_id": planet.id,
             "name": planet.display_name,
             "url": planet.url,
+        }
+
+    @router.delete("/api/planets/{planet_id}")
+    async def delete_planet_route(planet_id: str):
+        """
+        Remove one planet from storage and the live sky.
+
+        Used by the separate manager Android app during an event so a
+        volunteer can take a drawing down without wiping the whole gallery.
+        """
+        try:
+            planet = delete_planet.execute(planet_id)
+        except DomainError as e:
+            raise HTTPException(
+                status_code=_status_for(e), detail=e.user_message
+            ) from e
+        return {
+            "status": "deleted",
+            "planet_id": planet.id,
+            "name": planet.display_name,
         }
 
     @router.get("/uploads/{filename}")
