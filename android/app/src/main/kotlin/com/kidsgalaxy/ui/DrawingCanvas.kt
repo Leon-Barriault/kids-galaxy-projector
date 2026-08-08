@@ -70,7 +70,8 @@ fun DrawingCanvas(
                             onCanvasSizeChanged(next.first, next.second)
                         }
                     }
-                }.pointerInput(Unit) {
+                }
+                .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             livePoints.clear()
@@ -93,10 +94,14 @@ fun DrawingCanvas(
                     )
                 },
     ) {
-        val (w, h) = measured
-        val guide = if (w > 0f && h > 0f) PlanetGuide.forCanvas(CanvasSize(w, h)) else null
+        val guide =
+            if (measured.first > 0f && measured.second > 0f) {
+                PlanetGuide.forCanvas(CanvasSize(measured.first, measured.second))
+            } else {
+                null
+            }
 
-        // Fixed planet outline — not a stroke, never enters undo/clear/canLaunch.
+        // Soft outline of the guide disc (always drawn, never clipped away).
         if (guide != null && guide.isValid) {
             drawCircle(
                 color = GUIDE_OUTLINE_COLOR,
@@ -106,7 +111,6 @@ fun DrawingCanvas(
             )
         }
 
-        // Clip all painting to the guide so the texture stage sees a clean disc.
         if (guide != null && guide.isValid) {
             val clip =
                 Path().apply {
@@ -127,7 +131,7 @@ fun DrawingCanvas(
                         color = Color(stroke.colorArgb),
                         style =
                             Stroke(
-                                width = stroke.width,
+                                width = stroke.strokeWidth,
                                 cap = StrokeCap.Round,
                                 join = StrokeJoin.Round,
                             ),
@@ -154,7 +158,7 @@ fun DrawingCanvas(
                     color = Color(stroke.colorArgb),
                     style =
                         Stroke(
-                            width = stroke.width,
+                            width = stroke.strokeWidth,
                             cap = StrokeCap.Round,
                             join = StrokeJoin.Round,
                         ),
