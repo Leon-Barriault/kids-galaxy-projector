@@ -26,11 +26,9 @@ DEFAULT_GALLERY_SIZE = 12
 #:               forest, lava, gas and so on (the default)
 #:   "blend"   - the colours diffused across the sphere, no character
 #:   "off"     - the drawing is stored exactly as it arrived
-#:
-#: Chosen on an actual projector, not in the abstract. An earlier terrain
-#: that *replaced* the drawn colours was rejected for looking generated;
-#: the one behind this setting only modulates them. If terrain is ever
-#: made louder again, expect this default to move back to "blend".
+DEFAULT_SURFACE_STYLE = "terrain"
+SURFACE_STYLES = ("terrain", "blend", "off")
+
 #: What this projector calls itself on the network. A school might run one
 #: per classroom, and a blank row in a tablet's picker is unchoosable.
 DEFAULT_GALAXY_NAME = "Kids Galaxy"
@@ -43,12 +41,16 @@ DEFAULT_ADVERTISE = True
 
 #: The protocol tablets should use for the endpoint announced over mDNS.
 #: Development normally advertises HTTP; field deployments using the mTLS
-#: uvicorn command should set ADVERTISE_SCHEME=https and PORT=8443.
+#: gateway should set ADVERTISE_SCHEME=https and PORT=8443.
 DEFAULT_ADVERTISE_SCHEME = "http"
 ADVERTISE_SCHEMES = ("http", "https")
 
-DEFAULT_SURFACE_STYLE = "terrain"
-SURFACE_STYLES = ("terrain", "blend", "off")
+#: Authorization is opt-in for backward-compatible desk/development setups.
+#: In a field deployment FastAPI binds to loopback, an mTLS gateway derives
+#: the role from the client certificate, and only that trusted local gateway
+#: may forward role headers.
+DEFAULT_AUTHORIZATION_ENABLED = False
+DEFAULT_TRUSTED_ROLE_PROXY_HOSTS = ("127.0.0.1", "::1")
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,8 @@ class Settings:
     galaxy_name: str = DEFAULT_GALAXY_NAME
     advertise: bool = DEFAULT_ADVERTISE
     advertise_scheme: str = DEFAULT_ADVERTISE_SCHEME
+    authorization_enabled: bool = DEFAULT_AUTHORIZATION_ENABLED
+    trusted_role_proxy_hosts: tuple[str, ...] = DEFAULT_TRUSTED_ROLE_PROXY_HOSTS
     port: int = 8000
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
@@ -98,6 +102,13 @@ class Settings:
             # systemd unit should not stop the projector serving planets.
             return raw if raw in allowed else default
 
+        def _csv(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+            raw = source.get(key)
+            if raw is None or not raw.strip():
+                return default
+            values = tuple(value.strip() for value in raw.split(",") if value.strip())
+            return values or default
+
         origins_raw = (source.get("ALLOWED_ORIGINS") or "*").strip()
         origins = (
             ("*",)
@@ -124,6 +135,14 @@ class Settings:
                 "ADVERTISE_SCHEME",
                 ADVERTISE_SCHEMES,
                 DEFAULT_ADVERTISE_SCHEME,
+            ),
+            authorization_enabled=_flag(
+                "AUTHORIZATION_ENABLED",
+                default=DEFAULT_AUTHORIZATION_ENABLED,
+            ),
+            trusted_role_proxy_hosts=_csv(
+                "TRUSTED_ROLE_PROXY_HOSTS",
+                DEFAULT_TRUSTED_ROLE_PROXY_HOSTS,
             ),
             port=_int("PORT", 8000),
             allowed_origins=origins,
