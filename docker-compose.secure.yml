@@ -12,6 +12,7 @@ services:
       - "8000"
     environment:
       UPLOAD_DIR: /app/uploads
+      STATE_DIR: /app/state
       STATIC_DIR: /app/static
       PORT: "8443"
       ADVERTISE: "true"
@@ -21,6 +22,7 @@ services:
       GALAXY_NAME: ${GALAXY_NAME:-Kids Galaxy}
     volumes:
       - ./pi-server/uploads:/app/uploads
+      - ./pi-server/state:/app/state
     restart: unless-stopped
 
   mtls-gateway:
