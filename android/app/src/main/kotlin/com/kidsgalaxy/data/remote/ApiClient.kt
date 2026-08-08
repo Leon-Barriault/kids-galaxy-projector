@@ -15,11 +15,10 @@ object ApiClient {
     private const val TAG = "KidsGalaxyApi"
     private const val CLIENT_CERT_ASSET = "client.p12"
 
-    fun create(
+    fun httpClient(
         context: Context,
-        baseUrl: String = BuildConfig.SERVER_BASE_URL,
         useMutualTls: Boolean = BuildConfig.USE_MTLS,
-    ): PlanetApi {
+    ): OkHttpClient {
         val builder =
             OkHttpClient
                 .Builder()
@@ -46,12 +45,19 @@ object ApiClient {
             Log.i(TAG, "mTLS enabled - presenting kid tablet certificate")
         }
 
-        return Retrofit
+        return builder.build()
+    }
+
+    fun create(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+        useMutualTls: Boolean = BuildConfig.USE_MTLS,
+    ): PlanetApi =
+        Retrofit
             .Builder()
             .baseUrl(baseUrl.trimEnd('/') + "/")
-            .client(builder.build())
+            .client(httpClient(context, useMutualTls))
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(PlanetApi::class.java)
-    }
 }
