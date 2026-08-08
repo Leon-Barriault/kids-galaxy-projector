@@ -15,7 +15,13 @@ from fastapi import (
 from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.auth import AuthorizationPolicy, ClientRole
+from app.api.behavior_mapper import behavior_settings_to_payload, behavior_to_payload
+from app.api.behavior_models import BehaviorUpdateRequest
 from app.api.sse import build_planet_event_response
+from app.application.behavior_use_cases import (
+    GetGalaxyBehaviorUseCase,
+    UpdateGalaxyBehaviorUseCase,
+)
 from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
@@ -46,6 +52,13 @@ def client_key(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _behavior_state_payload(state) -> dict:
+    return {
+        "effective": behavior_to_payload(state.effective),
+        "settings": behavior_settings_to_payload(state.settings),
+    }
+
+
 def build_router(
     *,
     submit_planet: SubmitPlanetUseCase,
@@ -54,6 +67,8 @@ def build_router(
     list_recent_planets: ListRecentPlanetsUseCase,
     delete_planet: DeletePlanetUseCase,
     clear_planets: ClearPlanetsUseCase,
+    get_behavior: GetGalaxyBehaviorUseCase,
+    update_behavior: UpdateGalaxyBehaviorUseCase,
     repository: PlanetRepository,
     publisher: EventPublisher,
     settings_galaxy: Galaxy,
@@ -105,6 +120,20 @@ def build_router(
     async def current_scene():
         scene = get_current_scene.execute()
         return {"planets": [planet.to_payload() for planet in scene.planets]}
+
+    @router.get(
+        "/api/behavior",
+        dependencies=[Depends(projector_or_manager)],
+    )
+    async def galaxy_behavior():
+        return _behavior_state_payload(get_behavior.execute())
+
+    @router.put(
+        "/api/behavior",
+        dependencies=[Depends(manager_only)],
+    )
+    async def update_galaxy_behavior(request: BehaviorUpdateRequest):
+        return _behavior_state_payload(update_behavior.execute(request.to_domain()))
 
     @router.get(
         "/api/planets",
@@ -180,10 +209,6 @@ def build_router(
             "name": planet.display_name,
         }
 
-    # Texture bytes are a presentation asset, not a management capability.
-    # Keeping them readable allows the projector and Coil thumbnails to fetch
-    # images without carrying a second authenticated API session. Listing,
-    # deleting, clearing, and uploading remain role-protected.
     @router.get("/uploads/{filename}")
     async def serve_upload(filename: str):
         path = repository.resolve_image(filename)
