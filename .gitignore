@@ -1,8 +1,14 @@
 # Android
 *.iml
 .gradle/
-local.properties
 /.idea/
+# NOTE: android/local.properties is intentionally NOT ignored. It carries the
+# local-debug server settings and is committed so a fresh clone runs without
+# configuration. It deliberately contains no sdk.dir - that is the one
+# genuinely machine-specific line, and Studio or ANDROID_HOME supplies it.
+# NOTE: android/.idea/ is not covered by the /.idea/ rule above, which is
+# anchored to the repository root. Its shared run configurations are committed;
+# an allowlist in android/.idea/.gitignore keeps the machine-specific rest out.
 .DS_Store
 build/
 /captures

@@ -1,6 +1,6 @@
 .PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
         arch test test-unit test-integration test-android build-android \
-        docker-up docker-down certs vendor-three verify
+        docker-up docker-down dev-up certs vendor-three verify
 
 help:
 	@echo "Kids Galaxy Projector - common targets"
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-android     - JVM unit tests for the Android app"
 	@echo "  make build-android    - assemble the debug APK"
 	@echo "  make verify           - lint + arch + all tests (what CI runs)"
+	@echo "  make dev-up           - full debug environment: server + emulator"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make docker-down"
 	@echo "  make certs            - generate mTLS certificates"
@@ -32,7 +33,7 @@ lint-docker:
 	hadolint --config .hadolint.yaml pi-server/Dockerfile
 
 lint-shell:
-	shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh pi-server/certs/generate_certs.sh
+	shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh scripts/dev-up.sh pi-server/certs/generate_certs.sh
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
@@ -76,6 +77,12 @@ build-android:
 verify: lint arch test test-android
 
 # -------------------- local stack --------------------
+
+# Everything a debugging session needs, in one step: the server container
+# built and healthy, then an emulator if no device is attached. This is what
+# Android Studio runs as a before-launch step of "App (local debug)".
+dev-up:
+	./scripts/dev-up.sh
 
 docker-up:
 	docker compose up --build

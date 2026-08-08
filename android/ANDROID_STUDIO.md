@@ -121,17 +121,25 @@ or the `java` command will still appear missing.
 **`SDK location not found`**
 
 Gradle also needs the Android SDK path, which Studio knows but a bare terminal
-does not. Opening the project in Studio once writes `android/local.properties`
-for you. Otherwise start from the committed template — it already carries the
-local-debug server defaults, so you only have to supply the SDK path:
+does not. The cleanest fix is the environment variable, because it applies to
+every checkout and every tool on the machine:
 
 ```powershell
-cd android
-Copy-Item local.properties.example local.properties   # macOS/Linux: cp
+# Windows, persisted (then reopen the terminal)
+[Environment]::SetEnvironmentVariable("ANDROID_HOME", "$env:LOCALAPPDATA\Android\Sdk", "User")
 ```
 
-Java `.properties` escaping bites on Windows: both the backslashes *and* the
-colon after the drive letter need escaping.
+```bash
+# macOS
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+# Linux
+export ANDROID_HOME="$HOME/Android/Sdk"
+```
+
+The alternative is an `sdk.dir` line in `android/local.properties` — Studio
+writes one there itself the first time you open the project. Note that Java
+`.properties` escaping bites on Windows: both the backslashes *and* the colon
+after the drive letter need escaping.
 
 ```properties
 sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
@@ -144,25 +152,25 @@ Rather than counting backslashes, let PowerShell generate the line:
     Add-Content local.properties
 ```
 
-**If your Windows username contains an accented or non-ASCII character**, do not
-put it in this file. Gradle reads `.properties` as ISO-8859-1, so a UTF-8 `é`
-arrives as `Ã©` and the SDK is reported missing with a path that looks correct
-in your editor. Two ways round it — either set the environment variable and
-leave `sdk.dir` out of the file entirely:
-
-```powershell
-[Environment]::SetEnvironmentVariable("ANDROID_HOME", "$env:LOCALAPPDATA\Android\Sdk", "User")
-```
-
-or use the 8.3 short form of the path, which is pure ASCII (`dir /x %USERPROFILE%\..`
+**If your Windows username contains an accented or non-ASCII character, prefer
+`ANDROID_HOME` and skip `sdk.dir` entirely.** Gradle reads `.properties` as
+ISO-8859-1, so a UTF-8 `é` arrives as `Ã©` and the SDK is reported missing with
+a path that looks perfectly correct in your editor. If you do want the line in
+the file, use the 8.3 short form, which is pure ASCII (`dir /x %USERPROFILE%\..`
 shows it):
 
 ```properties
 sdk.dir=C\:\\Users\\LONBAR~1\\AppData\\Local\\Android\\Sdk
 ```
 
-`local.properties` is gitignored on purpose: it is machine-specific and must
-never be committed. `local.properties.example` is the committed copy.
+`android/local.properties` **is committed**, unusually — see section 4. It
+carries the local-debug server settings and deliberately contains no `sdk.dir`,
+which is the only genuinely machine-specific line in it. If Studio appends one
+and you'd rather not see it in `git status` on every branch:
+
+```bash
+git update-index --skip-worktree android/local.properties
+```
 
 Four suites, all fast:
 
@@ -188,42 +196,51 @@ which the build generates per variant:
 | `debug` | `http://<host>:8000/` | Cleartext, for the lab |
 | `release` | `https://<host>:8443/` | HTTPS + mTLS |
 
-`<host>` defaults to `10.42.0.1` — the Pi hotspot, i.e. the *deployed*
-configuration, which is not what you want at a desk. Override it without
-editing source: copy the template once and you have the local-debug setup
-already filled in.
+The two variants read **different properties**, deliberately:
 
-```powershell
-cd android
-Copy-Item local.properties.example local.properties   # macOS/Linux: cp
-```
+| Variant | Property | Default |
+|---|---|---|
+| `debug` | `kidsGalaxyDebugServerHost` | `10.0.2.2` |
+| `release` | `kidsGalaxyServerHost` | `10.42.0.1` |
 
-That sets `kidsGalaxyServerHost=10.0.2.2`. **`10.0.2.2` is how the Android
-emulator reaches your development machine's localhost** — so it pairs with a
-server running in Docker on the same machine, and cleartext HTTP to it is
-already permitted. Nothing else to configure.
+They used to share one, which meant a host set for local debugging silently
+followed a release build made on the same machine — and a release build gives
+no clue which address was compiled into it. Now a local value cannot leak into
+a field APK.
 
-On a *physical* tablet 10.0.2.2 means nothing; the tablet is a separate device.
-Uncomment the LAN line in the template and put your machine's address there:
+Nothing needs configuring for local work. `android/local.properties` is
+committed with `kidsGalaxyDebugServerHost=10.0.2.2` already set, and that is
+where `devUp` starts the server, so a fresh clone runs as-is.
+
+**`10.0.2.2` is how the Android emulator reaches your development machine's
+localhost.** Cleartext HTTP to it is permitted by
+`network_security_config.xml`, which is why no further setup is needed.
+
+On a *physical* tablet 10.0.2.2 means nothing — the tablet is a separate
+device. Swap the line in `android/local.properties` for your machine's LAN
+address:
 
 ```properties
-kidsGalaxyServerHost=192.168.1.50
+kidsGalaxyDebugServerHost=192.168.1.50
 ```
 
-`~/.gradle/gradle.properties` works too, if you'd rather set it once for every
-checkout on the machine.
-
-One thing to keep in mind: this property feeds **both** variants — debug builds
-an `http://` URL from it, release an `https://` one. So a value you set here for
-local work would also follow a release build made on this machine. State the
-host explicitly when you build anything destined for the field:
+Resolution order is `-P` on the command line, then `gradle.properties`, then
+`local.properties`, then the built-in default — so a release build passing the
+host explicitly always wins:
 
 ```bash
 ./gradlew assembleRelease -PkidsGalaxyServerHost=10.42.0.1 \
     -PkidsGalaxyCertPassword=<install-time password>
 ```
 
-Start the server side first:
+Worth knowing if you go looking: Gradle does **not** read `local.properties` as
+project properties — the Android plugin only takes `sdk.dir` from it. The app
+build script loads it explicitly for exactly this reason. Any advice that says
+to put arbitrary properties there and expect Gradle to pick them up is wrong
+for a stock build.
+
+You don't need to start the server by hand — **App (local debug)** does it (see
+below). If you want it on its own:
 
 ```bash
 docker compose up --build      # from the repo root; serves on :8000
@@ -233,6 +250,48 @@ Cleartext HTTP is only permitted for the configured host, `10.0.2.2` and
 `localhost` — see `res/xml/network_security_config.xml`. If you point the app at
 some other address over HTTP it will fail with a cleartext-not-permitted error.
 That's deliberate, not a bug.
+
+## 4a. Starting a debugging session
+
+Press **Debug** on **App (local debug)**. That is the whole procedure, from a
+cold machine with Docker closed and no emulator running.
+
+A `devUp` Gradle task runs first, as a before-launch step:
+
+1. builds and starts the `pi-server` container, detached;
+2. waits for `GET /health` to answer, so the app is never installed against a
+   server that is still starting — a race that presents as a *broken* app
+   rather than a slow one, and costs a confusing ten minutes the first time;
+3. starts an emulator if no device is attached, and waits for `sys.boot_completed`.
+
+Each step is idempotent, so a second Debug costs a couple of seconds and just
+re-confirms health. It runs *before* the APK is assembled on purpose: the
+emulator boot is the long pole, so starting it first overlaps with the build,
+and a compile failure still leaves you a warm environment for the retry.
+
+The implementation is `scripts/dev-up.sh` and `scripts/dev-up.ps1`, picked by
+OS. Both are runnable on their own, and so is the task:
+
+```bash
+cd android
+./gradlew devUp        # bring it all up
+./gradlew devDown      # stop the container (leaves the emulator running)
+```
+
+Behaviour is tunable through the environment, which is also how you use a real
+tablet instead of an emulator:
+
+| Variable | Effect |
+|---|---|
+| `KG_SKIP_EMULATOR=1` | Don't touch devices — for a physical tablet on USB |
+| `KG_AVD` | Which AVD to start; default is the first one listed |
+| `KG_SERVER_TIMEOUT` | Seconds to wait for `/health`, default 300 |
+| `KG_EMULATOR_TIMEOUT` | Seconds to wait for boot, default 300 |
+
+If a step can't run — no Docker daemon, no `adb`, no AVD defined — it says so
+and, where it safely can, carries on rather than blocking the launch. A missing
+emulator is a warning; an unreachable server is a hard failure, because
+launching the app without one only produces a misleading error inside the app.
 
 ## 5. Emulators worth creating
 

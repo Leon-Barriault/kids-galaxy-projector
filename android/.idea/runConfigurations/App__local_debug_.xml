@@ -2,21 +2,48 @@
   <!--
     App (local debug)
 
-    The default way to run the app. Pick it in the toolbar dropdown, press Run,
-    and it installs the debug variant on whatever device or emulator is
-    selected. Nothing here needs editing.
+    The default way to run the app, and the only manual step in a debugging
+    session: pick it in the toolbar dropdown and press Debug. Nothing here
+    needs editing.
+
+    What happens before the app launches
+    ===================================
+    The `devUp` Gradle task runs first, as a before launch step. It brings the
+    whole environment up so that pressing Debug on a cold machine is enough:
+
+      1. builds and starts the pi-server container, detached
+      2. waits for GET /health to answer, so the app is never installed
+         against a server that is still starting - which presents as a broken
+         app rather than a slow one
+      3. starts an emulator if no device is attached, and waits for it to
+         finish booting
+
+    It is idempotent, so on a second run it costs a couple of seconds and
+    confirms the server is still healthy. The implementation is
+    scripts/dev-up.sh and scripts/dev-up.ps1 at the repository root; both are
+    runnable on their own when something needs investigating.
+
+    It runs before the APK is assembled on purpose. The emulator boot is the
+    long pole, so starting it first overlaps with everything else, and if the
+    build then fails you still have a warm environment for the retry.
+
+    If you are debugging on a physical tablet over USB, set KG_SKIP_EMULATOR=1
+    in the environment and the device step is skipped.
 
     Where it points
     ===============
-    The debug variant builds its URL from `kidsGalaxyServerHost`. Copy
-    local.properties.example to local.properties once and that is already set
-    to 10.0.2.2, the emulator's alias for this machine's loopback, so the app
-    finds a server started with `docker compose up` at the repo root.
+    The debug variant builds its URL from `kidsGalaxyDebugServerHost`, which
+    is committed in android/local.properties as 10.0.2.2 - the emulator's
+    alias for this machine's loopback. That is also where devUp starts the
+    server, so the two match with nothing to configure.
 
-    On a physical tablet, 10.0.2.2 is meaningless. Set your machine's LAN
-    address in local.properties instead:
+    Release uses a separate property, `kidsGalaxyServerHost`, so a value set
+    for local debugging cannot follow a field build.
 
-        kidsGalaxyServerHost=192.168.1.50
+    On a physical tablet, 10.0.2.2 is meaningless - the tablet is a separate
+    device. Swap in your machine's LAN address in local.properties:
+
+        kidsGalaxyDebugServerHost=192.168.1.50
 
     Debug builds talk plain HTTP and attach an OkHttp logging interceptor at
     BASIC level. Watch Logcat filtered to KidsGalaxyApi or KidsGalaxyRepo.
@@ -60,6 +87,7 @@
     <option name="ACTIVITY_EXTRA_FLAGS" value="" />
     <option name="MODE" value="default_activity" />
     <method v="2">
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="devUp" externalProjectPath="$PROJECT_DIR$" vmOptions="" scriptParameters="" />
       <option name="Android.Gradle.BeforeRunTask" enabled="true" />
     </method>
   </configuration>

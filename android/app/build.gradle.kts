@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // Compose compiler plugin (Kotlin itself is built into AGP 9+)
@@ -5,19 +7,58 @@ plugins {
 }
 
 /**
- * Deployment settings are read from Gradle properties so a site can be
- * reconfigured without editing source. Override in `local.properties`,
- * `~/.gradle/gradle.properties`, or on the command line:
+ * Gradle does NOT read `local.properties` as project properties - the Android
+ * plugin only looks in it for `sdk.dir`. So load it explicitly, otherwise a
+ * `kidsGalaxyServerHost` put there would be silently ignored and the app would
+ * quietly keep pointing at the Pi.
+ */
+val localProperties =
+    Properties().apply {
+        val file = rootProject.file("local.properties")
+        if (file.exists()) {
+            file.inputStream().use { load(it) }
+        }
+    }
+
+/**
+ * Resolution order, most specific first:
+ *
+ *   1. -P on the command line, or gradle.properties  (release builds use this)
+ *   2. local.properties                              (per machine overrides)
+ *   3. the default below                             (works with no setup)
+ */
+fun setting(
+    name: String,
+    default: String,
+): String =
+    (project.findProperty(name) as String?)
+        ?: localProperties.getProperty(name)
+        ?: default
+
+/**
+ * Release / field deployment: the Raspberry Pi's hotspot address.
  *
  *   ./gradlew assembleRelease -PkidsGalaxyServerHost=10.42.0.1 \
  *       -PkidsGalaxyCertPassword=<install-time password>
  */
-val serverHost: String =
-    (project.findProperty("kidsGalaxyServerHost") as String?) ?: "10.42.0.1"
-val httpPort: String = (project.findProperty("kidsGalaxyHttpPort") as String?) ?: "8000"
-val httpsPort: String = (project.findProperty("kidsGalaxyHttpsPort") as String?) ?: "8443"
-val certPassword: String =
-    (project.findProperty("kidsGalaxyCertPassword") as String?) ?: "KidsGalaxy"
+val serverHost: String = setting("kidsGalaxyServerHost", "10.42.0.1")
+
+/**
+ * Debug / desk work, kept separate on purpose. Sharing one host between the
+ * variants meant that setting a local address for debugging also followed a
+ * release build made on the same machine - silently, because a release build
+ * gives no clue which host was compiled into it. 10.0.2.2 is the emulator's
+ * fixed alias for the host machine's loopback, so `docker compose up` at the
+ * repo root is reachable with no configuration at all.
+ *
+ * On a physical tablet, set kidsGalaxyDebugServerHost to this machine's LAN
+ * address in local.properties.
+ */
+val debugServerHost: String = setting("kidsGalaxyDebugServerHost", "10.0.2.2")
+
+val httpPort: String = setting("kidsGalaxyHttpPort", "8000")
+val httpsPort: String = setting("kidsGalaxyHttpsPort", "8443")
+val certPassword: String = setting("kidsGalaxyCertPassword", "KidsGalaxy")
 
 android {
     namespace = "com.kidsgalaxy"
@@ -42,9 +83,13 @@ android {
 
     buildTypes {
         debug {
-            // Lab / development: plain HTTP against the Pi or Docker stack.
-            buildConfigField("String", "SERVER_BASE_URL", "\"http://$serverHost:$httpPort/\"")
+            // Lab / development: plain HTTP against the Docker stack or the Pi.
+            buildConfigField("String", "SERVER_BASE_URL", "\"http://$debugServerHost:$httpPort/\"")
             buildConfigField("boolean", "USE_MTLS", "false")
+
+            // Overrides the defaultConfig value so network_security_config.xml
+            // permits cleartext to whatever the debug build actually targets.
+            manifestPlaceholders["serverHost"] = debugServerHost
         }
         release {
             // Field deployment: certificate-authenticated HTTPS (mTLS).
