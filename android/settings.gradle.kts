@@ -14,5 +14,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "KidsGalaxy"
+include(":connection")
 include(":app")
 include(":manager")
