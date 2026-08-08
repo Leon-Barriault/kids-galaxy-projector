@@ -7,14 +7,9 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-/**
- * HTTP client for the manager app.
- *
- * Debug builds talk cleartext HTTP to the same host as the drawing app.
- * This app is for volunteers on the closed event network.
- */
+/** HTTP client for whichever galaxy the volunteer selected. */
 object ApiFactory {
-    fun create(): ManagerApi {
+    fun create(baseUrl: String = BuildConfig.SERVER_BASE_URL): ManagerApi {
         val builder =
             OkHttpClient
                 .Builder()
@@ -36,7 +31,7 @@ object ApiFactory {
 
         return Retrofit
             .Builder()
-            .baseUrl(BuildConfig.SERVER_BASE_URL)
+            .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
