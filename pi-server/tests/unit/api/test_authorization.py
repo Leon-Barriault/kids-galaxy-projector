@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.api.auth import AuthorizationPolicy, ClientRole
+from app.api.auth import AuthorizationPolicy, ClientRole, PROXY_MARKER
 from app.config import Settings
 
 
@@ -30,6 +30,14 @@ def request(
     )
 
 
+def proxy_headers(role: str, verified: str = "SUCCESS") -> dict[str, str]:
+    return {
+        "X-Kids-Galaxy-Proxy": PROXY_MARKER,
+        "X-Kids-Galaxy-Role": role,
+        "X-Kids-Galaxy-Client-Verified": verified,
+    }
+
+
 def secure_policy(*trusted_hosts: str) -> AuthorizationPolicy:
     return AuthorizationPolicy(
         Settings(
@@ -44,6 +52,17 @@ def test_direct_loopback_client_is_projector():
 
 
 def test_verified_proxy_role_is_accepted():
+    assert secure_policy().role_for(request(headers=proxy_headers("manager"))) == ClientRole.MANAGER
+
+
+def test_proxy_role_without_certificate_verification_is_rejected():
+    role = secure_policy().role_for(
+        request(headers=proxy_headers("manager", verified="NONE"))
+    )
+    assert role is None
+
+
+def test_unmarked_local_role_header_is_rejected():
     role = secure_policy().role_for(
         request(
             headers={
@@ -51,13 +70,6 @@ def test_verified_proxy_role_is_accepted():
                 "X-Kids-Galaxy-Client-Verified": "SUCCESS",
             }
         )
-    )
-    assert role == ClientRole.MANAGER
-
-
-def test_role_header_without_certificate_verification_is_rejected():
-    role = secure_policy().role_for(
-        request(headers={"X-Kids-Galaxy-Role": "manager"})
     )
     assert role is None
 
@@ -66,46 +78,26 @@ def test_remote_clients_cannot_spoof_forwarded_roles():
     role = secure_policy().role_for(
         request(
             host="10.42.0.55",
-            headers={
-                "X-Kids-Galaxy-Role": "manager",
-                "X-Kids-Galaxy-Client-Verified": "SUCCESS",
-            },
+            headers=proxy_headers("manager"),
         )
     )
     assert role is None
 
 
 def test_unknown_forwarded_role_is_rejected():
-    role = secure_policy().role_for(
-        request(
-            headers={
-                "X-Kids-Galaxy-Role": "superuser",
-                "X-Kids-Galaxy-Client-Verified": "SUCCESS",
-            }
-        )
-    )
+    role = secure_policy().role_for(request(headers=proxy_headers("superuser")))
     assert role is None
 
 
 def test_manager_can_pass_manager_guard():
     policy = secure_policy()
-    req = request(
-        headers={
-            "X-Kids-Galaxy-Role": "manager",
-            "X-Kids-Galaxy-Client-Verified": "SUCCESS",
-        }
-    )
+    req = request(headers=proxy_headers("manager"))
     assert policy.require(req, ClientRole.MANAGER) == ClientRole.MANAGER
 
 
 def test_kid_cannot_pass_manager_guard():
     policy = secure_policy()
-    req = request(
-        headers={
-            "X-Kids-Galaxy-Role": "kid",
-            "X-Kids-Galaxy-Client-Verified": "SUCCESS",
-        }
-    )
+    req = request(headers=proxy_headers("kid"))
     with pytest.raises(HTTPException) as error:
         policy.require(req, ClientRole.MANAGER)
     assert error.value.status_code == 403
