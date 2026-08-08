@@ -31,9 +31,29 @@ export class PlanetEntity {
     if (celebrate) animator.scaleIn(this.mesh);
   }
 
-  update(t) {
-    this.mesh.position.copy(this.animator.positionOnOrbit(this, t));
-    this.mesh.rotation.y += this.spin * 0.01;
+  update(t, behavior = {}) {
+    const speed = Number(behavior.planet_speed) || 1;
+    const animatedTime = t * speed;
+    this.mesh.position.copy(this.animator.positionOnOrbit(this, animatedTime));
+    this.mesh.rotation.y += this.spin * 0.01 * speed;
+
+    if (behavior.ambient_effects === false) return;
+    switch (behavior.theme) {
+      case 'halloween':
+        this.mesh.position.y += Math.sin(animatedTime * 1.3 + this.M0) * 0.18;
+        this.mesh.rotation.z = Math.sin(animatedTime * 0.5 + this.M0) * 0.06;
+        break;
+      case 'easter':
+        this.mesh.position.y += Math.abs(Math.sin(animatedTime * 1.1 + this.M0)) * 0.24;
+        this.mesh.rotation.z = 0;
+        break;
+      case 'christmas':
+        this.mesh.position.y += Math.sin(animatedTime * 0.8 + this.M0) * 0.1;
+        this.mesh.rotation.z = Math.sin(animatedTime * 0.7 + this.M0) * 0.03;
+        break;
+      default:
+        this.mesh.rotation.z = 0;
+    }
   }
 
   applyTexture(texture) {
