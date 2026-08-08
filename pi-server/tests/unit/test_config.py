@@ -26,7 +26,6 @@ class TestDefaults:
         assert settings.allowed_origins == ("*",)
 
     def test_defaults_to_production_mode(self):
-        """Docs must be off unless development is explicitly requested."""
         assert Settings.from_env({}).is_development is False
 
 
@@ -51,7 +50,6 @@ class TestOverrides:
         assert settings.upload_dir == Path("uploads")
 
     def test_non_numeric_values_fall_back_rather_than_crash(self):
-        """A typo must not remove the upload size limit."""
         settings = Settings.from_env({"MAX_FILE_SIZE": "five megabytes"})
         assert settings.max_file_size == DEFAULT_MAX_FILE_SIZE
 
@@ -103,13 +101,29 @@ class TestDiscoveryAdvertisement:
         assert Settings.from_env({"ADVERTISE_SCHEME": "ftp"}).advertise_scheme == "http"
 
 
+class TestAuthorizationSettings:
+    def test_authorization_is_off_by_default_for_existing_deployments(self):
+        assert Settings.from_env({}).authorization_enabled is False
+
+    def test_secure_deployment_can_enable_authorization(self):
+        assert Settings.from_env({"AUTHORIZATION_ENABLED": "true"}).authorization_enabled is True
+
+    def test_trusted_role_proxies_default_to_loopback_only(self):
+        assert Settings.from_env({}).trusted_role_proxy_hosts == ("127.0.0.1", "::1")
+
+    def test_trusted_role_proxy_hosts_are_parsed_as_csv(self):
+        settings = Settings.from_env(
+            {"TRUSTED_ROLE_PROXY_HOSTS": "127.0.0.1, ::1, 10.0.0.2"}
+        )
+        assert settings.trusted_role_proxy_hosts == (
+            "127.0.0.1",
+            "::1",
+            "10.0.0.2",
+        )
+
+
 class TestSurfaceStyle:
-    """
-    Pinned because it is a taste decision that reads like an arbitrary
-    constant, and is exactly the sort of thing a later change "tidies". It has
-    already moved twice: to terrain, back to blend when terrain replaced the
-    drawn colours, and to terrain again once terrain only modulated them.
-    """
+    """Pins the projector-selected surface treatment default."""
 
     def test_defaults_to_terrain(self):
         assert Settings().surface_style == "terrain"
@@ -123,6 +137,5 @@ class TestSurfaceStyle:
         assert Settings.from_env({"SURFACE_STYLE": "  Terrain "}).surface_style == "terrain"
 
     def test_an_unknown_style_falls_back_instead_of_raising(self):
-        """A typo in a systemd unit must not stop the projector serving planets."""
         assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "terrain"
         assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "terrain"
