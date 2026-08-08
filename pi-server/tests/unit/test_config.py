@@ -9,6 +9,7 @@ disable a safety limit (e.g. the upload size cap) at runtime.
 from pathlib import Path
 
 from app.config import (
+    DEFAULT_ADVERTISE_SCHEME,
     DEFAULT_MAX_FILE_SIZE,
     DEFAULT_MAX_STORED_PLANETS,
     Settings,
@@ -81,6 +82,25 @@ class TestEnvironmentFlag:
     def test_production_is_not_development(self):
         for value in ("production", "prod", "staging"):
             assert Settings.from_env({"ENVIRONMENT": value}).is_development is False
+
+
+class TestDiscoveryAdvertisement:
+    def test_defaults_to_http(self):
+        assert Settings.from_env({}).advertise_scheme == DEFAULT_ADVERTISE_SCHEME
+        assert Settings.from_env({}).advertise_scheme == "http"
+
+    def test_https_is_accepted_for_mtls_field_deployments(self):
+        settings = Settings.from_env(
+            {"ADVERTISE_SCHEME": "https", "PORT": "8443"}
+        )
+        assert settings.advertise_scheme == "https"
+        assert settings.port == 8443
+
+    def test_scheme_is_case_and_whitespace_tolerant(self):
+        assert Settings.from_env({"ADVERTISE_SCHEME": " HTTPS "}).advertise_scheme == "https"
+
+    def test_unknown_scheme_falls_back_instead_of_advertising_a_bad_url(self):
+        assert Settings.from_env({"ADVERTISE_SCHEME": "ftp"}).advertise_scheme == "http"
 
 
 class TestSurfaceStyle:
