@@ -1,5 +1,7 @@
 package com.kidsgalaxy.manager.data
 
+import android.content.Context
+import com.kidsgalaxy.connection.MutualTls
 import com.kidsgalaxy.manager.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -9,16 +11,19 @@ import java.util.concurrent.TimeUnit
 
 /** HTTP client for whichever galaxy the volunteer selected. */
 object ApiFactory {
-    fun create(baseUrl: String = BuildConfig.SERVER_BASE_URL): ManagerApi {
+    private const val MANAGER_CERT_ASSET = "manager.p12"
+
+    fun create(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+        useMutualTls: Boolean = BuildConfig.USE_MTLS,
+    ): ManagerApi {
         val builder =
             OkHttpClient
                 .Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
 
-        // Debug only, matching the drawing app. Request logging must never ship
-        // enabled: this app deletes things, and its traffic names the
-        // children's planets.
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(
                 HttpLoggingInterceptor().apply {
@@ -27,12 +32,19 @@ object ApiFactory {
             )
         }
 
-        val client = builder.build()
+        if (useMutualTls) {
+            MutualTls.apply(
+                context = context.applicationContext,
+                builder = builder,
+                clientCertificateAsset = MANAGER_CERT_ASSET,
+                password = BuildConfig.CLIENT_CERT_PASSWORD.toCharArray(),
+            )
+        }
 
         return Retrofit
             .Builder()
-            .baseUrl(baseUrl)
-            .client(client)
+            .baseUrl(baseUrl.trimEnd('/') + "/")
+            .client(builder.build())
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ManagerApi::class.java)
