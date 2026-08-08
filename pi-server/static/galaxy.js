@@ -9,6 +9,7 @@
  *   { has_planet, id, url, name, timestamp }
  * Gallery response: { planets: [ ... ] }
  * SSE event type: "planet"
+ * Removal: { has_planet: false, id, removed: true }
  */
 
 import * as THREE from './vendor/three.module.js';
@@ -39,9 +40,13 @@ const sunGeom = new THREE.SphereGeometry(1.8, 32, 32);
 const sunMat = new THREE.MeshBasicMaterial({ color: 0xffee88 });
 const sun = new THREE.Mesh(sunGeom, sunMat);
 scene.add(sun);
-const sunLight = new THREE.PointLight(0xfff5d0, 2.2, 80);
+const sunLight = new THREE.PointLight(0xfff5d0, 3.4, 100);
 sun.add(sunLight);
-const ambient = new THREE.AmbientLight(0x404060, 0.35);
+const ambient = new THREE.AmbientLight(0x606090, 0.75);
+// Fill light from the camera side so the near hemisphere is never dark
+const fillLight = new THREE.DirectionalLight(0xaabbff, 0.55);
+fillLight.position.set(0, 8, 20);
+scene.add(fillLight);
 scene.add(ambient);
 
 // Decorative companions (fixed)
@@ -81,9 +86,23 @@ function disposeOldestIfNeeded() {
       if (entry.mesh.geometry) entry.mesh.geometry.dispose();
       if (entry.mesh.material) {
         if (entry.mesh.material.map) entry.mesh.material.map.dispose();
+        if (entry.mesh.material.emissiveMap) entry.mesh.material.emissiveMap.dispose();
         entry.mesh.material.dispose();
       }
     }
+  }
+}
+
+function removeKidPlanet(planetId) {
+  const entry = kidPlanets.get(planetId);
+  if (!entry) return;
+  kidPlanets.delete(planetId);
+  scene.remove(entry.mesh);
+  if (entry.mesh.geometry) entry.mesh.geometry.dispose();
+  if (entry.mesh.material) {
+    if (entry.mesh.material.map) entry.mesh.material.map.dispose();
+    if (entry.mesh.material.emissiveMap) entry.mesh.material.emissiveMap.dispose();
+    entry.mesh.material.dispose();
   }
 }
 
@@ -112,11 +131,16 @@ function addKidPlanet(payload, celebrate) {
     textureUrl,
     (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
-      const geom = new THREE.SphereGeometry(0.85, 32, 32);
+      const geom = new THREE.SphereGeometry(1.05, 32, 32);
       const mat = new THREE.MeshStandardMaterial({
         map: tex,
-        roughness: 0.85,
-        metalness: 0.05,
+        roughness: 0.45,
+        metalness: 0.08,
+        // Self-illuminate so kid drawings stay vivid under the projector
+        // even when the sphere faces away from the sun light.
+        emissive: 0xffffff,
+        emissiveMap: tex,
+        emissiveIntensity: 0.55,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.scale.setScalar(celebrate ? 0.01 : 1);
@@ -133,7 +157,6 @@ function addKidPlanet(payload, celebrate) {
         setPlanetName(displayNameOf(payload), true);
         animateScaleIn(mesh);
       } else {
-        // Quiet restore on page load — still surface the newest name.
         setPlanetName(displayNameOf(payload), false);
       }
     },
@@ -147,7 +170,6 @@ function animateScaleIn(mesh) {
   const duration = 900;
   function tick(now) {
     const t = Math.min(1, (now - start) / duration);
-    // easeOutBack
     const c1 = 1.70158;
     const c3 = c1 + 1;
     const eased = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
@@ -164,7 +186,6 @@ function setPlanetName(name, celebrate) {
   el.classList.add('visible');
   if (celebrate) {
     el.classList.remove('celebrate');
-    // Force reflow so the animation can re-trigger.
     void el.offsetWidth;
     el.classList.add('celebrate');
   }
@@ -209,9 +230,7 @@ async function loadInitialGallery() {
     const res = await fetch('/api/planets?limit=' + GALLERY_SIZE);
     if (!res.ok) return;
     const body = await res.json();
-    // Server returns { planets: [...] }, newest first.
     const list = Array.isArray(body) ? body : body.planets || [];
-    // Load oldest-first so orbit indices feel stable across reloads.
     for (let i = list.length - 1; i >= 0; i--) {
       addKidPlanet(list[i], false);
     }
@@ -223,22 +242,28 @@ async function loadInitialGallery() {
 function connectSSE() {
   const es = new EventSource('/api/events');
 
-  // Server emits named events: event: planet\ndata: {...}\n\n
-  // EventSource.onmessage only receives events with no type (or type "message").
   const onPlanet = (ev) => {
     try {
       const data = JSON.parse(ev.data);
-      if (!data || !data.id || data.has_planet === false) return;
-      // Celebrate only for true live arrivals (not the connect-time prime
-      // and not a body already restored by the gallery load).
+      if (!data || !data.id) return;
+      if (data.removed || data.has_planet === false) {
+        removeKidPlanet(data.id);
+        return;
+      }
       const isNew = !kidPlanets.has(data.id);
       addKidPlanet(data, isNew);
     } catch (_) {}
   };
 
   es.addEventListener('planet', onPlanet);
-  // Fallback if a proxy strips the event field.
   es.onmessage = onPlanet;
+
+  es.addEventListener('planet-removed', (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      if (data && data.id) removeKidPlanet(data.id);
+    } catch (_) {}
+  });
 
   es.onerror = () => {
     es.close();
@@ -246,7 +271,6 @@ function connectSSE() {
   };
 }
 
-// stars
 const starGeom = new THREE.BufferGeometry();
 const starCount = 800;
 const positions = new Float32Array(starCount * 3);
