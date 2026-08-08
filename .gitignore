@@ -28,6 +28,8 @@ pi-server/certs/*.srl
 pi-server/certs/*.csr
 android/app/src/main/assets/*.p12
 android/app/src/main/assets/*.crt
+android/manager/src/main/assets/*.p12
+android/manager/src/main/assets/*.crt
 
 # Python
 __pycache__/
