@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.auth import AuthorizationPolicy
 from app.api.routes import build_router
 from app.application.use_cases import (
     ClearPlanetsUseCase,
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     image_processor = PillowImageProcessor()
     surface_styler = _styler_for(settings.surface_style)
+    authorizer = AuthorizationPolicy(settings)
 
     submit_planet = SubmitPlanetUseCase(
         repository=repository,
@@ -96,7 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.2.0",
+        version="1.3.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -129,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             repository=repository,
             publisher=publisher,
             settings_galaxy=galaxy,
+            authorizer=authorizer,
             settings=settings,
         )
     )
@@ -139,4 +142,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.rate_limiter = rate_limiter
     app.state.galaxy = galaxy
     app.state.advertiser = advertiser
+    app.state.authorizer = authorizer
     return app
