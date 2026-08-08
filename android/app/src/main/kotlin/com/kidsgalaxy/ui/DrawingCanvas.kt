@@ -70,8 +70,7 @@ fun DrawingCanvas(
                             onCanvasSizeChanged(next.first, next.second)
                         }
                     }
-                }
-                .pointerInput(Unit) {
+                }.pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             livePoints.clear()
