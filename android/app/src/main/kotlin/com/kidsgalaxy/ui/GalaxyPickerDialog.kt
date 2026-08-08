@@ -67,16 +67,13 @@ fun GalaxyPickerDialog(
         healthByUrl = healthByUrl + (target.baseUrl to GalaxyHealth.CHECKING)
         scope.launch {
             val result = withContext(Dispatchers.IO) { verifier.verify(target) }
-            healthByUrl =
-                healthByUrl +
-                    (
-                        target.baseUrl to
-                            if (result.reachable) {
-                                GalaxyHealth.REACHABLE
-                            } else {
-                                GalaxyHealth.UNREACHABLE
-                            }
-                    )
+            val health =
+                if (result.reachable) {
+                    GalaxyHealth.REACHABLE
+                } else {
+                    GalaxyHealth.UNREACHABLE
+                }
+            healthByUrl = healthByUrl + (target.baseUrl to health)
         }
     }
 
@@ -86,16 +83,13 @@ fun GalaxyPickerDialog(
         healthByUrl = healthByUrl + (target.baseUrl to GalaxyHealth.CHECKING)
         scope.launch {
             val result = withContext(Dispatchers.IO) { verifier.verify(target) }
-            healthByUrl =
-                healthByUrl +
-                    (
-                        target.baseUrl to
-                            if (result.reachable) {
-                                GalaxyHealth.REACHABLE
-                            } else {
-                                GalaxyHealth.UNREACHABLE
-                            }
-                    )
+            val health =
+                if (result.reachable) {
+                    GalaxyHealth.REACHABLE
+                } else {
+                    GalaxyHealth.UNREACHABLE
+                }
+            healthByUrl = healthByUrl + (target.baseUrl to health)
             selectingUrl = null
             if (result.reachable) {
                 onSelect(target)
