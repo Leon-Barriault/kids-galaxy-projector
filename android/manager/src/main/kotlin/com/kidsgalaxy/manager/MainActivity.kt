@@ -10,10 +10,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kidsgalaxy.connection.GalaxyTarget
+import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
+import com.kidsgalaxy.manager.ui.GalaxyPickerDialog
 import com.kidsgalaxy.manager.ui.ManagerScreen
+import java.net.URI
 
 /** Space-dark, matching the drawing app and the projector page. */
 private val ManagerColors =
@@ -34,26 +41,49 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val viewModel: ManagerViewModel = viewModel(factory = ManagerViewModel.factory())
-            val state by viewModel.uiState.collectAsState()
+            val store = remember { SharedPreferencesGalaxyTargetStore(this) }
+            val defaultTarget =
+                remember {
+                    GalaxyTarget.create("Default Galaxy", BuildConfig.SERVER_BASE_URL)
+                }
+            var selectedGalaxy by remember { mutableStateOf(store.load(defaultTarget)) }
+            var showGalaxyPicker by remember { mutableStateOf(false) }
+            val fallbackScheme =
+                remember { URI(BuildConfig.SERVER_BASE_URL).scheme ?: "http" }
 
-            // A MaterialTheme is not optional here: the delete confirmation and
-            // error dialogs are Material3 components, and without a scheme they
-            // render with the default *light* palette inside a dark app.
+            val managerViewModel: ManagerViewModel =
+                viewModel(
+                    key = "manager:${selectedGalaxy.baseUrl}",
+                    factory = ManagerViewModel.factory(selectedGalaxy.baseUrl),
+                )
+            val state by managerViewModel.uiState.collectAsState()
+
             MaterialTheme(colorScheme = ManagerColors) {
                 Surface(
                     color = MaterialTheme.colorScheme.background,
-                    // enableEdgeToEdge draws behind the system bars, so the
-                    // content has to inset itself or the header sits under the
-                    // status bar and the last row under the navigation bar.
                     modifier = Modifier.safeDrawingPadding(),
                 ) {
                     ManagerScreen(
                         state = state,
-                        onRefresh = viewModel::refresh,
-                        onDelete = viewModel::deletePlanet,
-                        onClearAll = viewModel::clearAll,
-                        onClearError = viewModel::clearError,
+                        galaxy = selectedGalaxy,
+                        onConfigureGalaxy = { showGalaxyPicker = true },
+                        onRefresh = managerViewModel::refresh,
+                        onDelete = managerViewModel::deletePlanet,
+                        onClearAll = managerViewModel::clearAll,
+                        onClearError = managerViewModel::clearError,
+                    )
+                }
+
+                if (showGalaxyPicker) {
+                    GalaxyPickerDialog(
+                        current = selectedGalaxy,
+                        fallbackScheme = fallbackScheme,
+                        onSelect = { target ->
+                            store.save(target)
+                            selectedGalaxy = target
+                            showGalaxyPicker = false
+                        },
+                        onDismiss = { showGalaxyPicker = false },
                     )
                 }
             }
