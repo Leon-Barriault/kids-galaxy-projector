@@ -75,7 +75,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     galaxy = Galaxy(name=settings.galaxy_name)
     advertiser = (
-        ZeroconfServiceAdvertiser(galaxy, settings.port)
+        ZeroconfServiceAdvertiser(
+            galaxy,
+            settings.port,
+            scheme=settings.advertise_scheme,
+        )
         if settings.advertise
         else NullServiceAdvertiser()
     )
