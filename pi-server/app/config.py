@@ -41,6 +41,12 @@ DEFAULT_GALAXY_NAME = "Kids Galaxy"
 #: off if the deployment cannot.
 DEFAULT_ADVERTISE = True
 
+#: The protocol tablets should use for the endpoint announced over mDNS.
+#: Development normally advertises HTTP; field deployments using the mTLS
+#: uvicorn command should set ADVERTISE_SCHEME=https and PORT=8443.
+DEFAULT_ADVERTISE_SCHEME = "http"
+ADVERTISE_SCHEMES = ("http", "https")
+
 DEFAULT_SURFACE_STYLE = "terrain"
 SURFACE_STYLES = ("terrain", "blend", "off")
 
@@ -58,6 +64,7 @@ class Settings:
     surface_style: str = DEFAULT_SURFACE_STYLE
     galaxy_name: str = DEFAULT_GALAXY_NAME
     advertise: bool = DEFAULT_ADVERTISE
+    advertise_scheme: str = DEFAULT_ADVERTISE_SCHEME
     port: int = 8000
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
@@ -113,6 +120,11 @@ class Settings:
             galaxy_name=(source.get("GALAXY_NAME") or DEFAULT_GALAXY_NAME).strip()
             or DEFAULT_GALAXY_NAME,
             advertise=_flag("ADVERTISE", default=DEFAULT_ADVERTISE),
+            advertise_scheme=_choice(
+                "ADVERTISE_SCHEME",
+                ADVERTISE_SCHEMES,
+                DEFAULT_ADVERTISE_SCHEME,
+            ),
             port=_int("PORT", 8000),
             allowed_origins=origins,
             environment=source.get("ENVIRONMENT") or "production",
