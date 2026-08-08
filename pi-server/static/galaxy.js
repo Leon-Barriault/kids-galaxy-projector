@@ -282,6 +282,17 @@ function removeKidPlanet(id) {
   disposeEntry(entry);
 }
 
+/** "Clear all" from the manager app: empty the sky in one frame. */
+function removeAllKidPlanets() {
+  for (const entry of kidPlanets.values()) disposeEntry(entry);
+  kidPlanets.clear();
+  if (planetNameEl) {
+    planetNameEl.textContent = 'Waiting for a planet…';
+    planetNameEl.classList.remove('celebrate');
+  }
+  if (statusEl) statusEl.textContent = 'Draw on the tablet and launch into space!';
+}
+
 /**
  * Evict by arrival order, not by Map insertion order of the *texture* - those
  * differ whenever loads finish out of sequence, which is the normal case when
@@ -503,7 +514,15 @@ function handlePlanetEvent(raw) {
   } catch (e) {
     return;
   }
-  if (!data || !data.id) return; // the empty "no planet yet" payload
+  if (!data) return;
+  // Checked before the id guard: a clear-all names no single planet, so it
+  // arrives without an id and would otherwise be discarded as the empty
+  // "no planet yet" payload.
+  if (data.cleared) {
+    removeAllKidPlanets();
+    return;
+  }
+  if (!data.id) return; // the empty "no planet yet" payload
   if (data.removed || data.has_planet === false) {
     removeKidPlanet(data.id);
     return;

@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -27,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,9 +62,11 @@ fun ManagerScreen(
     state: ManagerUiState,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
+    onClearAll: () -> Unit,
     onClearError: () -> Unit,
 ) {
     var pendingDelete by remember { mutableStateOf<PlanetDto?>(null) }
+    var confirmClearAll by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -90,6 +94,37 @@ fun ManagerScreen(
             }
             IconButton(onClick = onRefresh, enabled = !state.isLoading) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Accent)
+            }
+        }
+
+        // Full width and clearly separated from the per-row delete buttons:
+        // this is the one control in the app that cannot be undone, and it
+        // should not sit close enough to a row to be hit by mistake.
+        if (state.planets.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = { confirmClearAll = true },
+                enabled = state.canClearAll,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+            ) {
+                if (state.isClearing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = Danger,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (state.isClearing) {
+                        "Clearing\u2026"
+                    } else {
+                        "Clear all (${state.planets.size})"
+                    },
+                )
             }
         }
 
@@ -121,6 +156,30 @@ fun ManagerScreen(
                 }
             }
         }
+    }
+
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("Remove every planet?") },
+            text = {
+                Text(
+                    "This deletes all ${state.planets.size} planet(s) from the Pi and " +
+                        "empties the projector. It cannot be undone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearAll = false
+                    onClearAll()
+                }) {
+                    Text("Clear all", color = Danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) { Text("Keep them") }
+            },
+        )
     }
 
     pendingDelete?.let { planet ->

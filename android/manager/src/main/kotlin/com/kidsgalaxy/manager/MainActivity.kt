@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         onRefresh = viewModel::refresh,
                         onDelete = viewModel::deletePlanet,
+                        onClearAll = viewModel::clearAll,
                         onClearError = viewModel::clearError,
                     )
                 }

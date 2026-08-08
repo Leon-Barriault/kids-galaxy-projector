@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import build_router
 from app.application.use_cases import (
+    ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
@@ -24,6 +25,7 @@ from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
+from app.infrastructure.surface_styler import PillowSurfaceStyler
 
 logger = logging.getLogger("kids-galaxy")
 
@@ -37,6 +39,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     publisher = InMemoryEventPublisher()
     rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
     image_processor = PillowImageProcessor()
+    # The look of a planet is tuned here, in the composition root, rather
+    # than inside the styler - so it can be changed without touching the
+    # code that implements the effect.
+    surface_styler = PillowSurfaceStyler(enabled=settings.surface_blend)
 
     # ---- use cases (application) ----
     submit_planet = SubmitPlanetUseCase(
@@ -44,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         publisher=publisher,
         rate_limiter=rate_limiter,
         image_processor=image_processor,
+        surface_styler=surface_styler,
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
@@ -54,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_limit=settings.max_stored_planets,
     )
     delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
+    clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
 
     # ---- transport (API) ----
     app = FastAPI(
@@ -87,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             get_current_planet=get_current_planet,
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
+            clear_planets=clear_planets,
             repository=repository,
             publisher=publisher,
             settings=settings,

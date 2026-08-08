@@ -262,3 +262,39 @@ class TestDelete:
 
         assert outside.exists()
         assert len(list(tmp_path.glob("*.png"))) == 1
+
+
+class TestClear:
+    """Backs the manager's "clear all" - end of an event, or a new group."""
+
+    def test_an_empty_store_clears_to_nothing(self, repo):
+        assert repo.clear() == []
+
+    def test_removes_every_image_and_sidecar(self, repo, tmp_path):
+        for i in range(4):
+            repo.save(f"id{i}", f"Planet {i}", PNG)
+
+        removed = repo.clear()
+
+        assert len(removed) == 4
+        assert list(tmp_path.glob("*.png")) == []
+        assert list(tmp_path.glob("*.json")) == []
+
+    def test_reports_what_went_so_it_can_be_logged(self, repo):
+        repo.save("id1", "Alice's World!", PNG)
+        assert [p.display_name for p in repo.clear()] == ["Alice's World!"]
+
+    def test_the_store_is_reusable_afterwards(self, repo):
+        repo.save("id1", "Before", PNG)
+        repo.clear()
+        repo.save("id2", "After", PNG)
+        assert repo.latest().display_name == "After"
+
+    def test_leaves_unrelated_files_alone(self, repo, tmp_path):
+        """The upload directory is not exclusively ours on a hand-built Pi."""
+        (tmp_path / "notes.txt").write_text("keep me", encoding="utf-8")
+        repo.save("id1", "Planet", PNG)
+
+        repo.clear()
+
+        assert (tmp_path / "notes.txt").exists()

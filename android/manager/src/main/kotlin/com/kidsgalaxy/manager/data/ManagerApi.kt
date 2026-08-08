@@ -25,6 +25,11 @@ data class DeleteResponse(
     @SerializedName("name") val name: String? = null,
 )
 
+data class ClearResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("removed") val removed: Int = 0,
+)
+
 interface ManagerApi {
     @GET("api/planets")
     suspend fun listPlanets(
@@ -35,4 +40,8 @@ interface ManagerApi {
     suspend fun deletePlanet(
         @Path("id") id: String,
     ): Response<DeleteResponse>
+
+    /** Empties the whole gallery. The server publishes one clear event. */
+    @DELETE("api/planets")
+    suspend fun clearPlanets(): Response<ClearResponse>
 }

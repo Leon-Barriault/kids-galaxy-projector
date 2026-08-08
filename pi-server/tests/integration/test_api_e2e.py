@@ -576,3 +576,124 @@ class TestRoutesAreRegistered:
             "/uploads/{filename}",
         ):
             assert expected in paths, f"{expected} is not registered"
+
+
+class TestClearAllPlanets:
+    """
+    "Clear all" in the manager app. Distinct from deleting one at a time: the
+    volunteer wants an empty sky in one action at the end of an event.
+    """
+
+    def test_empties_the_gallery_and_reports_the_count(self, client, upload_planet):
+        for i in range(3):
+            upload_planet(f"Planet {i}")
+
+        response = client.delete("/api/planets")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "cleared", "removed": 3}
+        assert client.get("/api/planets").json() == {"planets": []}
+        assert client.get("/api/current-planet").json() == {"has_planet": False}
+
+    def test_the_textures_stop_being_served(self, client, upload_planet):
+        planet = upload_planet("Gone")
+        assert client.get(planet["url"]).status_code == 200
+
+        client.delete("/api/planets")
+
+        assert client.get(planet["url"]).status_code == 404
+
+    def test_nothing_is_left_on_disk(self, client, upload_planet, settings):
+        for i in range(3):
+            upload_planet(f"Planet {i}")
+
+        client.delete("/api/planets")
+
+        assert list(settings.upload_dir.glob("*.png")) == []
+        assert list(settings.upload_dir.glob("*.json")) == []
+
+    def test_clearing_an_empty_gallery_succeeds(self, client):
+        """Idempotent: a volunteer tapping twice must not see an error."""
+        response = client.delete("/api/planets")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "cleared", "removed": 0}
+
+    def test_uploading_works_again_afterwards(self, client, upload_planet):
+        upload_planet("Before")
+        client.delete("/api/planets")
+
+        after = upload_planet("After")
+
+        assert client.get("/api/current-planet").json()["url"] == after["url"]
+
+    def test_the_collection_route_does_not_shadow_the_single_delete(
+        self, client, upload_planet
+    ):
+        """
+        DELETE /api/planets and DELETE /api/planets/{id} share a prefix, and
+        Starlette matches in registration order - so this pins that one planet
+        can still be removed on its own.
+        """
+        keep = upload_planet("Keep")
+        drop = upload_planet("Drop")
+
+        assert client.delete(f"/api/planets/{drop['planet_id']}").status_code == 200
+
+        names = [p["name"] for p in client.get("/api/planets").json()["planets"]]
+        assert names == ["Keep"]
+        assert client.get(keep["url"]).status_code == 200
+
+
+class TestSurfaceBlending:
+    """
+    Uploads come back as a planet surface rather than marker on white paper.
+    Asserted through the HTTP contract, because that is where the projector
+    reads it from.
+    """
+
+    def test_the_stored_texture_is_not_mostly_white(self, client, upload_planet):
+        import io as _io
+
+        from PIL import Image as _Image
+
+        # A small red blob on a large white canvas: the "before" case exactly.
+        canvas = _Image.new("RGB", (256, 128), (255, 255, 255))
+        canvas.paste(_Image.new("RGB", (30, 30), (220, 40, 40)), (110, 50))
+        buffer = _io.BytesIO()
+        canvas.save(buffer, format="PNG")
+
+        planet = upload_planet("Blended", png=buffer.getvalue())
+        stored = _Image.open(_io.BytesIO(client.get(planet["url"]).content))
+
+        greyscale = list(stored.convert("L").getdata())
+        white = sum(1 for p in greyscale if p >= 238) / len(greyscale)
+        assert white < 0.10, f"still {white:.0%} white paper"
+
+    def test_it_can_be_switched_off(self, tmp_path, make_png_bytes):
+        """An operator who dislikes the effect gets the plain drawing back."""
+        from fastapi.testclient import TestClient
+
+        settings = Settings(
+            upload_dir=tmp_path / "uploads",
+            static_dir=tmp_path / "static",
+            rate_limit_seconds=0.0,
+            surface_blend=False,
+        )
+        client = TestClient(create_app(settings))
+
+        response = client.post(
+            "/api/upload",
+            files={"file": ("p.png", make_png_bytes(color=(255, 255, 255)), "image/png")},
+            data={"name": "Plain"},
+        )
+        assert response.status_code == 200
+
+        import io as _io
+
+        from PIL import Image as _Image
+
+        stored = _Image.open(_io.BytesIO(client.get(response.json()["url"]).content))
+        greyscale = list(stored.convert("L").getdata())
+        white = sum(1 for p in greyscale if p >= 238) / len(greyscale)
+        assert white > 0.9, "with blending off a white drawing should stay white"

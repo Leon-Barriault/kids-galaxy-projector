@@ -63,7 +63,11 @@ class PillowImageProcessor(ImageProcessor):
                     )
 
                 buffer = BytesIO()
-                cleaned.save(buffer, format="PNG", optimize=True)
+                # No optimize=True: it costs several hundred milliseconds of zlib
+                # strategy search for a few percent of size, on the one path
+                # where a child is watching a spinner. The texture is served
+                # over a LAN, not the internet.
+                cleaned.save(buffer, format="PNG")
                 return buffer.getvalue()
         except Exception as e:
             logger.error("Failed to process image: %s", e)

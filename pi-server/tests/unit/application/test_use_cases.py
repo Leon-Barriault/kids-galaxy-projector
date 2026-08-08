@@ -9,6 +9,7 @@ publish -> prune) is verified in isolation and runs in microseconds.
 import pytest
 
 from app.application.use_cases import (
+    ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
@@ -53,6 +54,11 @@ class FakePlanetRepository:
                 return self.saved.pop(index)
         return None
 
+    def clear(self):
+        removed = list(self.saved)
+        self.saved.clear()
+        return removed
+
     def prune(self, keep):
         self.pruned_to = keep
 
@@ -90,6 +96,18 @@ class DenyAllRateLimiter:
         self.recorded.append(key)
 
 
+class FakeSurfaceStyler:
+    """Records what it was handed, so ordering against the processor is testable."""
+
+    def __init__(self, marker: bytes = b"styled"):
+        self.received: list[bytes] = []
+        self._marker = marker
+
+    def style(self, png_bytes):
+        self.received.append(png_bytes)
+        return self._marker
+
+
 class FakeImageProcessor:
     """Stands in for Pillow: records calls, returns normalised bytes."""
 
@@ -111,6 +129,7 @@ def deps():
         "publisher": FakeEventPublisher(),
         "rate_limiter": AllowAllRateLimiter(),
         "image_processor": FakeImageProcessor(),
+        "surface_styler": FakeSurfaceStyler(),
     }
 
 
@@ -260,8 +279,12 @@ class TestSubmitPlanet:
             )
         assert deps["publisher"].published == []
 
-    def test_stores_the_normalised_bytes_not_the_raw_upload(self, deps):
-        """Re-encoding is what strips hostile metadata, so it must be what we save."""
+    def test_the_raw_upload_is_never_what_gets_stored(self, deps):
+        """
+        Re-encoding is what strips hostile metadata, so the bytes reaching disk
+        must have been through it - and now out the far side of styling too.
+        What matters is that nothing the client sent is written verbatim.
+        """
         captured = {}
 
         class CapturingRepo(FakePlanetRepository):
@@ -276,7 +299,9 @@ class TestSubmitPlanet:
             raw_name="Clean",
             client_key="10.0.0.1",
         )
-        assert captured["bytes"] == b"normalised-png"
+        assert captured["bytes"] != PNG_BYTES
+        assert deps["image_processor"].calls == 1
+        assert deps["surface_styler"].received == [b"normalised-png"]
 
 
 class TestGetCurrentPlanet:
@@ -430,3 +455,95 @@ class TestDeletePlanet:
 
         listing = ListRecentPlanetsUseCase(repo).execute(limit=12)
         assert [p["name"] for p in listing["planets"]] == ["Beta"]
+
+
+class TestSurfaceStyling:
+    """
+    The drawing is marker on white paper; a planet is not. Styling turns one
+    into the other, and *where* it sits in the pipeline is the part worth
+    pinning down.
+    """
+
+    def test_the_stored_bytes_are_the_styled_ones(self, deps):
+        build(deps).execute(
+            image_bytes=PNG_BYTES,
+            content_type="image/png",
+            raw_name="Pretty",
+            client_key="10.0.0.1",
+        )
+        assert deps["repository"].saved  # sanity
+        assert deps["surface_styler"].received == [b"normalised-png"]
+
+    def test_styling_happens_after_the_security_re_encode_never_before(self, deps):
+        """
+        The styler must only ever see bytes the image processor has already
+        vouched for. Handing it the raw upload would mean running a decode and
+        a dozen filters over whatever a client chose to send.
+        """
+        build(deps).execute(
+            image_bytes=PNG_BYTES,
+            content_type="image/png",
+            raw_name="Safe",
+            client_key="10.0.0.1",
+        )
+        assert deps["surface_styler"].received == [b"normalised-png"]
+        assert PNG_BYTES not in deps["surface_styler"].received
+
+    def test_a_rejected_upload_is_never_styled(self, deps):
+        with pytest.raises(ImageValidationError):
+            build(deps).execute(
+                image_bytes=b"not an image at all",
+                content_type="image/png",
+                raw_name="Bad",
+                client_key="10.0.0.1",
+            )
+        assert deps["surface_styler"].received == []
+
+
+class TestClearPlanets:
+    def test_removes_everything_and_reports_how_many(self):
+        repo = FakePlanetRepository()
+        for i in range(4):
+            repo.save(f"id{i}", f"Planet {i}", b"x")
+        publisher = FakeEventPublisher()
+
+        removed = ClearPlanetsUseCase(repo, publisher).execute()
+
+        assert removed == 4
+        assert repo.saved == []
+
+    def test_announces_one_event_not_one_per_planet(self):
+        """
+        Thirty separate removals would make the projector flicker through a
+        cascade of disposals; one `cleared` empties it in a frame.
+        """
+        repo = FakePlanetRepository()
+        for i in range(10):
+            repo.save(f"id{i}", f"Planet {i}", b"x")
+        publisher = FakeEventPublisher()
+
+        ClearPlanetsUseCase(repo, publisher).execute()
+
+        assert publisher.published == [{"has_planet": False, "cleared": True}]
+
+    def test_announces_even_when_the_store_was_already_empty(self):
+        """
+        A projector that has drifted out of step - a missed removal, a tab left
+        open since yesterday - is put right by this. A "clear" that visibly
+        does nothing is worse than one that does.
+        """
+        publisher = FakeEventPublisher()
+
+        removed = ClearPlanetsUseCase(FakePlanetRepository(), publisher).execute()
+
+        assert removed == 0
+        assert publisher.published == [{"has_planet": False, "cleared": True}]
+
+    def test_the_gallery_is_empty_afterwards(self):
+        repo = FakePlanetRepository()
+        repo.save("a", "Alpha", b"x")
+        repo.save("b", "Beta", b"x")
+
+        ClearPlanetsUseCase(repo, FakeEventPublisher()).execute()
+
+        assert ListRecentPlanetsUseCase(repo).execute(limit=12) == {"planets": []}

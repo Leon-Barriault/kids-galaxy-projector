@@ -36,6 +36,16 @@ class PlanetRepository(ABC):
         """
 
     @abstractmethod
+    def clear(self) -> list[Planet]:
+        """
+        Remove every stored planet and return what was removed.
+
+        Returning the planets rather than a count keeps the use case able to
+        report and log what actually went, and keeps the port symmetric with
+        delete().
+        """
+
+    @abstractmethod
     def prune(self, keep: int) -> None:
         """Delete all but the newest `keep` planets."""
 
@@ -84,6 +94,24 @@ class RateLimiter(ABC):
     @abstractmethod
     def record(self, key: str) -> None:
         """Mark a successful upload, starting this client's cooldown."""
+
+
+class SurfaceStyler(ABC):
+    """
+    Cosmetic pass that turns a drawing into a planet surface.
+
+    Separate from ImageProcessor on purpose. That one is a security control -
+    re-encoding to strip anything smuggled inside the upload - and mixing a
+    look-and-feel decision into it would mean tuning the appearance of planets
+    inside the code that defends the server.
+    """
+
+    @abstractmethod
+    def style(self, png_bytes: bytes) -> bytes:
+        """
+        Return a styled PNG. Must never raise: styling is cosmetic, and a
+        planet that looks like paper beats an upload that fails.
+        """
 
 
 class ImageProcessor(ABC):

@@ -32,6 +32,7 @@ class Settings:
     rate_limit_seconds: float = DEFAULT_RATE_LIMIT_SECONDS
     max_stored_planets: int = DEFAULT_MAX_STORED_PLANETS
     gallery_size: int = DEFAULT_GALLERY_SIZE
+    surface_blend: bool = True
     allowed_origins: tuple[str, ...] = ("*",)
     environment: str = "production"
 
@@ -52,6 +53,12 @@ class Settings:
             except ValueError:
                 return default
 
+        def _flag(key: str, *, default: bool) -> bool:
+            raw = source.get(key)
+            if raw is None or not raw.strip():
+                return default
+            return raw.strip().lower() not in {"0", "false", "no", "off"}
+
         origins_raw = (source.get("ALLOWED_ORIGINS") or "*").strip()
         origins = (
             ("*",)
@@ -70,6 +77,7 @@ class Settings:
             ),
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
             gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
+            surface_blend=_flag("SURFACE_BLEND", default=True),
             allowed_origins=origins,
             environment=source.get("ENVIRONMENT") or "production",
         )

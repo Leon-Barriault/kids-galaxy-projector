@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.sse import build_planet_event_response
 from app.application.use_cases import (
+    ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
@@ -52,6 +53,7 @@ def build_router(
     get_current_planet: GetCurrentPlanetUseCase,
     list_recent_planets: ListRecentPlanetsUseCase,
     delete_planet: DeletePlanetUseCase,
+    clear_planets: ClearPlanetsUseCase,
     repository: PlanetRepository,
     publisher: EventPublisher,
     settings,
@@ -137,6 +139,22 @@ def build_router(
             "name": planet.display_name,
             "url": planet.url,
         }
+
+    @router.delete("/api/planets")
+    async def clear_planets_route():
+        """
+        Remove every stored planet.
+
+        Declared before the /{planet_id} route below because Starlette matches
+        in registration order and a path parameter would otherwise be a
+        candidate for the bare collection path too.
+
+        There is no confirmation here by design: confirming is the client's
+        job, and the manager app asks. An API that argues with its caller is
+        harder to script and no safer.
+        """
+        removed = clear_planets.execute()
+        return {"status": "cleared", "removed": removed}
 
     @router.delete("/api/planets/{planet_id}")
     async def delete_planet_route(planet_id: str):

@@ -16,9 +16,13 @@ data class ManagerUiState(
     val planets: List<PlanetDto> = emptyList(),
     val isLoading: Boolean = false,
     val deletingIds: Set<String> = emptySet(),
+    val isClearing: Boolean = false,
     val errorMessage: String? = null,
     val statusMessage: String? = null,
-)
+) {
+    /** Nothing to clear, and no second clear while one is in flight. */
+    val canClearAll: Boolean get() = planets.isNotEmpty() && !isClearing && !isLoading
+}
 
 class ManagerViewModel(
     private val api: ManagerApi = ApiFactory.create(),
@@ -95,6 +99,48 @@ class ManagerViewModel(
                 _uiState.update {
                     it.copy(
                         deletingIds = it.deletingIds - id,
+                        errorMessage = e.message ?: "Network error",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Empties the gallery in one request.
+     *
+     * Deliberately not a loop over deletePlanet: that would be thirty round
+     * trips and thirty separate events, and the projector would flicker
+     * through the removals one at a time instead of emptying at once.
+     */
+    fun clearAll() {
+        if (_uiState.value.isClearing) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isClearing = true, errorMessage = null) }
+            try {
+                val response = api.clearPlanets()
+                if (response.isSuccessful) {
+                    val removed = response.body()?.removed ?: 0
+                    _uiState.update {
+                        it.copy(
+                            planets = emptyList(),
+                            deletingIds = emptySet(),
+                            isClearing = false,
+                            statusMessage = "Cleared $removed planet(s)",
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isClearing = false,
+                            errorMessage = "Could not clear the gallery (${response.code()})",
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isClearing = false,
                         errorMessage = e.message ?: "Network error",
                     )
                 }

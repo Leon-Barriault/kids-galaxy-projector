@@ -17,7 +17,13 @@ from app.domain.image_rules import (
 )
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
-from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter
+from app.ports import (
+    EventPublisher,
+    ImageProcessor,
+    PlanetRepository,
+    RateLimiter,
+    SurfaceStyler,
+)
 
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024
 DEFAULT_MAX_DIMENSION = 2048
@@ -47,12 +53,14 @@ class SubmitPlanetUseCase:
         publisher: EventPublisher,
         rate_limiter: RateLimiter,
         image_processor: ImageProcessor,
+        surface_styler: SurfaceStyler,
         retention: int = DEFAULT_RETENTION,
     ):
         self._repository = repository
         self._publisher = publisher
         self._rate_limiter = rate_limiter
         self._image_processor = image_processor
+        self._surface_styler = surface_styler
         self._retention = retention
 
     def execute(
@@ -80,7 +88,13 @@ class SubmitPlanetUseCase:
             image_bytes, max_dimension=max_dimension, target_size=target_size
         )
 
-        # 4. Persist, keeping the child's name verbatim.
+        # 4. Style: spread the child's colours across the sphere so the planet
+        #    is a world rather than marker on white paper. Strictly after the
+        #    security re-encode - this operates on bytes we have already
+        #    decided are a safe image, never on the raw upload.
+        clean_png = self._surface_styler.style(clean_png)
+
+        # 5. Persist, keeping the child's name verbatim.
         display_name = normalize_display_name(raw_name)
         planet = self._repository.save(
             planet_id=uuid.uuid4().hex[:10],
@@ -88,11 +102,11 @@ class SubmitPlanetUseCase:
             image_bytes=clean_png,
         )
 
-        # 5. The drawing is stored, so the cooldown may now start. Doing this
+        # 6. The drawing is stored, so the cooldown may now start. Doing this
         #    after storage means a rejected upload costs the child nothing.
         self._rate_limiter.record(client_key)
 
-        # 6. Bound disk usage, then tell the projector - in that order, so a
+        # 7. Bound disk usage, then tell the projector - in that order, so a
         #    prune failure cannot leave the projector pointing at a deleted file.
         self._repository.prune(keep=self._retention)
         self._publisher.publish(planet.to_payload())
@@ -163,3 +177,27 @@ class DeletePlanetUseCase:
             }
         )
         return planet
+
+
+class ClearPlanetsUseCase:
+    """
+    Empty the sky.
+
+    The manager app's "clear all", for the end of an event or a fresh start
+    with a new group. Deliberately a separate use case from DeletePlanetUseCase
+    rather than a loop over it: one broadcast instead of thirty, and a
+    projector that empties in one frame rather than flickering through a
+    cascade of removals.
+    """
+
+    def __init__(self, repository: PlanetRepository, publisher: EventPublisher):
+        self._repository = repository
+        self._publisher = publisher
+
+    def execute(self) -> int:
+        removed = self._repository.clear()
+        # Announce even when nothing was stored: a projector that has drifted
+        # out of step - a missed removal, a stale tab - is put right by this,
+        # and "clear" that visibly does nothing is worse than one that does.
+        self._publisher.publish({"has_planet": False, "cleared": True})
+        return len(removed)

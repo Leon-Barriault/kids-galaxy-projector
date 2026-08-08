@@ -142,6 +142,42 @@ three of the bugs above, which is the point.
 projector is a poor trade. Run it locally before pushing anything that touches
 `static/`. It needs `pip install playwright httpx` and a Chromium.
 
+## 3.6 Session five: clear-all and surface blending
+
+**Clear all** (`DELETE /api/planets`). `PlanetRepository.clear`,
+`ClearPlanetsUseCase`, and a confirmed full-width button in the manager. One
+broadcast (`{"has_planet": false, "cleared": true}`) rather than a loop over
+the single delete: thirty round trips would make the projector flicker through
+a cascade of disposals instead of emptying in one frame. The clear event
+carries no `id`, so `galaxy.js` checks `cleared` *before* its `!data.id` guard.
+The collection route is registered before `/{planet_id}` because Starlette
+matches in order.
+
+**Surface blending** (`SurfaceStyler` port, `PillowSurfaceStyler`). A drawing
+is marker on white paper; wrapped onto a sphere that is what it looks like.
+The styler diffuses the child's own colours outwards until the paper is gone,
+then lays the strokes back at 80% so they still recognise it, then adds
+multi-octave grain. Applied in `SubmitPlanetUseCase` strictly *after* the
+security re-encode - the styler must only ever see bytes the image processor
+has already vouched for. `SURFACE_BLEND=0` turns it off and returns the raw
+drawing byte for byte.
+
+Three things about it that are easy to undo by accident:
+
+- The diffusion is **coarse to fine** - radius starts at a quarter of the
+  texture and halves. A fixed small radius cannot cross a large empty region,
+  so a child who draws one small shape gets a mostly white planet; a fixed
+  large one turns the strokes to mud.
+- It runs at **quarter resolution** and scales back up. The wash is
+  low-frequency, and full-size blurs took the better part of two seconds.
+- The noise is a **seeded** RNG, not `Image.effect_noise`, which cannot be
+  seeded and made the same drawing style differently every time. The seed is a
+  hash of the drawing, so a planet is stable but two planets differ.
+
+Also dropped `optimize=True` from both PNG saves: it was ~700ms of zlib
+strategy search per upload for a few percent of size, on the one path where a
+child is watching a spinner. Styling now costs ~170ms total.
+
 ## 4. What is left
 
 Nothing is broken. In rough order of value:

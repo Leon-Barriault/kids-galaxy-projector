@@ -117,6 +117,30 @@ class FileSystemPlanetRepository(PlanetRepository):
             return planet
         return None
 
+    def clear(self) -> list[Planet]:
+        """
+        Empty the store.
+
+        Reads every planet first so callers know what went, then deletes. A
+        failure part-way leaves the rest deleted rather than rolling back:
+        there is no transaction here, and a half-cleared gallery is a far
+        better outcome for a volunteer than an error and no idea what state
+        the Pi is in.
+        """
+        removed: list[Planet] = []
+        for image_path in self._images_newest_first():
+            planet = self._to_planet(image_path)
+            try:
+                image_path.unlink(missing_ok=True)
+                (self._directory / planet.metadata_filename).unlink(missing_ok=True)
+            except OSError as e:
+                logger.warning("Could not clear %s: %s", image_path.name, e)
+                continue
+            removed.append(planet)
+        if removed:
+            logger.info("Cleared %d planet(s)", len(removed))
+        return removed
+
     def resolve_image(self, filename: str) -> Path | None:
         candidate = (self._directory / Path(filename).name).resolve()
         try:

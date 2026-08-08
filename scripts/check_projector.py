@@ -14,6 +14,7 @@ server instead, and asserts the behaviours that have actually broken before:
   * a delete removes the planet from the sky
   * the gallery is capped, and the planet dropped is the oldest
   * orbits are derived from the planet id, so a reload reproduces the same sky
+  * a clear-all empties the sky in one event and the page still works after
   * nothing is logged to the console as an error
 
 Run it with `make check-projector` (needs playwright + chromium, which CI does
@@ -104,6 +105,9 @@ class Server:
     def delete(self, planet_id: str) -> int:
         return httpx.delete(f"{self.base}/api/planets/{planet_id}", timeout=10).status_code
 
+    def clear(self) -> int:
+        return httpx.delete(f"{self.base}/api/planets", timeout=10).status_code
+
 
 FAILURES: list[str] = []
 
@@ -178,6 +182,14 @@ def main() -> int:
         ids = planet_ids(page)
         check(len(ids) == cap, f"the sky is capped at {cap} planets (got {len(ids)})")
         check(oldest_remaining not in ids, "the oldest planet is the one evicted")
+
+        print("\nclear all")
+        check(server.clear() == 200, "DELETE /api/planets returns 200")
+        wait_for(page, "window.kidsGalaxy.kidPlanets.size === 0")
+        check(planet_ids(page) == [], "the whole sky empties on one clear event")
+        server.upload("After The Clear")
+        wait_for(page, "window.kidsGalaxy.kidPlanets.size === 1")
+        check(len(planet_ids(page)) == 1, "planets can arrive again afterwards")
 
         print("\nconsole")
         check(errors == [], f"no console errors ({errors[:3]})")
