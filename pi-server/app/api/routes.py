@@ -2,9 +2,19 @@
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, HTMLResponse
 
+from app.api.auth import AuthorizationPolicy, ClientRole
 from app.api.sse import build_planet_event_response
 from app.application.use_cases import (
     ClearPlanetsUseCase,
@@ -47,11 +57,24 @@ def build_router(
     repository: PlanetRepository,
     publisher: EventPublisher,
     settings_galaxy: Galaxy,
+    authorizer: AuthorizationPolicy,
     settings,
 ) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
+    projector_only = authorizer.dependency(ClientRole.PROJECTOR)
+    projector_or_manager = authorizer.dependency(
+        ClientRole.PROJECTOR,
+        ClientRole.MANAGER,
+    )
+    kid_only = authorizer.dependency(ClientRole.KID)
+    manager_only = authorizer.dependency(ClientRole.MANAGER)
+
+    @router.get(
+        "/",
+        response_class=HTMLResponse,
+        dependencies=[Depends(projector_only)],
+    )
     async def galaxy_page():
         index_path = settings.static_dir / "index.html"
         if not index_path.exists():
@@ -68,22 +91,34 @@ def build_router(
     async def galaxy_identity():
         return settings_galaxy.to_payload()
 
-    @router.get("/api/current-planet")
+    @router.get(
+        "/api/current-planet",
+        dependencies=[Depends(projector_or_manager)],
+    )
     async def current_planet():
         return get_current_planet.execute()
 
-    @router.get("/api/scene")
+    @router.get(
+        "/api/scene",
+        dependencies=[Depends(projector_or_manager)],
+    )
     async def current_scene():
         scene = get_current_scene.execute()
         return {"planets": [planet.to_payload() for planet in scene.planets]}
 
-    @router.get("/api/planets")
+    @router.get(
+        "/api/planets",
+        dependencies=[Depends(projector_or_manager)],
+    )
     async def planet_gallery(
         limit: int | None = Query(default=None, ge=1),
     ):
         return list_recent_planets.execute(limit=limit)
 
-    @router.post("/api/upload")
+    @router.post(
+        "/api/upload",
+        dependencies=[Depends(kid_only)],
+    )
     async def upload_planet(
         request: Request,
         file: UploadFile = File(...),
@@ -120,12 +155,18 @@ def build_router(
             "url": planet.url,
         }
 
-    @router.delete("/api/planets")
+    @router.delete(
+        "/api/planets",
+        dependencies=[Depends(manager_only)],
+    )
     async def clear_planets_route():
         removed = clear_planets.execute()
         return {"status": "cleared", "removed": removed}
 
-    @router.delete("/api/planets/{planet_id}")
+    @router.delete(
+        "/api/planets/{planet_id}",
+        dependencies=[Depends(manager_only)],
+    )
     async def delete_planet_route(planet_id: str):
         try:
             planet = delete_planet.execute(planet_id)
@@ -139,14 +180,20 @@ def build_router(
             "name": planet.display_name,
         }
 
-    @router.get("/uploads/{filename}")
+    @router.get(
+        "/uploads/{filename}",
+        dependencies=[Depends(projector_or_manager)],
+    )
     async def serve_upload(filename: str):
         path = repository.resolve_image(filename)
         if path is None:
             raise HTTPException(status_code=404, detail="Planet not found")
         return FileResponse(path)
 
-    @router.get("/api/events")
+    @router.get(
+        "/api/events",
+        dependencies=[Depends(projector_only)],
+    )
     async def planet_events(request: Request):
         return build_planet_event_response(request, publisher, get_current_planet)
 
