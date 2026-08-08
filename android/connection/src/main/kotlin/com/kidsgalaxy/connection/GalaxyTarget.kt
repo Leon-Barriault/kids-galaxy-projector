@@ -66,7 +66,10 @@ data class GalaxyTarget(
                 "Galaxy URL must point to the server root"
             }
 
-            val host = uri.host
+            // URI implementations are inconsistent about whether host keeps
+            // IPv6 brackets. Strip them once here and add exactly one pair in
+            // the serialized URL.
+            val host = uri.host.removePrefix("[").removeSuffix("]")
             val urlHost = if (':' in host) "[$host]" else host
             val port = if (uri.port == -1) "" else ":${uri.port}"
             return "$scheme://$urlHost$port/"
