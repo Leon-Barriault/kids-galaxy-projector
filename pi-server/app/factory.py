@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import build_router
 from app.application.use_cases import (
+    DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
@@ -46,20 +47,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
-    # The gallery ceiling is capped by retention as well: showing more
-    # planets than the store keeps would leave gaps the moment prune runs.
+    # Ceiling is retention (disk), not gallery size: the manager app lists
+    # everything stored; the projector still requests limit=GALLERY_SIZE.
     list_recent_planets = ListRecentPlanetsUseCase(
         repository,
-        max_limit=min(settings.gallery_size, settings.max_stored_planets),
+        max_limit=settings.max_stored_planets,
     )
+    delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
 
     # ---- transport (API) ----
     app = FastAPI(
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
         version="1.1.0",
-        # API docs stay off outside development: this runs on a tablet-facing
-        # hotspot and there is no reason to publish a schema explorer there.
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -68,7 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -86,13 +86,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             submit_planet=submit_planet,
             get_current_planet=get_current_planet,
             list_recent_planets=list_recent_planets,
+            delete_planet=delete_planet,
             repository=repository,
             publisher=publisher,
             settings=settings,
         )
     )
 
-    # Exposed for tests and for operational introspection.
     app.state.settings = settings
     app.state.repository = repository
     app.state.publisher = publisher
