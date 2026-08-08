@@ -30,7 +30,7 @@ import com.kidsgalaxy.domain.model.StrokePath
 /** Bridges the domain's framework-free [Point] and Compose's [Offset]. */
 private fun Offset.toPoint() = Point(x, y)
 
-private fun pathThrough(points: List[Point]): Path =
+private fun pathThrough(points: List<Point>): Path =
     Path().apply {
         moveTo(points.first().x, points.first().y)
         for (i in 1 until points.size) {
@@ -44,7 +44,7 @@ private const val GuideStrokeWidth = 5f
 
 @Composable
 fun DrawingCanvas(
-    strokes: List[StrokePath],
+    strokes: List<StrokePath>,
     currentColorArgb: Int,
     currentStrokeWidth: Float,
     onStartStroke: (Point) -> Unit,
@@ -53,7 +53,8 @@ fun DrawingCanvas(
     onCanvasSizeChanged: (Float, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val livePoints = remember { mutableStateListOf[Point]() }
+    // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
+    val livePoints = remember { mutableStateListOf<Point>() }
     var measured by remember { mutableStateOf(0f to 0f) }
 
     Canvas(
@@ -95,6 +96,8 @@ fun DrawingCanvas(
     ) {
         val guide = PlanetGuide.forCanvas(CanvasSize(size.width, size.height))
 
+        // Guide outline sits under the strokes so the kid sees the planet edge.
+        // It is not a stroke: undo/clear leave it alone and it does not arm Launch.
         if (guide.isValid) {
             drawCircle(
                 color = GuideOutlineColor,
@@ -108,6 +111,7 @@ fun DrawingCanvas(
             )
         }
 
+        // Clip drawing to the circle so the tablet matches what becomes the sphere.
         val drawStrokes: () -> Unit = {
             strokes.forEach { stroke ->
                 if (!stroke.isRenderable) return@forEach
