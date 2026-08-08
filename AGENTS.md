@@ -1,9 +1,9 @@
 # AGENTS.md — handoff for the next agent
 
 Features 1–3 from the original tablet/projector handoff are implemented and
-on main. Read this whole file before touching anything: several of the
-decisions below were made by the repository owner against explicit
-alternatives, and re-deriving them will produce a different and wrong answer.
+on main. A fourth slice (brighter planets + manager app + delete API) is
+**mostly on main but not finished** — see §4 for the exact remaining work.
+Read this whole file before touching anything.
 
 ---
 
@@ -13,110 +13,158 @@ Children draw a planet on an Android tablet. It appears, live, in a projected
 3D galaxy running on a Raspberry Pi. Local network only, no accounts, mTLS in
 the field.
 
-Three deployable pieces:
+Four deployable pieces:
 
 | Piece | Where | Stack |
 |---|---|---|
-| Tablet app | `android/` | Kotlin, Jetpack Compose, AGP 9 built-in Kotlin |
-| Server | `pi-server/` | FastAPI, Pillow, SSE with polling fallback |
-| Projector page | `pi-server/static/` | Three.js r185, vendored, no CDN |
+| Drawing tablet app | `android/app` | Kotlin, Jetpack Compose, AGP 9 |
+| **Manager app (new)** | `android/manager` | Separate `applicationId` `com.kidsgalaxy.manager` |
+| Server | `pi-server/` | FastAPI, Pillow, SSE |
+| Projector page | `pi-server/static/` | Three.js r185, vendored, offline |
 
 `README.md` covers setup, `ARCHITECTURE.md` the layering, `DEVELOPMENT.md` the
-workflow, `android/ANDROID_STUDIO.md` how to run and debug the tablet app.
-Read `android/ANDROID_STUDIO.md` before running anything Android.
+workflow, `android/ANDROID_STUDIO.md` how to run the drawing app.
 
 ---
 
-## 2. The feature in progress
+## 2. Features 1–3 (complete on main)
 
-The owner asked for three things, in one sentence each:
+Settled owner decisions — do not re-litigate:
 
-1. **A default circle on the tablet.** The kid should find a circle already
-   drawn, representing the planet, and colour it in.
-2. **Every drawing becomes its own planet.** Sending a planet should add one to
-   the galaxy, not repaint the single existing one.
-3. **The circle should become the whole sphere.** Currently a drawing lands on
-   one side of the sphere only.
+- **Polar wrapping**: disc centre → north pole, rim → south pole.
+- **Guide circle**: outline only, fixed, not a stroke; clips drawing + mapping.
+- **Gallery size 12**: oldest disposed; store keeps up to 30 on disk.
 
-### 2.1 Decisions already made — do not re-litigate
+Implemented:
 
-Each of these was chosen by the owner from a set of alternatives. They are
-settled.
-
-**Wrapping: polar (globe-style).** The centre of the drawn circle becomes the
-north pole; the rim of the circle becomes the south pole. Every part of the
-drawing appears somewhere on the sphere and the whole sphere is covered. The
-owner was offered "front and back, mirrored" (keeps a drawn face recognisable)
-and "stretch to fill", and chose polar. It is the most planet-like of the
-three; the known cost is that a drawn face smears around the top, and that is
-accepted.
-
-**The circle: outline only, fixed.** A circle guide is painted on the canvas
-with no fill — the inside stays white until the kid colours it. It is *not* a
-stroke: undo and clear must not remove it, and it must not make `canLaunch`
-true on its own. It defines the planet's edge, so anything drawn outside it is
-ignored. That boundary is also what makes the sphere mapping well-defined.
-
-**Gallery size: 12, oldest fades out.** A new planet joins its own orbit. When
-the thirteenth arrives, the oldest shrinks away and is removed from the scene
-(not from disk — the server keeps 30, deliberately more than the sky shows, so
-raising the limit needs no re-upload).
+- `PlanetGuide` + `SphericalProjection` + `TextureProjection.mapGuide` (domain, TDD).
+- Two-stage Android texture renderer (disc clip → polar equirectangular PNG).
+- Projector `kidPlanets` Map, SSE arrivals, `disposeOldestIfNeeded`.
+- Server `GET /api/planets`, payload shape `{has_planet, id, url, name, timestamp}`.
 
 ---
 
-## 3. What is done (committed, green)
+## 3. What was added in this session (mostly on main)
 
-**Feature 1 — fixed planet guide on the tablet.**
+### 3.1 Brighter planets (projector) — **on main**
 
-- `PlanetGuide` in domain (pure JVM): centre + radius from `CanvasSize`
-  (radius ≈ 0.42 × min dimension). `contains()` inclusive on the rim.
-  Unmeasured canvas yields a degenerate guide (radius 0).
-- `DrawingCanvas` paints a soft blue outline (`GUIDE_OUTLINE_COLOR` /
-  `GUIDE_STROKE_WIDTH`) and clips all strokes to the guide via `clipPath`.
-  The guide is never stored as a stroke — undo / clear / canLaunch stay
-  driven by `drawing.isEmpty`.
+`pi-server/static/galaxy.js`:
 
-**Feature 2 — every drawing becomes its own planet.**
+- Kid planet material: lower roughness, `emissive` + `emissiveMap` +
+  `emissiveIntensity: 0.55` so drawings stay vivid under the projector.
+- Stronger sun point light, brighter ambient, camera-side fill light.
+- Slightly larger spheres (`1.05` radius).
 
-Server (already green at 7d70397):
+Hard-refresh the projector page (or restart the kiosk) to pick this up.
 
-- `Planet.to_payload()` gained `"id"`. Shared payload shape across
-  `/api/current-planet`, `/api/planets` and the SSE stream.
-- `PlanetRepository.recent(limit)`, `ListRecentPlanetsUseCase`,
-  `GET /api/planets?limit=N`, `Settings.gallery_size` (default 12).
+### 3.2 Delete API + live sky removal — **on main**
 
-Projector (`pi-server/static/galaxy.js`):
+Server (clean architecture, same ports pattern as the rest):
 
-- `kidPlanets` Map keyed by id; SSE and gallery load share `addKidPlanet`.
-- `loadInitialGallery` fetches `GET /api/planets?limit=GALLERY_SIZE` on start
-  (newest first, no celebrate for restored bodies).
-- `disposeOldestIfNeeded` when past 12; deterministic `orbitParamsForIndex`.
-- Celebrate (scale-in + banner) only for live arrivals.
+- `PlanetRepository.delete(planet_id) -> Planet | None`
+- `FileSystemPlanetRepository.delete` (image + sidecar)
+- `DeletePlanetUseCase` → publishes `{has_planet: false, id, removed: true}` on the
+  existing SSE channel
+- `DELETE /api/planets/{planet_id}` → 200 `{status, planet_id, name}` or 404
+- `NotFoundError` → HTTP 404
+- CORS allows `DELETE`
+- List ceiling is **retention** (`max_stored_planets`, default 30), not gallery
+  size 12, so the manager can list everything stored. Projector still requests
+  `limit=12`.
 
-**Feature 3 — the circle becomes the whole sphere.**
+Projector (`galaxy.js`):
 
-- `SphericalProjection` (domain, pure JVM): polar reverse mapping —
-  equirectangular texel samples the source disc so centre = north pole,
-  rim = south pole. Property tests for poles, rim, monotonic r, longitude wrap.
-- `TextureProjection.mapGuide` so clip path and polar mapping share geometry.
-- Two-stage renderer: stage 1 draws strokes into a square disc clipped to
-  `PlanetGuide`; stage 2 resamples via `SphericalProjection` into 1024×512
-  equirectangular PNG (`IntArray` bulk pixel access).
+- `removeKidPlanet(id)` disposes mesh/materials
+- SSE `onPlanet` treats `removed: true` / `has_planet: false` as removal
+- Optional `planet-removed` listener kept as a fallback
 
-Architecture boundaries (`make arch`) and ktlint 1.5.0 hold. Domain stays
-free of Android/Compose imports.
+### 3.3 Manager Android app — **sources on main, not fully CI-green yet**
+
+Separate module `android/manager` (`include(":manager")` in `settings.gradle.kts`):
+
+| Path | Role |
+|---|---|
+| `ManagerApi` / `ApiFactory` | Retrofit: `GET api/planets?limit=30`, `DELETE api/planets/{id}` |
+| `ManagerViewModel` | List + delete state |
+| `ManagerScreen` | Thumbnails (Coil), name, confirm dialog, delete |
+| `MainActivity` | Compose host |
+
+Same host settings as the drawing app (`kidsGalaxyDebugServerHost` /
+`kidsGalaxyServerHost` via `local.properties`). Debug uses cleartext HTTP to
+the local server; no mTLS on the manager yet (event LAN only).
+
+Build (once Android SDK is available):
+
+```bash
+cd android && ./gradlew :manager:assembleDebug
+```
 
 ---
 
-## 4. What is left / known follow-ups
+## 4. What must be done next (priority order)
 
-- Keep CI green on every push. The Android job is the long pole; ktlint and
-  `make arch` are the fast gates that catch most regressions before Gradle.
-- Dependency versions remain pinned to the set introduced at 7d70397 unless
-  the owner explicitly asks to bump them.
-- Optional polish (not blocking): richer arrival animations, per-planet labels
-  on the projector, or a tablet preview of the equirectangular texture before
-  launch. None of these change the domain contracts above.
+### 4.1 CRITICAL — restore integration tests (main is broken)
+
+**`pi-server/tests/integration/test_api_e2e.py` on main is currently the
+literal string `PLACEHOLDER_WILL_FAIL`.** That was an accidental bad push.
+CI integration tests cannot pass until this file is restored.
+
+The local working tree under `kids-galaxy-projector-live` has the correct full
+content, including:
+
+- Clamp assertion updated to `<= 30` (retention, not gallery size 12)
+- New class `TestDeletePlanet` (delete success, 404, texture 404 after delete)
+
+**Action:** replace the remote file with the local good version and push.
+Do **not** push a placeholder. Verify with:
+
+```bash
+cd pi-server && PYTHONPATH=. python -m pytest tests/integration/ -q
+```
+
+### 4.2 Push remaining local test + CI updates
+
+Still only local (or incomplete on main) last time this was written:
+
+- Unit tests: `FakePlanetRepository.delete`, `TestDeletePlanet` in
+  `tests/unit/application/test_use_cases.py`
+- Unit tests: `TestDelete` in
+  `tests/unit/infrastructure/test_filesystem_repository.py`
+- CI ktlint path should include manager sources:
+
+```yaml
+/tmp/ktlint --relative --editorconfig=.editorconfig \
+  "app/src/**/*.kt" "manager/src/**/*.kt"
+```
+
+(remote still only has `"app/src/**/*.kt"`).
+
+### 4.3 Verify CI green end-to-end
+
+After 4.1–4.2:
+
+```bash
+cd pi-server && ruff check . --config ruff.toml
+# ... hadolint, shellcheck ...
+cd android && ktlint --relative --editorconfig=.editorconfig \
+  "app/src/**/*.kt" "manager/src/**/*.kt"
+make arch
+cd pi-server && PYTHONPATH=. python -m pytest tests/ -q
+cd android && ./gradlew testDebugUnitTest assembleDebug
+# also: ./gradlew :manager:assembleDebug
+```
+
+Confirm the GitHub Actions run on main is fully green (lint, arch, unit,
+integration, Android, Docker).
+
+### 4.4 Optional polish (not blocking)
+
+- Manager mTLS for field use (today: cleartext debug / simple HTTPS release).
+- Document the manager app in `README.md` / `DEVELOPMENT.md` (how to install
+  the second APK on a volunteer phone/tablet).
+- Per-planet labels on the projector, richer arrival animations.
+- Dependency versions stay pinned to the set from `7d70397` unless the owner
+  asks to bump them.
 
 ---
 
@@ -124,108 +172,81 @@ free of Android/Compose imports.
 
 ### 5.1 Method
 
-The owner asked for **TDD and clean architecture**, explicitly, and every
-commit so far honours it. Write the failing test, watch it fail for the right
-reason, then implement. Domain first, then application, then infrastructure,
-then UI.
+TDD and clean architecture, explicitly. Domain first, then application, then
+infrastructure, then UI. Dependencies point inwards. `make arch` fails the
+build if boundaries are violated.
 
-Dependencies point inwards. The domain knows nothing about frameworks. This is
-not decoration — it is what makes the Android tests runnable on the JVM and the
-Python use cases testable with fakes in microseconds, and `make arch` fails the
-build if it is violated.
-
-### 5.2 The gates, exactly as CI runs them
+### 5.2 The gates, exactly as CI should run them
 
 ```bash
 cd pi-server && ruff check . --config ruff.toml
 hadolint --config .hadolint.yaml pi-server/Dockerfile
 shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
     scripts/dev-up.sh pi-server/certs/generate_certs.sh
-cd android && ktlint --relative --editorconfig=.editorconfig "app/src/**/*.kt"
+cd android && ktlint --relative --editorconfig=.editorconfig \
+    "app/src/**/*.kt" "manager/src/**/*.kt"
 make arch
 cd pi-server && python -m pytest tests/ -q          # PYTHONPATH=.
 cd android && ./gradlew testDebugUnitTest assembleDebug
+cd android && ./gradlew :manager:assembleDebug
 ```
 
-`make verify` runs most of it. The lint job gates every other job in CI, so a
-formatting error costs a whole round trip.
+**ktlint must be exactly 1.5.0.**
 
-**ktlint must be exactly 1.5.0.** A different version reports spurious diffs.
-`ktlint --format` fixes everything it reports.
+### 5.3 Environment notes
 
-### 5.3 Environment notes that will save you an hour
+- Gradle often cannot run in constrained cloud agents; Kotlin changes are
+  verified by CI. Review Gradle Kotlin DSL carefully before pushing.
+- Owner preference: **push straight to main** when the tree is green. Small
+  CI-green commits.
+- Conventional commits: prefix + *why*, not only *what*.
 
-- **Gradle cannot run in the Claude cloud container** — `services.gradle.org`
-  is not reachable through the proxy. Kotlin build-script and app changes are
-  verified by CI, not locally. Review Gradle Kotlin DSL carefully before
-  pushing; a syntax error there fails every job.
-- Python tests, ruff, shellcheck and ktlint *do* run locally. ktlint is at
-  `/tmp/ktlint` in this container (1.5.0, already downloaded).
-- `pip install -r requirements-dev.txt --break-system-packages`.
-- Run pytest with `PYTHONPATH=.` from `pi-server/`.
+### 5.4 Payload / wire contracts (do not drift)
 
-### 5.4 Getting changes to GitHub
+**Planet payload** (REST + SSE):
 
-Direct `git push` to GitHub is blocked from the container. The working route,
-used for every commit so far:
-
-1. `git bundle create <name>.bundle <base>..<branch>` in the container.
-2. `SendUserFile` the bundle, then `mcp__remote-devices__device_commit_files`
-   with the returned `file_uuid` to write it into the owner's connected folder
-   (`.../flyscan-cowork/Leon-Barriault/kids-galaxy-projector`).
-3. Via `mcp__remote-devices__Windows-MCP__PowerShell`, copy it into the working
-   clone at `C:\\Users\\LéonBarriault\\AppData\\Local\\Temp\\kg-push`, then
-   `git fetch <bundle> <branch>` and `git push origin FETCH_HEAD:main`.
-4. Confirm the CI run is green through the Chrome connector at
-   `github.com/Leon-Barriault/kids-galaxy-projector/actions?query=branch:main`.
-
-The owner's standing preference is **push straight to main** — main is green
-and these are additive changes. Confirm before pushing anything that could
-break it; do not assume one approval covers the next push.
-
-### 5.5 Commit style
-
-Conventional prefix, then prose explaining *why*, not what. State what was
-tried and rejected. Sign off with:
-
+```json
+{ "has_planet": true, "id": "...", "url": "/uploads/....png", "name": "...", "timestamp": 0 }
 ```
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+**Gallery:** `{ "planets": [ ... ] }` newest first.
+
+**Removal event (same SSE channel, event type `planet`):**
+
+```json
+{ "has_planet": false, "id": "...", "removed": true }
 ```
+
+**Upload success (tablet):** `{ "status": "success", "message": "...", "planet_id", "name", "url" }`.
+
+**Delete success (manager):** `{ "status": "deleted", "planet_id", "name" }`.
+
+Projector `galaxy.js` must keep matching these field names (`url` / `name`, not
+legacy `texture_url` / `display_name` alone — aliases exist only as fallback).
 
 ---
 
-## 6. Traps this project has already sprung
+## 6. Traps already sprung (do not undo)
 
-Every one of these cost a CI round trip or worse. They are all fixed; do not
-undo them.
-
-- **Gradle does not read `local.properties` as project properties.** The
-  Android plugin only takes `sdk.dir` from it. `app/build.gradle.kts` loads it
-  explicitly. Any advice that says otherwise is wrong for a stock build.
-- **`android/local.properties` is committed on purpose** and is *not* in
-  `.gitignore`. It carries the local-debug server host and deliberately has no
-  `sdk.dir`.
-- **Debug and release read different host properties** —
-  `kidsGalaxyDebugServerHost` and `kidsGalaxyServerHost`. They used to share
-  one, which let a local address follow a release build silently.
-- **AGP 9 ships built-in Kotlin.** `org.jetbrains.kotlin.android` must stay
-  absent; applying it fails with a new-DSL incompatibility.
-- **`buildFeatures { buildConfig = true }` and `manifestPlaceholders`
-  ["serverHost"] are load-bearing.** `ApiClient` reads four `BuildConfig`
-  fields and `network_security_config.xml` interpolates the placeholder.
-- **`compileSdk` must be ≥ 37** for `androidx.lifecycle` 2.11.
-- **`three.module.js` is not self-contained** since r16x — it imports
-  `three.core.js`. Both are vendored; `make vendor-three` fails loudly if the
-  core file goes missing.
-- **The projector must never reference the public internet.** `make arch`
-  greps `index.html` and `galaxy.js` for `http`. The Pi has no uplink.
-- **Starlette ≥ 1.4 stopped exposing `path` on router-included routes.** SSE
-  route assertions go through the OpenAPI schema instead; the stream lives in
-  `app/api/sse.py` so it can be driven directly without deadlocking TestClient.
+- HTML-escaped Kotlin generics (`\u003c`) in pushes — always push real source.
+- ktlint `chain-method-continuation`: join `}.pointerInput` after multi-line
+  trailing lambdas.
+- `StrokePath.strokeWidth` not `.width`.
+- Gallery JSON is an object with `planets`, not a bare array.
+- SSE uses named event `planet`; listen with `addEventListener('planet', …)`.
+- Never push placeholder content to a real source file on main.
+- List `max_limit` is retention (30) for the API ceiling; projector still uses 12.
 
 ---
 
-## 7. Where to start
+## 7. Suggested first actions for the next agent
 
-Features 1–3 are on main. Prefer small, CI-green pushes. If something is red,
-fix the failing gate first (ktlint / arch / tests) before adding more surface.
+1. **Restore** `pi-server/tests/integration/test_api_e2e.py` from the local good
+   copy (see §4.1). Run the integration suite.
+2. Push unit-test updates for `delete` and the CI ktlint manager path (§4.2).
+3. Confirm Actions green on main (§4.3).
+4. Optionally document and smoke-test `:manager:assembleDebug` against a running
+   `docker compose` server.
+
+Stop and hand off again if anything above is still red before starting new
+feature work.
