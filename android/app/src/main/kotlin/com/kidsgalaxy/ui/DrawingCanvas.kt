@@ -12,20 +12,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import com.kidsgalaxy.domain.model.CanvasSize
+import com.kidsgalaxy.domain.model.PlanetGuide
 import com.kidsgalaxy.domain.model.Point
 import com.kidsgalaxy.domain.model.StrokePath
 
 /** Bridges the domain's framework-free [Point] and Compose's [Offset]. */
 private fun Offset.toPoint() = Point(x, y)
 
-private fun pathThrough(points: List<Point>): Path =
+private fun pathThrough(points: List[Point]): Path =
     Path().apply {
         moveTo(points.first().x, points.first().y)
         for (i in 1 until points.size) {
@@ -33,9 +38,13 @@ private fun pathThrough(points: List<Point>): Path =
         }
     }
 
+/** Soft blue outline so the planet edge is visible without looking like a stroke. */
+private val GuideOutlineColor = Color(0xFF64B5F6)
+private const val GuideStrokeWidth = 5f
+
 @Composable
 fun DrawingCanvas(
-    strokes: List<StrokePath>,
+    strokes: List[StrokePath],
     currentColorArgb: Int,
     currentStrokeWidth: Float,
     onStartStroke: (Point) -> Unit,
@@ -44,8 +53,7 @@ fun DrawingCanvas(
     onCanvasSizeChanged: (Float, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
-    val livePoints = remember { mutableStateListOf<Point>() }
+    val livePoints = remember { mutableStateListOf[Point]() }
     var measured by remember { mutableStateOf(0f to 0f) }
 
     Canvas(
@@ -79,38 +87,73 @@ fun DrawingCanvas(
                             livePoints.clear()
                         },
                         onDragCancel = {
-                            // Commit what was drawn so a cancelled gesture is not lost.
                             onEndStroke()
                             livePoints.clear()
                         },
                     )
                 },
     ) {
-        strokes.forEach { stroke ->
-            if (!stroke.isRenderable) return@forEach
-            drawPath(
-                path = pathThrough(stroke.points),
-                color = Color(stroke.colorArgb),
+        val guide = PlanetGuide.forCanvas(CanvasSize(size.width, size.height))
+
+        if (guide.isValid) {
+            drawCircle(
+                color = GuideOutlineColor,
+                radius = guide.radius,
+                center = Offset(guide.centreX, guide.centreY),
                 style =
                     Stroke(
-                        width = stroke.strokeWidth,
+                        width = GuideStrokeWidth,
                         cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
                     ),
             )
         }
 
-        if (livePoints.size >= 2) {
-            drawPath(
-                path = pathThrough(livePoints),
-                color = Color(currentColorArgb),
-                style =
-                    Stroke(
-                        width = currentStrokeWidth,
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round,
-                    ),
-            )
+        val drawStrokes: () -> Unit = {
+            strokes.forEach { stroke ->
+                if (!stroke.isRenderable) return@forEach
+                drawPath(
+                    path = pathThrough(stroke.points),
+                    color = Color(stroke.colorArgb),
+                    style =
+                        Stroke(
+                            width = stroke.strokeWidth,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+
+            if (livePoints.size >= 2) {
+                drawPath(
+                    path = pathThrough(livePoints),
+                    color = Color(currentColorArgb),
+                    style =
+                        Stroke(
+                            width = currentStrokeWidth,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+        }
+
+        if (guide.isValid) {
+            val clip =
+                Path().apply {
+                    addOval(
+                        Rect(
+                            left = guide.centreX - guide.radius,
+                            top = guide.centreY - guide.radius,
+                            right = guide.centreX + guide.radius,
+                            bottom = guide.centreY + guide.radius,
+                        ),
+                    )
+                }
+            clipPath(clip, clipOp = ClipOp.Intersect) {
+                drawStrokes()
+            }
+        } else {
+            drawStrokes()
         }
     }
 }
