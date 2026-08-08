@@ -43,7 +43,10 @@ class SphericalProjection(
      * source = centre + r · R · (cos φ, sin φ)
      * ```
      */
-    fun sourcePoint(x: Int, y: Int): Point {
+    fun sourcePoint(
+        x: Int,
+        y: Int,
+    ): Point {
         val v = (y + 0.5f) / outputHeight
         val u = (x + 0.5f) / outputWidth
         val phi = u * (2.0 * PI)
