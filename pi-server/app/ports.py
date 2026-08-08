@@ -2,9 +2,11 @@
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
+from datetime import date
 from pathlib import Path
 
 from app.application.event_types import ApplicationEvent
+from app.domain.behavior import GalaxyBehaviorSettings
 from app.domain.planet import Planet
 
 
@@ -36,6 +38,22 @@ class PlanetRepository(ABC):
     @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
         """Resolve a public image filename inside the backing store."""
+
+
+class BehaviorRepository(ABC):
+    @abstractmethod
+    def load(self) -> GalaxyBehaviorSettings:
+        """Load persisted projector behavior settings or their defaults."""
+
+    @abstractmethod
+    def save(self, settings: GalaxyBehaviorSettings) -> None:
+        """Persist operator-selected behavior settings."""
+
+
+class Clock(ABC):
+    @abstractmethod
+    def today(self) -> date:
+        """Return the Pi's current local calendar day."""
 
 
 class EventPublisher(ABC):
