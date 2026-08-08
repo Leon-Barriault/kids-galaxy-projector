@@ -55,7 +55,9 @@ def build_router(
     async def galaxy_page():
         index_path = settings.static_dir / "index.html"
         if not index_path.exists():
-            return HTMLResponse("<h1>Galaxy visualization not found</h1>", status_code=404)
+            return HTMLResponse(
+                "<h1>Galaxy visualization not found</h1>", status_code=404
+            )
         return FileResponse(index_path)
 
     @router.get("/health")
@@ -101,8 +103,15 @@ def build_router(
                 target_size=settings.texture_size,
             )
         except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
-        logger.info("Planet received from %s: %s (%s)", client_key(request), planet.filename, planet.display_name)
+            raise HTTPException(
+                status_code=_status_for(e), detail=e.user_message
+            ) from e
+        logger.info(
+            "Planet received from %s: %s (%s)",
+            client_key(request),
+            planet.filename,
+            planet.display_name,
+        )
         return {
             "status": "success",
             "message": "Your planet is flying to the galaxy!",
@@ -121,8 +130,14 @@ def build_router(
         try:
             planet = delete_planet.execute(planet_id)
         except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
-        return {"status": "deleted", "planet_id": planet.id, "name": planet.display_name}
+            raise HTTPException(
+                status_code=_status_for(e), detail=e.user_message
+            ) from e
+        return {
+            "status": "deleted",
+            "planet_id": planet.id,
+            "name": planet.display_name,
+        }
 
     @router.get("/uploads/{filename}")
     async def serve_upload(filename: str):
