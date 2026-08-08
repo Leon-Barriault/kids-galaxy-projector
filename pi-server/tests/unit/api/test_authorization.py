@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.api.auth import AuthorizationPolicy, ClientRole, PROXY_MARKER
+from app.api.auth import PROXY_MARKER, AuthorizationPolicy, ClientRole
 from app.config import Settings
 
 
