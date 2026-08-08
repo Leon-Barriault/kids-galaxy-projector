@@ -180,10 +180,11 @@ def build_router(
             "name": planet.display_name,
         }
 
-    @router.get(
-        "/uploads/{filename}",
-        dependencies=[Depends(projector_or_manager)],
-    )
+    # Texture bytes are a presentation asset, not a management capability.
+    # Keeping them readable allows the projector and Coil thumbnails to fetch
+    # images without carrying a second authenticated API session. Listing,
+    # deleting, clearing, and uploading remain role-protected.
+    @router.get("/uploads/{filename}")
     async def serve_upload(filename: str):
         path = repository.resolve_image(filename)
         if path is None:
