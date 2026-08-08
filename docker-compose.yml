@@ -18,27 +18,21 @@ services:
       - "8000:8000"
     volumes:
       - ./pi-server/uploads:/app/uploads
+      - ./pi-server/state:/app/state
       - ./pi-server/static:/app/static:ro
       # Mount certs for optional mTLS development
       - ./pi-server/certs:/app/certs:ro
     environment:
       - ENVIRONMENT=development
       - UPLOAD_DIR=/app/uploads
+      - STATE_DIR=/app/state
       - MAX_FILE_SIZE=5242880
-      # Newest N planets are kept; older drawings are pruned with their metadata
-      # so a long event cannot fill the Pi's disk.
       - MAX_STORED_PLANETS=${MAX_STORED_PLANETS:-30}
-      # Per-client cooldown between uploads, in seconds.
       - RATE_LIMIT_SECONDS=${RATE_LIMIT_SECONDS:-3}
-      # Comma-separated origins, or "*" for the closed local network.
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
-      # What this projector calls itself when a tablet goes looking. A
-      # school running one per classroom wants "Room 3", not three
-      # identical rows in a picker.
       - GALAXY_NAME=${GALAXY_NAME:-Kids Galaxy}
-      # mDNS advertising. On this bridged network it will log a warning and
-      # carry on: multicast does not reach the LAN through Docker's default
-      # bridge, so discovery needs docker-compose.pi.yml (see below).
+      # Bridged Docker cannot normally advertise mDNS to the LAN; the Pi
+      # override switches to host networking for real discovery.
       - ADVERTISE=${ADVERTISE:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -48,8 +42,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # Optional: simple static file server that mimics the projector page
-  # Useful for browser-based visual checks without Chromium kiosk
   projector-mock:
     image: nginx:alpine
     ports:
