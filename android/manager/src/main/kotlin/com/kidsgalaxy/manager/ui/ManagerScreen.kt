@@ -46,7 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.kidsgalaxy.manager.BuildConfig
+import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.manager.ManagerUiState
 import com.kidsgalaxy.manager.data.PlanetDto
 
@@ -60,6 +60,8 @@ private val TextMuted = Color(0xFFB0BEC5)
 @Composable
 fun ManagerScreen(
     state: ManagerUiState,
+    galaxy: GalaxyTarget,
+    onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
     onClearAll: () -> Unit,
@@ -87,9 +89,16 @@ fun ManagerScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = state.statusMessage ?: "Planets stored on the server",
+                    text = state.statusMessage ?: "Planets stored on ${galaxy.name}",
                     color = TextMuted,
                     fontSize = 14.sp,
+                )
+            }
+            TextButton(onClick = onConfigureGalaxy) {
+                Text(
+                    text = "🌌 ${galaxy.name}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             IconButton(onClick = onRefresh, enabled = !state.isLoading) {
@@ -97,9 +106,6 @@ fun ManagerScreen(
             }
         }
 
-        // Full width and clearly separated from the per-row delete buttons:
-        // this is the one control in the app that cannot be undone, and it
-        // should not sit close enough to a row to be hit by mistake.
         if (state.planets.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
@@ -138,7 +144,11 @@ fun ManagerScreen(
             }
             state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No planets yet \u2014 kids can start drawing!", color = TextMuted, fontSize = 16.sp)
+                    Text(
+                        "No planets yet \u2014 kids can start drawing!",
+                        color = TextMuted,
+                        fontSize = 16.sp,
+                    )
                 }
             }
             else -> {
@@ -149,6 +159,7 @@ fun ManagerScreen(
                     items(state.planets, key = { it.id }) { planet ->
                         PlanetRow(
                             planet = planet,
+                            baseUrl = galaxy.baseUrl,
                             isDeleting = planet.id in state.deletingIds,
                             onDeleteClick = { pendingDelete = planet },
                         )
@@ -164,15 +175,17 @@ fun ManagerScreen(
             title = { Text("Remove every planet?") },
             text = {
                 Text(
-                    "This deletes all ${state.planets.size} planet(s) from the Pi and " +
-                        "empties the projector. It cannot be undone.",
+                    "This deletes all ${state.planets.size} planet(s) from ${galaxy.name} and " +
+                        "empties its projector. It cannot be undone.",
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    confirmClearAll = false
-                    onClearAll()
-                }) {
+                TextButton(
+                    onClick = {
+                        confirmClearAll = false
+                        onClearAll()
+                    },
+                ) {
                     Text("Clear all", color = Danger)
                 }
             },
@@ -188,7 +201,8 @@ fun ManagerScreen(
             title = { Text("Remove planet?") },
             text = {
                 Text(
-                    "\"${planet.name}\" will leave the galaxy and be deleted from the server. This cannot be undone.",
+                    "\"${planet.name}\" will leave ${galaxy.name} and be deleted from the server. " +
+                        "This cannot be undone.",
                 )
             },
             confirmButton = {
@@ -225,6 +239,7 @@ fun ManagerScreen(
 @Composable
 private fun PlanetRow(
     planet: PlanetDto,
+    baseUrl: String,
     isDeleting: Boolean,
     onDeleteClick: () -> Unit,
 ) {
@@ -232,7 +247,7 @@ private fun PlanetRow(
         if (planet.url.startsWith("http")) {
             planet.url
         } else {
-            BuildConfig.SERVER_BASE_URL.trimEnd('/') + planet.url
+            baseUrl.trimEnd('/') + planet.url
         }
 
     Row(
@@ -279,7 +294,11 @@ private fun PlanetRow(
             )
         } else {
             IconButton(onClick = onDeleteClick) {
-                Icon(Icons.Default.Delete, contentDescription = "Remove ${planet.name}", tint = Danger)
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Remove ${planet.name}",
+                    tint = Danger,
+                )
             }
         }
     }
