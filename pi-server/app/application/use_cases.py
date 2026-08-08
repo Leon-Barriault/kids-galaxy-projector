@@ -1,13 +1,8 @@
-"""
-Application layer: orchestration only.
-
-These use cases sequence the domain rules and the ports. They contain no
-framework code, no filesystem access and no image library calls, which is why
-they can be fully tested with in-memory doubles.
-"""
+"""Application layer: orchestration only."""
 
 import uuid
 
+from app.application.events import GalaxyCleared, PlanetCreated, PlanetRemoved
 from app.domain.errors import NotFoundError
 from app.domain.image_rules import (
     ensure_content_type_allowed,
@@ -18,28 +13,16 @@ from app.domain.image_rules import (
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
 from app.domain.scene import Scene
-from app.ports import (
-    EventPublisher,
-    ImageProcessor,
-    PlanetRepository,
-    RateLimiter,
-    SurfaceStyler,
-)
+from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter, SurfaceStyler
 
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024
 DEFAULT_MAX_DIMENSION = 2048
 DEFAULT_TARGET_SIZE = 1024
 DEFAULT_RETENTION = 30
-
-#: How many planets orbit at once. Retention (30) is about disk; this is about
-#: what a projector can show and a room can follow. The store deliberately
-#: keeps more than the sky shows.
 DEFAULT_GALLERY_SIZE = 12
 
 
 class SubmitPlanetUseCase:
-    """Accept, validate, normalise, style, store and publish a drawing."""
-
     def __init__(
         self,
         repository: PlanetRepository,
@@ -85,13 +68,11 @@ class SubmitPlanetUseCase:
         )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
-        self._publisher.publish(planet.to_payload())
+        self._publisher.publish(PlanetCreated(planet))
         return planet
 
 
 class GetCurrentPlanetUseCase:
-    """Report the newest planet for compatibility clients and SSE priming."""
-
     def __init__(self, repository: PlanetRepository):
         self._repository = repository
 
@@ -101,13 +82,7 @@ class GetCurrentPlanetUseCase:
 
 
 class GetCurrentSceneUseCase:
-    """Return the immutable set of planets the projector should render now."""
-
-    def __init__(
-        self,
-        repository: PlanetRepository,
-        max_planets: int = DEFAULT_GALLERY_SIZE,
-    ):
+    def __init__(self, repository: PlanetRepository, max_planets: int = DEFAULT_GALLERY_SIZE):
         self._repository = repository
         self._max_planets = max_planets
 
@@ -116,13 +91,7 @@ class GetCurrentSceneUseCase:
 
 
 class ListRecentPlanetsUseCase:
-    """Return recent planets in the legacy gallery wire format."""
-
-    def __init__(
-        self,
-        repository: PlanetRepository,
-        max_limit: int = DEFAULT_GALLERY_SIZE,
-    ):
+    def __init__(self, repository: PlanetRepository, max_limit: int = DEFAULT_GALLERY_SIZE):
         self._repository = repository
         self._max_limit = max_limit
 
@@ -133,8 +102,6 @@ class ListRecentPlanetsUseCase:
 
 
 class DeletePlanetUseCase:
-    """Remove one planet from the store and tell connected projectors."""
-
     def __init__(self, repository: PlanetRepository, publisher: EventPublisher):
         self._repository = repository
         self._publisher = publisher
@@ -143,20 +110,16 @@ class DeletePlanetUseCase:
         planet = self._repository.delete(planet_id)
         if planet is None:
             raise NotFoundError()
-        self._publisher.publish(
-            {"has_planet": False, "id": planet.id, "removed": True}
-        )
+        self._publisher.publish(PlanetRemoved(planet.id))
         return planet
 
 
 class ClearPlanetsUseCase:
-    """Empty the sky and broadcast one reconciliation event."""
-
     def __init__(self, repository: PlanetRepository, publisher: EventPublisher):
         self._repository = repository
         self._publisher = publisher
 
     def execute(self) -> int:
         removed = self._repository.clear()
-        self._publisher.publish({"has_planet": False, "cleared": True})
+        self._publisher.publish(GalaxyCleared())
         return len(removed)
