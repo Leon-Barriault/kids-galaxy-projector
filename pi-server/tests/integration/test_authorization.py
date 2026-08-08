@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.api.auth import PROXY_MARKER
 from app.config import Settings
 from app.factory import create_app
 
@@ -23,6 +24,7 @@ def secure_client(tmp_path) -> TestClient:
 
 def headers(role: str) -> dict[str, str]:
     return {
+        "X-Kids-Galaxy-Proxy": PROXY_MARKER,
         "X-Kids-Galaxy-Role": role,
         "X-Kids-Galaxy-Client-Verified": VERIFIED,
     }
@@ -93,6 +95,22 @@ def test_unverified_forwarded_role_is_rejected(tmp_path):
     client = secure_client(tmp_path)
     response = client.get(
         "/api/planets",
-        headers={"X-Kids-Galaxy-Role": "manager"},
+        headers={
+            "X-Kids-Galaxy-Proxy": PROXY_MARKER,
+            "X-Kids-Galaxy-Role": "manager",
+            "X-Kids-Galaxy-Client-Verified": "NONE",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_unmarked_forwarded_role_is_rejected(tmp_path):
+    client = secure_client(tmp_path)
+    response = client.get(
+        "/api/planets",
+        headers={
+            "X-Kids-Galaxy-Role": "manager",
+            "X-Kids-Galaxy-Client-Verified": VERIFIED,
+        },
     )
     assert response.status_code == 403
