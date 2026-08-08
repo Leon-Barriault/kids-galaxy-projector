@@ -3,6 +3,7 @@ package com.kidsgalaxy.di
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.kidsgalaxy.BuildConfig
 import com.kidsgalaxy.data.remote.ApiClient
 import com.kidsgalaxy.data.render.AndroidPlanetTextureRenderer
 import com.kidsgalaxy.data.repository.RetrofitPlanetRepository
@@ -13,24 +14,36 @@ import com.kidsgalaxy.presentation.DrawingViewModel
 /**
  * Composition root for the app.
  *
- * The single place where concrete implementations are chosen and wired to the
- * ports the domain declares. A small hand-rolled locator is proportionate here -
- * the graph is three objects deep and adding Hilt would cost more than it saves.
+ * The selected galaxy URL enters here, at the outermost boundary. The drawing
+ * domain and use case remain unaware of HTTP endpoints or discovery.
  */
 object ServiceLocator {
-    fun planetRepository(context: Context): PlanetRepository =
+    fun planetRepository(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+    ): PlanetRepository =
         RetrofitPlanetRepository(
-            api = ApiClient.create(context.applicationContext),
+            api =
+                ApiClient.create(
+                    context = context.applicationContext,
+                    baseUrl = baseUrl,
+                ),
             renderer = AndroidPlanetTextureRenderer(),
         )
 
-    fun sendPlanetUseCase(context: Context): SendPlanetUseCase = SendPlanetUseCase(planetRepository(context))
+    fun sendPlanetUseCase(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+    ): SendPlanetUseCase = SendPlanetUseCase(planetRepository(context, baseUrl))
 
     /**
      * Factory so Compose can obtain the ViewModel through `viewModel(factory = ...)`,
      * which keeps it scoped to the host and surviving configuration changes.
      */
-    fun viewModelFactory(context: Context): ViewModelProvider.Factory {
+    fun viewModelFactory(
+        context: Context,
+        baseUrl: String = BuildConfig.SERVER_BASE_URL,
+    ): ViewModelProvider.Factory {
         val appContext = context.applicationContext
         return object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -38,7 +51,7 @@ object ServiceLocator {
                 require(modelClass.isAssignableFrom(DrawingViewModel::class.java)) {
                     "Unknown ViewModel: ${modelClass.name}"
                 }
-                return DrawingViewModel(sendPlanetUseCase(appContext)) as T
+                return DrawingViewModel(sendPlanetUseCase(appContext, baseUrl)) as T
             }
         }
     }
