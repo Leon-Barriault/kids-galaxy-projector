@@ -1,15 +1,10 @@
-"""
-In-process pub/sub backing the SSE stream.
-
-Each subscriber gets a bounded queue. Publishing never awaits and never raises:
-a projector that has stopped reading loses updates rather than stalling the
-tablet that is uploading.
-"""
+"""In-process pub/sub backing the SSE stream."""
 
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 
+from app.application.event_types import ApplicationEvent
 from app.ports import EventPublisher
 
 DEFAULT_QUEUE_SIZE = 8
@@ -18,27 +13,22 @@ DEFAULT_QUEUE_SIZE = 8
 class InMemoryEventPublisher(EventPublisher):
     def __init__(self, queue_size: int = DEFAULT_QUEUE_SIZE):
         self._queue_size = queue_size
-        self._subscribers: set[asyncio.Queue] = set()
+        self._subscribers: set[asyncio.Queue[ApplicationEvent]] = set()
 
     @property
     def subscriber_count(self) -> int:
         return len(self._subscribers)
 
-    def publish(self, payload: dict) -> None:
+    def publish(self, event: ApplicationEvent) -> None:
         for queue in list(self._subscribers):
-            # Drop rather than block - a slow consumer must not affect the upload.
             with contextlib.suppress(asyncio.QueueFull):
-                queue.put_nowait(payload)
+                queue.put_nowait(event)
 
     @contextlib.asynccontextmanager
-    async def subscribe(self) -> AsyncIterator[asyncio.Queue]:
-        """
-        Register a subscriber for the duration of the block.
-
-        The queue is always removed on exit - including on exception - so a
-        disconnected projector cannot leak.
-        """
-        queue: asyncio.Queue = asyncio.Queue(maxsize=self._queue_size)
+    async def subscribe(self) -> AsyncIterator[asyncio.Queue[ApplicationEvent]]:
+        queue: asyncio.Queue[ApplicationEvent] = asyncio.Queue(
+            maxsize=self._queue_size
+        )
         self._subscribers.add(queue)
         try:
             yield queue
