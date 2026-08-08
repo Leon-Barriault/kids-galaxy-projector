@@ -33,3 +33,9 @@ class RateLimitedError(DomainError):
     """The client is sending planets faster than the cooldown allows."""
 
     user_message = "Please wait a few seconds before sending another planet."
+
+
+class NotFoundError(DomainError):
+    """The requested planet does not exist (or was already removed)."""
+
+    user_message = "Planet not found."

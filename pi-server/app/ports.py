@@ -40,6 +40,15 @@ class PlanetRepository(ABC):
         """Delete all but the newest `keep` planets."""
 
     @abstractmethod
+    def delete(self, planet_id: str) -> Planet | None:
+        """
+        Remove one planet by id.
+
+        Returns the deleted entity so callers can publish a removal event, or
+        None if no planet with that id exists.
+        """
+
+    @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
         """
         Map a requested filename to a real path inside the store.
@@ -78,15 +87,10 @@ class RateLimiter(ABC):
 
 
 class ImageProcessor(ABC):
-    """Turns untrusted upload bytes into a safe, normalised PNG."""
+    """Normalise uploaded images into a safe, fixed-size PNG texture."""
 
     @abstractmethod
     def normalize_to_png(
         self, content: bytes, max_dimension: int, target_size: int
     ) -> bytes:
-        """
-        Validate integrity and re-encode as a clean PNG.
-
-        Re-encoding is a security control: it drops any metadata or payload
-        smuggled inside the original file.
-        """
+        """Re-encode to PNG, capped and squared for the projector."""
