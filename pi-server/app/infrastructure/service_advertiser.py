@@ -1,9 +1,9 @@
 """
 Announcing the galaxy on the local network over mDNS.
 
-Tablets browse for `_kidsgalaxy._tcp.local.` and get back a name, an address
-and a port without anyone typing an IP. This is the same mechanism printers and
-Chromecasts use, so it works on an ordinary home router.
+Tablets browse for `_kidsgalaxy._tcp.local.` and get back a name, an address,
+a port and a transport scheme without anyone typing an IP. This is the same
+mechanism printers and Chromecasts use, so it works on an ordinary home router.
 
 Two things about the deployment are easy to get wrong and expensive to debug:
 
@@ -35,10 +35,17 @@ class NullServiceAdvertiser(ServiceAdvertiser):
 
 
 class ZeroconfServiceAdvertiser(ServiceAdvertiser):
-    def __init__(self, galaxy: Galaxy, port: int, host_ip: str | None = None):
+    def __init__(
+        self,
+        galaxy: Galaxy,
+        port: int,
+        host_ip: str | None = None,
+        scheme: str = "http",
+    ):
         self._galaxy = galaxy
         self._port = port
         self._host_ip = host_ip
+        self._scheme = scheme if scheme in {"http", "https"} else "http"
         self._zeroconf = None
         self._info = None
 
@@ -58,14 +65,16 @@ class ZeroconfServiceAdvertiser(ServiceAdvertiser):
                 properties={
                     "name": self._galaxy.name,
                     "service": self._galaxy.to_payload()["service"],
+                    "scheme": self._scheme,
                 },
                 server=f"{self._safe_hostname()}.local.",
             )
             self._zeroconf = Zeroconf()
             self._zeroconf.register_service(self._info)
             logger.info(
-                "Advertising '%s' at %s:%s over mDNS",
+                "Advertising '%s' at %s://%s:%s over mDNS",
                 self._galaxy.name,
+                self._scheme,
                 address,
                 self._port,
             )
