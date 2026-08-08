@@ -32,9 +32,10 @@ fun GalaxyPickerDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val discovery = remember(context, fallbackScheme) {
-        AndroidGalaxyDiscovery(context, fallbackScheme)
-    }
+    val discovery =
+        remember(context, fallbackScheme) {
+            AndroidGalaxyDiscovery(context, fallbackScheme)
+        }
     var targets by remember { mutableStateOf(emptyList<GalaxyTarget>()) }
     var discoveryError by remember { mutableStateOf<String?>(null) }
     var manualAddress by remember { mutableStateOf("") }
