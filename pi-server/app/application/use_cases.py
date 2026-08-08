@@ -17,6 +17,7 @@ from app.domain.image_rules import (
 )
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
+from app.domain.scene import Scene
 from app.ports import (
     EventPublisher,
     ImageProcessor,
@@ -37,15 +38,7 @@ DEFAULT_GALLERY_SIZE = 12
 
 
 class SubmitPlanetUseCase:
-    """
-    Accept a drawing from a tablet.
-
-    Order matters:
-    * the cooldown is *checked* before any expensive work,
-    * but only *recorded* once the planet is stored - a rejected drawing must not
-      make the child wait,
-    * and the projector is notified only after the planet is durably stored.
-    """
+    """Accept, validate, normalise, style, store and publish a drawing."""
 
     def __init__(
         self,
@@ -73,49 +66,31 @@ class SubmitPlanetUseCase:
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
     ) -> Planet:
-        # 1. Cheapest rejection first - no image work for a throttled client.
-        #    This only queries; the cooldown starts at step 5.
         self._rate_limiter.check(client_key)
-
-        # 2. Domain rules on the raw upload.
         ensure_content_type_allowed(content_type)
         ensure_not_empty(len(image_bytes))
         ensure_size_within(len(image_bytes), max_size)
         ensure_recognised_image(image_bytes)
 
-        # 3. Re-encode: strips hostile metadata and normalises the texture.
         clean_png = self._image_processor.normalize_to_png(
             image_bytes, max_dimension=max_dimension, target_size=target_size
         )
-
-        # 4. Style: spread the child's colours across the sphere so the planet
-        #    is a world rather than marker on white paper. Strictly after the
-        #    security re-encode - this operates on bytes we have already
-        #    decided are a safe image, never on the raw upload.
         clean_png = self._surface_styler.style(clean_png)
 
-        # 5. Persist, keeping the child's name verbatim.
         display_name = normalize_display_name(raw_name)
         planet = self._repository.save(
             planet_id=uuid.uuid4().hex[:10],
             display_name=display_name,
             image_bytes=clean_png,
         )
-
-        # 6. The drawing is stored, so the cooldown may now start. Doing this
-        #    after storage means a rejected upload costs the child nothing.
         self._rate_limiter.record(client_key)
-
-        # 7. Bound disk usage, then tell the projector - in that order, so a
-        #    prune failure cannot leave the projector pointing at a deleted file.
         self._repository.prune(keep=self._retention)
         self._publisher.publish(planet.to_payload())
-
         return planet
 
 
 class GetCurrentPlanetUseCase:
-    """Report the planet the projector should currently be showing."""
+    """Report the newest planet for compatibility clients and SSE priming."""
 
     def __init__(self, repository: PlanetRepository):
         self._repository = repository
@@ -125,18 +100,23 @@ class GetCurrentPlanetUseCase:
         return planet.to_payload() if planet else NO_PLANET_PAYLOAD
 
 
+class GetCurrentSceneUseCase:
+    """Return the immutable set of planets the projector should render now."""
+
+    def __init__(
+        self,
+        repository: PlanetRepository,
+        max_planets: int = DEFAULT_GALLERY_SIZE,
+    ):
+        self._repository = repository
+        self._max_planets = max_planets
+
+    def execute(self) -> Scene:
+        return Scene(planets=tuple(self._repository.recent(self._max_planets)))
+
+
 class ListRecentPlanetsUseCase:
-    """
-    The projector's gallery.
-
-    Every drawing now becomes its own planet, so on load the projector needs
-    the whole visible set rather than only the newest one - otherwise
-    refreshing the page would empty a sky that took an afternoon to fill.
-
-    `max_limit` is a ceiling, not a suggestion. The query parameter behind it
-    is caller-controlled, and leaving it unbounded would turn this into a way
-    to enumerate and re-read the entire store in one request.
-    """
+    """Return recent planets in the legacy gallery wire format."""
 
     def __init__(
         self,
@@ -153,12 +133,7 @@ class ListRecentPlanetsUseCase:
 
 
 class DeletePlanetUseCase:
-    """
-    Remove one planet from the store and tell every connected projector.
-
-    Used by the manager Android app during an event so a volunteer can take
-    down a drawing without restarting the kiosk or wiping the whole gallery.
-    """
+    """Remove one planet from the store and tell connected projectors."""
 
     def __init__(self, repository: PlanetRepository, publisher: EventPublisher):
         self._repository = repository
@@ -168,27 +143,14 @@ class DeletePlanetUseCase:
         planet = self._repository.delete(planet_id)
         if planet is None:
             raise NotFoundError()
-        # Same SSE channel as arrivals; the projector keys on `removed: true`.
         self._publisher.publish(
-            {
-                "has_planet": False,
-                "id": planet.id,
-                "removed": True,
-            }
+            {"has_planet": False, "id": planet.id, "removed": True}
         )
         return planet
 
 
 class ClearPlanetsUseCase:
-    """
-    Empty the sky.
-
-    The manager app's "clear all", for the end of an event or a fresh start
-    with a new group. Deliberately a separate use case from DeletePlanetUseCase
-    rather than a loop over it: one broadcast instead of thirty, and a
-    projector that empties in one frame rather than flickering through a
-    cascade of removals.
-    """
+    """Empty the sky and broadcast one reconciliation event."""
 
     def __init__(self, repository: PlanetRepository, publisher: EventPublisher):
         self._repository = repository
@@ -196,8 +158,5 @@ class ClearPlanetsUseCase:
 
     def execute(self) -> int:
         removed = self._repository.clear()
-        # Announce even when nothing was stored: a projector that has drifted
-        # out of step - a missed removal, a stale tab - is put right by this,
-        # and "clear" that visibly does nothing is worse than one that does.
         self._publisher.publish({"has_planet": False, "cleared": True})
         return len(removed)
