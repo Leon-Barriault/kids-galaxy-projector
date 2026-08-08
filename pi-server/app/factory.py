@@ -1,10 +1,4 @@
-"""
-Composition root.
-
-The only place where concrete adapters are chosen and wired to the ports the
-application layer depends on. Swapping storage or transport is a change here
-and nowhere else.
-"""
+"""Composition root for the Kids Galaxy service."""
 
 import contextlib
 import logging
@@ -18,6 +12,7 @@ from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
+    GetCurrentSceneUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
@@ -27,10 +22,7 @@ from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
-from app.infrastructure.service_advertiser import (
-    NullServiceAdvertiser,
-    ZeroconfServiceAdvertiser,
-)
+from app.infrastructure.service_advertiser import NullServiceAdvertiser, ZeroconfServiceAdvertiser
 from app.infrastructure.surface_styler import PillowSurfaceStyler
 from app.infrastructure.terrain_styler import TerrainSurfaceStyler
 
@@ -38,7 +30,6 @@ logger = logging.getLogger("kids-galaxy")
 
 
 def _styler_for(style: str):
-    """Settings.from_env has already validated the name."""
     if style == "terrain":
         return TerrainSurfaceStyler()
     if style == "blend":
@@ -50,17 +41,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     logging.basicConfig(level=logging.INFO)
 
-    # ---- adapters (infrastructure) ----
     repository = FileSystemPlanetRepository(settings.upload_dir)
     publisher = InMemoryEventPublisher()
     rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
     image_processor = PillowImageProcessor()
-    # The look of a planet is chosen and tuned here, in the composition
-    # root, rather than inside any styler - so it can change without
-    # touching the code that implements an effect.
     surface_styler = _styler_for(settings.surface_style)
 
-    # ---- use cases (application) ----
     submit_planet = SubmitPlanetUseCase(
         repository=repository,
         publisher=publisher,
@@ -70,41 +56,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
-    # Ceiling is retention (disk), not gallery size: the manager app lists
-    # everything stored; the projector still requests limit=GALLERY_SIZE.
-    list_recent_planets = ListRecentPlanetsUseCase(
-        repository,
-        max_limit=settings.max_stored_planets,
-    )
+    get_current_scene = GetCurrentSceneUseCase(repository)
+    list_recent_planets = ListRecentPlanetsUseCase(repository, max_limit=settings.max_stored_planets)
     delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
     clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
 
-    # ---- identity and discovery ----
     galaxy = Galaxy(name=settings.galaxy_name)
-    advertiser = (
-        ZeroconfServiceAdvertiser(galaxy, settings.port)
-        if settings.advertise
-        else NullServiceAdvertiser()
-    )
+    advertiser = ZeroconfServiceAdvertiser(galaxy, settings.port) if settings.advertise else NullServiceAdvertiser()
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
-        # Advertising is started here rather than at import time so a test
-        # that builds an app never touches the network, and so the socket
-        # is closed when the server stops rather than lingering as a stale
-        # record that points tablets at a projector that is gone.
         advertiser.start()
         try:
             yield
         finally:
             advertiser.stop()
 
-    # ---- transport (API) ----
     app = FastAPI(
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.1.0",
+        version="1.2.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -118,11 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     if settings.static_dir.is_dir():
-        app.mount(
-            "/static",
-            StaticFiles(directory=settings.static_dir),
-            name="static",
-        )
+        app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
     else:
         logger.warning("Static directory %s not found", settings.static_dir)
 
@@ -130,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         build_router(
             submit_planet=submit_planet,
             get_current_planet=get_current_planet,
+            get_current_scene=get_current_scene,
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
             clear_planets=clear_planets,
@@ -146,5 +115,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.rate_limiter = rate_limiter
     app.state.galaxy = galaxy
     app.state.advertiser = advertiser
-
     return app
