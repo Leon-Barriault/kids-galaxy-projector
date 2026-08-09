@@ -1,4 +1,10 @@
-"""Galaxy behavior domain model and deterministic seasonal scheduling."""
+"""Galaxy behavior domain model and deterministic seasonal scheduling.
+
+This module owns the rules that decide how the projected galaxy looks and
+moves. It is completely free of infrastructure concerns (no clock, no
+filesystem, no HTTP). Seasonal theme resolution is pure and deterministic
+so it can be unit-tested with fixed dates.
+"""
 
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -6,6 +12,8 @@ from enum import StrEnum
 
 
 class GalaxyTheme(StrEnum):
+    """Visual theme applied to the entire galaxy scene."""
+
     DEFAULT = "default"
     HALLOWEEN = "halloween"
     EASTER = "easter"
@@ -13,13 +21,26 @@ class GalaxyTheme(StrEnum):
 
 
 class BehaviorMode(StrEnum):
+    """How the active theme is chosen.
+
+    AUTO  - theme is derived from the calendar (SeasonalThemeResolver).
+    MANUAL - operator has locked a specific theme.
+    """
+
     AUTO = "auto"
     MANUAL = "manual"
 
 
 @dataclass(frozen=True)
 class GalaxyBehaviorSettings:
-    """Persisted operator choices; AUTO resolves the theme from the calendar."""
+    """Persisted operator choices; AUTO resolves the theme from the calendar.
+
+    Attributes:
+        mode: Whether theme selection is automatic or manual.
+        manual_theme: Theme used when mode is MANUAL.
+        planet_speed: Multiplier for orbital / rotation speed (0.25 .. 2.0).
+        ambient_effects: Whether subtle ambient visual effects are enabled.
+    """
 
     mode: BehaviorMode = BehaviorMode.AUTO
     manual_theme: GalaxyTheme = GalaxyTheme.DEFAULT
@@ -33,7 +54,11 @@ class GalaxyBehaviorSettings:
 
 @dataclass(frozen=True)
 class GalaxyBehavior:
-    """Effective projector behavior after schedule/manual resolution."""
+    """Effective projector behavior after schedule/manual resolution.
+
+    This is the value that actually drives the Three.js scene. It is the
+    result of applying GalaxyBehaviorSettings against the current date.
+    """
 
     theme: GalaxyTheme
     planet_speed: float
@@ -42,9 +67,14 @@ class GalaxyBehavior:
 
 
 class SeasonalThemeResolver:
-    """Built-in annual scene presets with no infrastructure dependencies."""
+    """Built-in annual scene presets with no infrastructure dependencies.
+
+    The windows are intentionally a little generous so a classroom that only
+    runs the projector a few times a week still hits the themed periods.
+    """
 
     def resolve(self, day: date) -> GalaxyTheme:
+        """Return the theme that should be active on the given calendar day."""
         # Christmas crosses the year boundary.
         if (day.month == 12 and day.day >= 20) or (day.month == 1 and day.day <= 6):
             return GalaxyTheme.CHRISTMAS
@@ -60,7 +90,11 @@ class SeasonalThemeResolver:
 
     @staticmethod
     def easter_sunday(year: int) -> date:
-        """Gregorian Easter (Meeus/Jones/Butcher), valid for modern deployments."""
+        """Gregorian Easter (Meeus/Jones/Butcher), valid for modern deployments.
+
+        The algorithm is deterministic and has no external dependencies, which
+        keeps the whole seasonal system unit-testable with plain date objects.
+        """
         a = year % 19
         b = year // 100
         c = year % 100
@@ -82,6 +116,15 @@ class SeasonalThemeResolver:
         settings: GalaxyBehaviorSettings,
         day: date,
     ) -> GalaxyBehavior:
+        """Resolve the concrete behaviour that should be applied right now.
+
+        Args:
+            settings: Operator-persisted configuration.
+            day: The calendar day to resolve against (normally today).
+
+        Returns:
+            A fully-resolved GalaxyBehavior ready for the projector.
+        """
         theme = (
             self.resolve(day)
             if settings.mode == BehaviorMode.AUTO
