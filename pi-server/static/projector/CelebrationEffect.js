@@ -8,21 +8,75 @@ const SPARKLE_COLORS = [
   '#F48FB1',
 ];
 
-/** Owns the projector's DOM feedback for arrivals and empty state. */
+const COPY = {
+  en: {
+    badge: 'Kids Galaxy Projector',
+    waiting: 'Waiting for a planet…',
+    drawHint: 'Draw on the tablet and launch into space!',
+    orbitHint: '✨ Your planet orbits the sun and spins in space',
+    textureFailed: 'One planet is still finding its way here…',
+    newPlanet: 'A new planet',
+    joinedSky: (name) => `${name} joined the sky!`,
+  },
+  fr: {
+    badge: 'Projecteur Kids Galaxy',
+    waiting: 'En attente d’une planète…',
+    drawHint: 'Dessine sur la tablette et lance ta planète dans l’espace!',
+    orbitHint: '✨ Ta planète tourne autour du soleil et sur elle-même',
+    textureFailed: 'Une planète cherche encore son chemin jusqu’ici…',
+    newPlanet: 'Une nouvelle planète',
+    joinedSky: (name) => `${name} a rejoint le ciel!`,
+  },
+};
+
+/** Owns the projector's DOM feedback for arrivals, localization and empty state. */
 export class CelebrationEffect {
-  constructor({ planetNameEl, statusEl, celebrationEl, sparklesEl }) {
+  constructor({ planetNameEl, statusEl, celebrationEl, sparklesEl, badgeLabelEl, hintEl }) {
     this.planetNameEl = planetNameEl;
     this.statusEl = statusEl;
     this.celebrationEl = celebrationEl;
     this.sparklesEl = sparklesEl;
+    this.badgeLabelEl = badgeLabelEl;
+    this.hintEl = hintEl;
     this.timer = null;
+    this.language = 'en';
+    this.state = 'waiting';
+    this.lastName = null;
+  }
+
+  copy() {
+    return COPY[this.language] || COPY.en;
+  }
+
+  setLanguage(language) {
+    this.language = language === 'fr' ? 'fr' : 'en';
+    document.documentElement.lang = this.language;
+    const copy = this.copy();
+    if (this.badgeLabelEl) this.badgeLabelEl.textContent = copy.badge;
+    if (this.hintEl) this.hintEl.textContent = copy.orbitHint;
+
+    if (this.state === 'waiting') {
+      if (this.planetNameEl) this.planetNameEl.textContent = copy.waiting;
+      this.setStatus(copy.drawHint);
+    } else if (this.state === 'texture-failed') {
+      this.setStatus(copy.textureFailed);
+    } else {
+      this.setStatus(copy.drawHint);
+    }
+
+    if (this.celebrationEl?.classList.contains('show') && this.lastName) {
+      const msg = this.celebrationEl.querySelector('.msg');
+      if (msg) msg.textContent = copy.joinedSky(this.lastName);
+    }
   }
 
   displayName(payload) {
-    return payload.name || payload.display_name || 'A new planet';
+    return payload.name || payload.display_name || this.copy().newPlanet;
   }
 
   setPlanetName(name, celebrate = false) {
+    this.state = 'planet';
+    this.lastName = name;
     if (!this.planetNameEl) return;
     this.planetNameEl.textContent = '🌍 ' + name;
     this.planetNameEl.classList.add('visible');
@@ -38,15 +92,18 @@ export class CelebrationEffect {
   }
 
   resetWaiting() {
+    this.state = 'waiting';
+    this.lastName = null;
     if (this.planetNameEl) {
-      this.planetNameEl.textContent = 'Waiting for a planet…';
+      this.planetNameEl.textContent = this.copy().waiting;
       this.planetNameEl.classList.remove('celebrate');
     }
-    this.setStatus('Draw on the tablet and launch into space!');
+    this.setStatus(this.copy().drawHint);
   }
 
   textureLoadFailed() {
-    this.setStatus('One planet is still finding its way here…');
+    this.state = 'texture-failed';
+    this.setStatus(this.copy().textureFailed);
   }
 
   burstSparkles(count = 36) {
@@ -79,7 +136,7 @@ export class CelebrationEffect {
     if (!this.celebrationEl) return;
 
     const msg = this.celebrationEl.querySelector('.msg');
-    if (msg) msg.textContent = name + ' joined the sky!';
+    if (msg) msg.textContent = this.copy().joinedSky(name);
     this.celebrationEl.classList.add('show');
 
     if (this.timer !== null) clearTimeout(this.timer);
