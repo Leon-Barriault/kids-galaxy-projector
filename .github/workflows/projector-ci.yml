@@ -53,7 +53,7 @@ jobs:
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
       - name: Exercise kid artwork and Saturn rings in the real projector
-        run: python scripts/check_visual_renderer.py
+        run: python scripts/check_visual_renderer_v2.py
       - name: Upload rendered comparison frames
         if: always()
         uses: actions/upload-artifact@v4
