@@ -31,6 +31,13 @@ class BehaviorMode(StrEnum):
     MANUAL = "manual"
 
 
+class ProjectorLanguage(StrEnum):
+    """Language used by the projector's kid-facing on-screen text."""
+
+    ENGLISH = "en"
+    FRENCH = "fr"
+
+
 @dataclass(frozen=True)
 class GalaxyBehaviorSettings:
     """Persisted operator choices; AUTO resolves the theme from the calendar.
@@ -40,12 +47,14 @@ class GalaxyBehaviorSettings:
         manual_theme: Theme used when mode is MANUAL.
         planet_speed: Multiplier for orbital / rotation speed (0.25 .. 2.0).
         ambient_effects: Whether subtle ambient visual effects are enabled.
+        projector_language: Language used by the projector's on-screen copy.
     """
 
     mode: BehaviorMode = BehaviorMode.AUTO
     manual_theme: GalaxyTheme = GalaxyTheme.DEFAULT
     planet_speed: float = 1.0
     ambient_effects: bool = True
+    projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
 
     def __post_init__(self) -> None:
         if not 0.25 <= self.planet_speed <= 2.0:
@@ -64,6 +73,7 @@ class GalaxyBehavior:
     planet_speed: float
     ambient_effects: bool
     mode: BehaviorMode
+    projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
 
 
 class SeasonalThemeResolver:
@@ -135,4 +145,5 @@ class SeasonalThemeResolver:
             planet_speed=settings.planet_speed,
             ambient_effects=settings.ambient_effects,
             mode=settings.mode,
+            projector_language=settings.projector_language,
         )
