@@ -29,6 +29,10 @@ class DrawingViewModel(
         _uiState.update { it.copy(planetStyle = style) }
     }
 
+    fun changeRingColor(colorArgb: Int) {
+        _uiState.update { it.copy(ringColorArgb = colorArgb) }
+    }
+
     fun toggleCompanion(companion: PlanetCompanion) {
         _uiState.update { state ->
             val next =
