@@ -172,19 +172,13 @@ export class GalaxyScene {
     return sun;
   }
 
-  createOrbitRing(a, e, inclination, color = 0x4fc3f7, opacity = 0.3) {
+  createOrbitRing(a, _e, inclination, color = 0x4fc3f7, opacity = 0.3) {
     const segments = 160;
     const points = [];
-    for (let k = 0; k <= segments; k++) {
-      const M = (k / segments) * Math.PI * 2;
-      const E = this.animator.solveKepler(M, e);
-      const cosE = Math.cos(E);
-      const sinE = Math.sin(E);
-
-      // A smooth Kepler ellipse. Orbit guides never receive the handmade
-      // wobble used by the physical ring attached to a ringed kid planet.
-      const xOrb = a * (cosE - e);
-      const yOrb = a * Math.sqrt(1 - e * e) * sinE;
+    for (let k = 0; k < segments; k++) {
+      const angle = (k / segments) * Math.PI * 2;
+      const xOrb = a * Math.cos(angle);
+      const yOrb = a * Math.sin(angle);
       points.push(
         new THREE.Vector3(
           xOrb,
@@ -194,16 +188,20 @@ export class GalaxyScene {
       );
     }
 
+    // These are deliberately perfect circular guide lines. Organic edge
+    // movement belongs only to the physical ring attached to a ringed planet.
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     geometry.userData.kidsGalaxyOrbitGuide = true;
     geometry.userData.kidsGalaxyRingWobble = false;
+    geometry.userData.kidsGalaxyCircularGuide = true;
+    geometry.userData.radius = a;
     return new THREE.LineLoop(
       geometry,
       new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
     );
   }
 
-  addCompanion(radius, color, a, e, inclination, periodScale) {
+  addCompanion(radius, color, a, _e, inclination, periodScale) {
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 24, 24),
       new THREE.MeshStandardMaterial({
@@ -213,11 +211,11 @@ export class GalaxyScene {
       }),
     );
     this.scene.add(mesh);
-    this.scene.add(this.createOrbitRing(a, e, inclination, color, 0.18));
+    this.scene.add(this.createOrbitRing(a, 0, inclination, color, 0.18));
     this.companions.push({
       mesh,
       a,
-      e,
+      e: 0,
       i: inclination,
       n: this.animator.meanMotion(a) * periodScale,
       M0: Math.random() * Math.PI * 2,
