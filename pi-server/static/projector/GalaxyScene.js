@@ -179,9 +179,12 @@ export class GalaxyScene {
       const M = (k / segments) * Math.PI * 2;
       const E = this.animator.solveKepler(M, e);
       const cosE = Math.cos(E);
-      const r = a * (1 - e * cosE);
-      const xOrb = r * (cosE - e);
-      const yOrb = r * Math.sqrt(1 - e * e) * Math.sin(E);
+      const sinE = Math.sin(E);
+
+      // A smooth Kepler ellipse. Orbit guides never receive the handmade
+      // wobble used by the physical ring attached to a ringed kid planet.
+      const xOrb = a * (cosE - e);
+      const yOrb = a * Math.sqrt(1 - e * e) * sinE;
       points.push(
         new THREE.Vector3(
           xOrb,
@@ -191,8 +194,11 @@ export class GalaxyScene {
       );
     }
 
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    geometry.userData.kidsGalaxyOrbitGuide = true;
+    geometry.userData.kidsGalaxyRingWobble = false;
     return new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(points),
+      geometry,
       new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
     );
   }
