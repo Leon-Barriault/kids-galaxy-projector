@@ -12,6 +12,7 @@ from app.domain.image_rules import (
 )
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
+from app.domain.planet_customization import normalize_companions, normalize_planet_style
 from app.domain.scene import Scene
 from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter, SurfaceStyler
 
@@ -45,6 +46,8 @@ class SubmitPlanetUseCase:
         content_type: str | None,
         raw_name: str,
         client_key: str,
+        raw_style: str | None = None,
+        raw_companions: str | None = None,
         max_size: int = DEFAULT_MAX_SIZE,
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
@@ -55,16 +58,21 @@ class SubmitPlanetUseCase:
         ensure_size_within(len(image_bytes), max_size)
         ensure_recognised_image(image_bytes)
 
+        style = normalize_planet_style(raw_style)
+        companions = normalize_companions(raw_companions)
+
         clean_png = self._image_processor.normalize_to_png(
             image_bytes, max_dimension=max_dimension, target_size=target_size
         )
         clean_png = self._surface_styler.style(clean_png)
 
         display_name = normalize_display_name(raw_name)
-        planet = self._repository.save(
+        planet = self._repository.save_designed(
             planet_id=uuid.uuid4().hex[:10],
             display_name=display_name,
             image_bytes=clean_png,
+            style=style,
+            companions=companions,
         )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
