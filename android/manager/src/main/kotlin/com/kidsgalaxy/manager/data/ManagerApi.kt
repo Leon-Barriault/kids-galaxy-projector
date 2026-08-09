@@ -13,6 +13,7 @@ data class PlanetDto(
     @SerializedName("url") val url: String,
     @SerializedName("timestamp") val timestamp: Double? = null,
     @SerializedName("has_planet") val hasPlanet: Boolean? = null,
+    @SerializedName("style") val style: String = "classic",
 )
 
 data class PlanetListResponse(
