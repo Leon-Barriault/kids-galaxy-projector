@@ -1,7 +1,9 @@
 package com.kidsgalaxy.domain.model
 
 /** Physical form chosen before drawing begins. The paint texture stays unchanged. */
-enum class PlanetStyle(val wireValue: String) {
+enum class PlanetStyle(
+    val wireValue: String,
+) {
     CLASSIC("classic"),
     RINGED("ringed"),
     CRATERED("cratered"),
@@ -9,7 +11,9 @@ enum class PlanetStyle(val wireValue: String) {
 }
 
 /** Optional animated objects that travel with the child's planet. */
-enum class PlanetCompanion(val wireValue: String) {
+enum class PlanetCompanion(
+    val wireValue: String,
+) {
     MOON("moon"),
     STARS("stars"),
     SATELLITE("satellite"),
