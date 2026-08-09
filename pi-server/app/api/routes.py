@@ -7,9 +7,6 @@ This module is deliberately thin. It:
 - Delegates every business decision to a use case.
 - Maps DomainError subclasses onto HTTP status codes via ``_status_for``.
 - Applies role-based access control through the AuthorizationPolicy.
-
-No domain rules live here. If a new validation is needed, it belongs in the
-domain or a use case, not in a route handler.
 """
 
 import logging
@@ -45,7 +42,11 @@ from app.application.use_cases import (
 from app.domain.errors import DomainError, NotFoundError, RateLimitedError, ValidationError
 from app.domain.galaxy import Galaxy
 from app.domain.image_rules import ensure_size_within
-from app.domain.planet_customization import DEFAULT_RING_COLOR
+from app.domain.planet_customization import (
+    DEFAULT_CRATER_COLOR,
+    DEFAULT_MOUNTAIN_COLOR,
+    DEFAULT_RING_COLOR,
+)
 from app.ports import EventPublisher, PlanetRepository
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def _status_for(error: DomainError) -> int:
 
 
 def client_key(request: Request) -> str:
-    """Stable identifier used by the rate limiter (client IP, or "unknown")."""
+    """Stable identifier used by the rate limiter."""
     return request.client.host if request.client else "unknown"
 
 
@@ -91,11 +92,7 @@ def build_router(
     authorizer: AuthorizationPolicy,
     settings,
 ) -> APIRouter:
-    """Compose the FastAPI router with all use cases and auth dependencies wired in.
-
-    This is the composition point for the HTTP surface. The factory calls it
-    once at startup after the concrete adapters have been constructed.
-    """
+    """Compose the FastAPI router with use cases and auth dependencies."""
     router = APIRouter()
 
     projector_only = authorizer.dependency(ClientRole.PROJECTOR)
@@ -112,22 +109,20 @@ def build_router(
         dependencies=[Depends(projector_only)],
     )
     async def galaxy_page():
-        """Serve the projector HTML page (Three.js galaxy visualisation)."""
         index_path = settings.static_dir / "index.html"
         if not index_path.exists():
             return HTMLResponse(
-                "<h1>Galaxy visualization not found</h1>", status_code=404
+                "<h1>Galaxy visualization not found</h1>",
+                status_code=404,
             )
         return FileResponse(index_path)
 
     @router.get("/health")
     async def health():
-        """Liveness probe used by Docker and monitoring."""
         return {"status": "ok", "service": "kids-galaxy-projector"}
 
     @router.get("/api/galaxy")
     async def galaxy_identity():
-        """Return the galaxy name and service marker (used by tablet discovery)."""
         return settings_galaxy.to_payload()
 
     @router.get(
@@ -135,7 +130,6 @@ def build_router(
         dependencies=[Depends(projector_or_manager)],
     )
     async def current_planet():
-        """Return the single most-recent planet (or the empty payload)."""
         return get_current_planet.execute()
 
     @router.get(
@@ -143,7 +137,6 @@ def build_router(
         dependencies=[Depends(projector_or_manager)],
     )
     async def current_scene():
-        """Return the planets currently visible in the sky (gallery size)."""
         scene = get_current_scene.execute()
         return {"planets": [planet.to_payload() for planet in scene.planets]}
 
@@ -152,7 +145,6 @@ def build_router(
         dependencies=[Depends(projector_or_manager)],
     )
     async def galaxy_behavior():
-        """Return both the stored settings and the currently effective behaviour."""
         return _behavior_state_payload(get_behavior.execute())
 
     @router.put(
@@ -160,7 +152,6 @@ def build_router(
         dependencies=[Depends(manager_only)],
     )
     async def update_galaxy_behavior(request: BehaviorUpdateRequest):
-        """Update operator behaviour settings (manager only)."""
         return _behavior_state_payload(update_behavior.execute(request.to_domain()))
 
     @router.get(
@@ -170,7 +161,6 @@ def build_router(
     async def planet_gallery(
         limit: int | None = Query(default=None, ge=1),
     ):
-        """Return recent planets for the manager gallery or projector reconciliation."""
         return list_recent_planets.execute(limit=limit)
 
     @router.post(
@@ -184,13 +174,9 @@ def build_router(
         style: str = Form("classic"),
         companions: str = Form(""),
         ring_color: str = Form(DEFAULT_RING_COLOR),
+        crater_color: str = Form(DEFAULT_CRATER_COLOR),
+        mountain_color: str = Form(DEFAULT_MOUNTAIN_COLOR),
     ):
-        """Accept a child's drawing and launch it into the galaxy.
-
-        Size is guarded both via Content-Length (when present) and by reading
-        at most max_file_size + 1 bytes so a malicious client cannot force the
-        server to buffer an unbounded body.
-        """
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
         content = await file.read(settings.max_file_size + 1)
@@ -202,6 +188,8 @@ def build_router(
                 raw_style=style,
                 raw_companions=companions,
                 raw_ring_color=ring_color,
+                raw_crater_color=crater_color,
+                raw_mountain_color=mountain_color,
                 client_key=client_key(request),
                 max_size=settings.max_file_size,
                 max_dimension=settings.max_dimension,
@@ -209,7 +197,8 @@ def build_router(
             )
         except DomainError as e:
             raise HTTPException(
-                status_code=_status_for(e), detail=e.user_message
+                status_code=_status_for(e),
+                detail=e.user_message,
             ) from e
         logger.info(
             "Planet received from %s: %s (%s, %s)",
@@ -227,6 +216,8 @@ def build_router(
             "style": planet.style,
             "companions": list(planet.companions),
             "ring_color": planet.ring_color,
+            "crater_color": planet.crater_color,
+            "mountain_color": planet.mountain_color,
         }
 
     @router.delete(
@@ -234,7 +225,6 @@ def build_router(
         dependencies=[Depends(manager_only)],
     )
     async def clear_planets_route():
-        """Remove every planet from the galaxy (manager only)."""
         removed = clear_planets.execute()
         return {"status": "cleared", "removed": removed}
 
@@ -243,12 +233,12 @@ def build_router(
         dependencies=[Depends(manager_only)],
     )
     async def delete_planet_route(planet_id: str):
-        """Remove a single planet by id (manager only)."""
         try:
             planet = delete_planet.execute(planet_id)
         except DomainError as e:
             raise HTTPException(
-                status_code=_status_for(e), detail=e.user_message
+                status_code=_status_for(e),
+                detail=e.user_message,
             ) from e
         return {
             "status": "deleted",
@@ -258,7 +248,6 @@ def build_router(
 
     @router.get("/uploads/{filename}")
     async def serve_upload(filename: str):
-        """Serve a planet texture PNG. Path traversal is rejected by the repository."""
         path = repository.resolve_image(filename)
         if path is None:
             raise HTTPException(status_code=404, detail="Planet not found")
@@ -269,7 +258,6 @@ def build_router(
         dependencies=[Depends(projector_only)],
     )
     async def planet_events(request: Request):
-        """Server-Sent Events stream of planet arrivals, removals and clears."""
         return build_planet_event_response(request, publisher, get_current_planet)
 
     return router
