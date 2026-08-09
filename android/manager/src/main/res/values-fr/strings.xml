@@ -48,10 +48,14 @@
     <string name="space_activity_hint">Contrôle les objets permanents et intermittents qui traversent la galaxie projetée.</string>
     <string name="asteroid_belt">Ceinture d’astéroïdes</string>
     <string name="asteroid_belt_hint">Une large ceinture rocheuse tourne à l’extérieur des planètes des enfants.</string>
+    <string name="easter_egg_belt">Ceinture d’œufs de Pâques</string>
+    <string name="easter_egg_belt_hint">Des œufs de Pâques pastel décorés tournent autour des planètes à la place des rochers.</string>
     <string name="comets">Comètes</string>
     <string name="comets_hint">Des comètes traversent périodiquement la galaxie. Leur tête brillante reste du côté du soleil et leur queue pointe à l’opposé du soleil.</string>
     <string name="flyby_asteroids">Passages d’astéroïdes</string>
     <string name="flyby_asteroids_hint">De petits groupes d’astéroïdes entrent occasionnellement dans la scène puis en ressortent.</string>
+    <string name="easter_egg_flybys">Passages d’œufs de Pâques</string>
+    <string name="easter_egg_flybys_hint">De petits groupes d’œufs de Pâques colorés traversent occasionnellement la scène.</string>
     <string name="frequency_rare">Rare</string>
     <string name="frequency_normal">Normal</string>
     <string name="frequency_frequent">Fréquent</string>
@@ -64,6 +68,7 @@
     <string name="theme_halloween">Halloween</string>
     <string name="theme_easter">Pâques</string>
     <string name="theme_christmas">Noël</string>
+    <string name="theme_easter_effects">Ambiance de Pâques : les astéroïdes deviennent des œufs pastel et les compagnons astronautes deviennent des lapins blancs.</string>
     <string name="enabled_seasonal_themes">Thèmes saisonniers activés</string>
     <string name="ambient_theme_effects">Effets d’ambiance du thème</string>
     <string name="ambient_theme_effects_hint">Active les particules subtiles et les mouvements supplémentaires du thème actif.</string>
