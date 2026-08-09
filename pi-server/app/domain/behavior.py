@@ -21,11 +21,7 @@ class GalaxyTheme(StrEnum):
 
 
 class BehaviorMode(StrEnum):
-    """How the active theme is chosen.
-
-    AUTO  - theme is derived from the calendar (SeasonalThemeResolver).
-    MANUAL - operator has locked a specific theme.
-    """
+    """How the active theme is chosen."""
 
     AUTO = "auto"
     MANUAL = "manual"
@@ -38,54 +34,71 @@ class ProjectorLanguage(StrEnum):
     FRENCH = "fr"
 
 
+class EventFrequency(StrEnum):
+    """Operator-friendly cadence for intermittent galaxy events."""
+
+    RARE = "rare"
+    NORMAL = "normal"
+    FREQUENT = "frequent"
+
+
+DEFAULT_ENABLED_THEMES = (
+    GalaxyTheme.DEFAULT,
+    GalaxyTheme.HALLOWEEN,
+    GalaxyTheme.EASTER,
+    GalaxyTheme.CHRISTMAS,
+)
+
+
 @dataclass(frozen=True)
 class GalaxyBehaviorSettings:
-    """Persisted operator choices; AUTO resolves the theme from the calendar.
-
-    Attributes:
-        mode: Whether theme selection is automatic or manual.
-        manual_theme: Theme used when mode is MANUAL.
-        planet_speed: Multiplier for orbital / rotation speed (0.25 .. 2.0).
-        ambient_effects: Whether subtle ambient visual effects are enabled.
-        projector_language: Language used by the projector's on-screen copy.
-    """
+    """Persisted operator choices for the projected galaxy."""
 
     mode: BehaviorMode = BehaviorMode.AUTO
     manual_theme: GalaxyTheme = GalaxyTheme.DEFAULT
     planet_speed: float = 1.0
     ambient_effects: bool = True
     projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
+    asteroid_belt_enabled: bool = False
+    comets_enabled: bool = False
+    comet_frequency: EventFrequency = EventFrequency.NORMAL
+    flyby_asteroids_enabled: bool = False
+    flyby_frequency: EventFrequency = EventFrequency.NORMAL
+    enabled_themes: tuple[GalaxyTheme, ...] = DEFAULT_ENABLED_THEMES
 
     def __post_init__(self) -> None:
         if not 0.25 <= self.planet_speed <= 2.0:
             raise ValueError("planet_speed must be between 0.25 and 2.0")
 
+        # Default is the safe visual fallback and therefore cannot be disabled.
+        # De-duplicate values while preserving the operator's persisted order.
+        unique = tuple(dict.fromkeys(self.enabled_themes))
+        if GalaxyTheme.DEFAULT not in unique:
+            unique = (GalaxyTheme.DEFAULT, *unique)
+        object.__setattr__(self, "enabled_themes", unique)
+
 
 @dataclass(frozen=True)
 class GalaxyBehavior:
-    """Effective projector behavior after schedule/manual resolution.
-
-    This is the value that actually drives the Three.js scene. It is the
-    result of applying GalaxyBehaviorSettings against the current date.
-    """
+    """Effective projector behavior after schedule/manual resolution."""
 
     theme: GalaxyTheme
     planet_speed: float
     ambient_effects: bool
     mode: BehaviorMode
     projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
+    asteroid_belt_enabled: bool = False
+    comets_enabled: bool = False
+    comet_frequency: EventFrequency = EventFrequency.NORMAL
+    flyby_asteroids_enabled: bool = False
+    flyby_frequency: EventFrequency = EventFrequency.NORMAL
 
 
 class SeasonalThemeResolver:
-    """Built-in annual scene presets with no infrastructure dependencies.
-
-    The windows are intentionally a little generous so a classroom that only
-    runs the projector a few times a week still hits the themed periods.
-    """
+    """Built-in annual scene presets with no infrastructure dependencies."""
 
     def resolve(self, day: date) -> GalaxyTheme:
         """Return the theme that should be active on the given calendar day."""
-        # Christmas crosses the year boundary.
         if (day.month == 12 and day.day >= 20) or (day.month == 1 and day.day <= 6):
             return GalaxyTheme.CHRISTMAS
 
@@ -100,11 +113,7 @@ class SeasonalThemeResolver:
 
     @staticmethod
     def easter_sunday(year: int) -> date:
-        """Gregorian Easter (Meeus/Jones/Butcher), valid for modern deployments.
-
-        The algorithm is deterministic and has no external dependencies, which
-        keeps the whole seasonal system unit-testable with plain date objects.
-        """
+        """Gregorian Easter (Meeus/Jones/Butcher)."""
         a = year % 19
         b = year // 100
         c = year % 100
@@ -126,19 +135,16 @@ class SeasonalThemeResolver:
         settings: GalaxyBehaviorSettings,
         day: date,
     ) -> GalaxyBehavior:
-        """Resolve the concrete behaviour that should be applied right now.
-
-        Args:
-            settings: Operator-persisted configuration.
-            day: The calendar day to resolve against (normally today).
-
-        Returns:
-            A fully-resolved GalaxyBehavior ready for the projector.
-        """
-        theme = (
+        """Resolve the concrete behaviour that should be applied right now."""
+        candidate = (
             self.resolve(day)
             if settings.mode == BehaviorMode.AUTO
             else settings.manual_theme
+        )
+        theme = (
+            candidate
+            if candidate in settings.enabled_themes
+            else GalaxyTheme.DEFAULT
         )
         return GalaxyBehavior(
             theme=theme,
@@ -146,4 +152,9 @@ class SeasonalThemeResolver:
             ambient_effects=settings.ambient_effects,
             mode=settings.mode,
             projector_language=settings.projector_language,
+            asteroid_belt_enabled=settings.asteroid_belt_enabled,
+            comets_enabled=settings.comets_enabled,
+            comet_frequency=settings.comet_frequency,
+            flyby_asteroids_enabled=settings.flyby_asteroids_enabled,
+            flyby_frequency=settings.flyby_frequency,
         )
