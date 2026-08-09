@@ -327,8 +327,20 @@ private fun SettingsCard(
                 .background(AdminCard)
                 .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        content = content,
-    )
+    ) {
+        Text(
+            text = title,
+            color = AdminText,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+        )
+        Text(
+            text = subtitle,
+            color = AdminMuted,
+            fontSize = 13.sp,
+        )
+        content()
+    }
 }
 
 @Composable
