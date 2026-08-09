@@ -1,5 +1,6 @@
 package com.kidsgalaxy.manager
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
+import com.kidsgalaxy.connection.SharedPreferencesUiLanguageStore
+import com.kidsgalaxy.connection.withUiLanguage
 import com.kidsgalaxy.manager.ui.GalaxyPickerDialog
 import com.kidsgalaxy.manager.ui.ManagerScreen
 import java.net.URI
@@ -37,11 +40,18 @@ private val ManagerColors =
     )
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        val language = SharedPreferencesUiLanguageStore(newBase).load()
+        super.attachBaseContext(newBase.withUiLanguage(language))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             val store = remember { SharedPreferencesGalaxyTargetStore(this) }
+            val languageStore = remember { SharedPreferencesUiLanguageStore(this) }
+            val language = remember { languageStore.load() }
             val defaultTarget =
                 remember {
                     GalaxyTarget.create("Default Galaxy", BuildConfig.SERVER_BASE_URL)
@@ -70,6 +80,11 @@ class MainActivity : ComponentActivity() {
                     ManagerScreen(
                         state = state,
                         galaxy = selectedGalaxy,
+                        language = language,
+                        onToggleLanguage = {
+                            languageStore.save(language.toggled())
+                            recreate()
+                        },
                         onConfigureGalaxy = { showGalaxyPicker = true },
                         onRefresh = managerViewModel::refresh,
                         onDelete = managerViewModel::deletePlanet,
