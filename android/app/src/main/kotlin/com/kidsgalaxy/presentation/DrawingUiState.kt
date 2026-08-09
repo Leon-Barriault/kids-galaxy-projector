@@ -1,15 +1,15 @@
 package com.kidsgalaxy.presentation
 
 import com.kidsgalaxy.domain.model.Drawing
+import com.kidsgalaxy.domain.model.PlanetCompanion
+import com.kidsgalaxy.domain.model.PlanetDesign
+import com.kidsgalaxy.domain.model.PlanetStyle
 
-/**
- * Everything the drawing screen needs to render.
- *
- * Colour is kept as an ARGB Int (not a Compose Color) so this state - and the
- * ViewModel that owns it - remains testable on the JVM.
- */
+/** Everything the kid creation flow needs to render. */
 data class DrawingUiState(
     val drawing: Drawing = Drawing(),
+    val planetStyle: PlanetStyle = PlanetStyle.CLASSIC,
+    val companions: Set<PlanetCompanion> = emptySet(),
     val currentColorArgb: Int = DEFAULT_COLOR_ARGB,
     val currentStrokeWidth: Float = DEFAULT_STROKE_WIDTH,
     val isSending: Boolean = false,
@@ -18,9 +18,10 @@ data class DrawingUiState(
 ) {
     val canUndo: Boolean get() = !drawing.isEmpty
     val canLaunch: Boolean get() = !drawing.isEmpty && !isSending
+    val design: PlanetDesign get() = PlanetDesign(planetStyle, companions)
 
     companion object {
-        const val DEFAULT_COLOR_ARGB: Int = 0xFFE53935.toInt() // bright red
-        const val DEFAULT_STROKE_WIDTH = 28f // kid-friendly thick brush
+        const val DEFAULT_COLOR_ARGB: Int = 0xFFE53935.toInt()
+        const val DEFAULT_STROKE_WIDTH = 28f
     }
 }
