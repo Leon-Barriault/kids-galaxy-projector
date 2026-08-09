@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -97,6 +98,7 @@ fun PlanetDrawerScreen(
     var planetName by rememberSaveable { mutableStateOf("") }
     var step by rememberSaveable { mutableStateOf(CreationStep.STYLE) }
     val defaultName = stringResource(R.string.default_planet_name)
+    val languageDescription = stringResource(R.string.language_toggle_description)
 
     Scaffold(
         topBar = {
@@ -107,8 +109,7 @@ fun PlanetDrawerScreen(
                         onClick = onToggleLanguage,
                         modifier =
                             Modifier.semantics {
-                                contentDescription =
-                                    stringResource(R.string.language_toggle_description)
+                                contentDescription = languageDescription
                             },
                     ) {
                         Text(
@@ -744,6 +745,24 @@ private fun FullMoonIcon() {
     Canvas(modifier = Modifier.size(52.dp)) {
         val radius = size.minDimension * 0.46f
         val centre = center
+        val craterOne =
+            centre +
+                Offset(
+                    -radius * 0.34f,
+                    -radius * 0.22f,
+                )
+        val craterTwo =
+            centre +
+                Offset(
+                    radius * 0.33f,
+                    radius * 0.18f,
+                )
+        val craterThree =
+            centre +
+                Offset(
+                    radius * 0.20f,
+                    -radius * 0.38f,
+                )
         drawCircle(
             color = Color(0xFFB7BDC7),
             radius = radius,
@@ -752,17 +771,17 @@ private fun FullMoonIcon() {
         drawCircle(
             color = Color(0xFF858C98),
             radius = radius * 0.23f,
-            center = centre + androidx.compose.ui.geometry.Offset(-radius * 0.34f, -radius * 0.22f),
+            center = craterOne,
         )
         drawCircle(
             color = Color(0xFF949BA6),
             radius = radius * 0.16f,
-            center = centre + androidx.compose.ui.geometry.Offset(radius * 0.33f, radius * 0.18f),
+            center = craterTwo,
         )
         drawCircle(
             color = Color(0xFF7C838E),
             radius = radius * 0.11f,
-            center = centre + androidx.compose.ui.geometry.Offset(radius * 0.20f, -radius * 0.38f),
+            center = craterThree,
         )
     }
 }
