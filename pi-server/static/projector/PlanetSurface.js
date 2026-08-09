@@ -3,49 +3,44 @@ import * as THREE from 'three';
 /**
  * Pi-friendly molded-toy surface treatment.
  *
- * The colour texture remains the child's artwork. A tiny relief texture is
- * derived once from the tablet palette so painted regions sit gently above a
- * neutral base, like molded clay/plastic. The same small map drives both bump
- * lighting and a very shallow vertex displacement; there is no per-frame CPU
- * image work and no generated high-poly mesh.
+ * The child's colour texture remains untouched. A tiny grayscale relief map is
+ * derived once when the texture loads. Unpainted white stays at the sphere's
+ * original radius while painted regions rise by a uniform amount with softly
+ * rounded edges, like the molded ribbons and blobs on a toy planet. This avoids
+ * the balloon-like look that came from giving different paint colours different
+ * geometric heights.
  */
 
 export const POLISHED_SURFACE_PROFILE = Object.freeze({
   reliefWidth: 256,
   reliefHeight: 128,
-  bumpScale: 0.065,
-  displacementScale: 0.045,
-  displacementBias: -0.019,
+  baseRelief: 0.5,
+  accentRelief: 0.94,
+  bumpScale: 0.082,
+  displacementScale: 0.07,
+  displacementBias: -0.035,
   maxAnisotropy: 4,
-  clearcoat: 0.16,
+  clearcoat: 0.08,
 });
 
-const TABLET_PALETTE = [
-  { rgb: [0xff, 0xff, 0xff], height: 0.42 }, // unpainted/base white
-  { rgb: [0xe5, 0x39, 0x35], height: 0.70 }, // red
-  { rgb: [0xff, 0x98, 0x00], height: 0.77 }, // orange
-  { rgb: [0xff, 0xeb, 0x3b], height: 0.82 }, // yellow
-  { rgb: [0x4c, 0xaf, 0x50], height: 0.68 }, // green
-  { rgb: [0x21, 0x96, 0xf3], height: 0.64 }, // blue
-  { rgb: [0x9c, 0x27, 0xb0], height: 0.73 }, // purple
-  { rgb: [0xe9, 0x1e, 0x63], height: 0.72 }, // pink
-  { rgb: [0x00, 0x00, 0x00], height: 0.62 }, // black paint stays raised too
-];
+function paintPresence(r, g, b) {
+  // The tablet texture has a white unpainted base. Measure distance from white
+  // instead of assigning a different height to every palette colour. The
+  // gradual threshold preserves antialiased brush edges and becomes the bevel.
+  const dr = 255 - r;
+  const dg = 255 - g;
+  const db = 255 - b;
+  const distance = Math.sqrt(dr * dr + dg * dg + db * db) / 441.673;
+  return THREE.MathUtils.smoothstep(distance, 0.045, 0.22);
+}
 
-function nearestPaletteHeight(r, g, b) {
-  let bestDistance = Number.POSITIVE_INFINITY;
-  let height = 0.42;
-  for (const swatch of TABLET_PALETTE) {
-    const dr = r - swatch.rgb[0];
-    const dg = g - swatch.rgb[1];
-    const db = b - swatch.rgb[2];
-    const distance = dr * dr + dg * dg + db * db;
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      height = swatch.height;
-    }
-  }
-  return height;
+function moldedHeight(r, g, b) {
+  const presence = paintPresence(r, g, b);
+  return THREE.MathUtils.lerp(
+    POLISHED_SURFACE_PROFILE.baseRelief,
+    POLISHED_SURFACE_PROFILE.accentRelief,
+    presence,
+  );
 }
 
 function softenedCanvas(source) {
@@ -57,13 +52,15 @@ function softenedCanvas(source) {
 
   context.imageSmoothingEnabled = true;
   if ('filter' in context) {
-    context.filter = 'blur(1.8px)';
+    // A slightly wider blur turns the raised paint boundary into a soft molded
+    // shoulder instead of a sharp inflated ridge.
+    context.filter = 'blur(2.6px)';
     context.drawImage(source, 0, 0);
     context.filter = 'none';
     return output;
   }
 
-  // Older kiosk Chromium fallback: a down/up sample rounds hard region edges.
+  // Older kiosk Chromium fallback: repeated down/up sampling softens edges.
   const half = document.createElement('canvas');
   half.width = Math.max(1, source.width >> 1);
   half.height = Math.max(1, source.height >> 1);
@@ -90,7 +87,7 @@ export function createPaletteReliefMap(texture) {
     const pixels = image.data;
     for (let index = 0; index < pixels.length; index += 4) {
       const value = Math.round(
-        nearestPaletteHeight(pixels[index], pixels[index + 1], pixels[index + 2]) * 255,
+        moldedHeight(pixels[index], pixels[index + 1], pixels[index + 2]) * 255,
       );
       pixels[index] = value;
       pixels[index + 1] = value;
@@ -117,19 +114,19 @@ export function createPaletteReliefMap(texture) {
 export function createPolishedPlanetMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: 0.52,
-    metalness: 0.01,
+    roughness: 0.58,
+    metalness: 0.006,
     clearcoat: POLISHED_SURFACE_PROFILE.clearcoat,
-    clearcoatRoughness: 0.48,
+    clearcoatRoughness: 0.62,
   });
 }
 
 export function createPolishedFeatureMaterial(
   color,
   {
-    roughness = 0.52,
-    clearcoat = 0.18,
-    metalness = 0.01,
+    roughness = 0.56,
+    clearcoat = 0.12,
+    metalness = 0.008,
     side = THREE.FrontSide,
   } = {},
 ) {
@@ -139,7 +136,7 @@ export function createPolishedFeatureMaterial(
     roughness,
     metalness,
     clearcoat,
-    clearcoatRoughness: Math.min(0.72, roughness + 0.08),
+    clearcoatRoughness: Math.min(0.76, roughness + 0.1),
     side,
   });
 }
