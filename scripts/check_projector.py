@@ -15,6 +15,7 @@ polished renderer contract:
   * cratered planets own recessed bowl/rim geometry
   * mountain planets own rounded lathed peak geometry
   * the polished path does not enable expensive real-time shadow maps
+  * a larger-than-1080p display still renders internally at at most 1080p
   * a live upload appears without a reload
   * a delete removes the planet from the sky
   * the gallery is capped, and the planet dropped is the oldest
@@ -22,8 +23,9 @@ polished renderer contract:
   * a clear-all empties the sky in one event and the page still works after
   * nothing is logged to the console as an error
 
-Run it with `make check-projector` (needs playwright + chromium, which CI does
-not install - this is a local pre-push check, not a CI gate).
+Run it with `make check-projector` (needs playwright + chromium). Projector CI
+runs the same check with SwiftShader so browser-only Three.js regressions block
+main even though the field device uses the Pi GPU.
 """
 
 from __future__ import annotations
@@ -157,7 +159,7 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
-        page = browser.new_page()
+        page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -189,7 +191,10 @@ def main() -> int:
             "sunIntensity: g.sunLight.intensity,"
             "ambientIntensity: g.ambientLight.intensity,"
             "fillIntensity: g.fillLight.intensity,"
-            "shadows: g.renderer.shadowMap.enabled"
+            "shadows: g.renderer.shadowMap.enabled,"
+            "renderScale: g.renderer.userData.kidsGalaxyRenderScale,"
+            "internalWidth: g.renderer.userData.kidsGalaxyInternalWidth,"
+            "internalHeight: g.renderer.userData.kidsGalaxyInternalHeight"
             "};"
             "})()"
         )
@@ -203,6 +208,9 @@ def main() -> int:
             "sun is stronger than the non-directional readability fill",
         )
         check(not polished["shadows"], "renderer avoids expensive real-time shadow maps")
+        check(polished["renderScale"] < 1, "large viewport is rendered below native resolution")
+        check(polished["internalWidth"] <= 1920, "internal render width is capped at 1920")
+        check(polished["internalHeight"] <= 1080, "internal render height is capped at 1080")
 
         crater_geometry = page.evaluate(
             f"(() => {{"
