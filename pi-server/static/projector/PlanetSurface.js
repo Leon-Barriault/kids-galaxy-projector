@@ -5,15 +5,17 @@ import * as THREE from 'three';
  *
  * The colour texture remains the child's artwork. A tiny relief texture is
  * derived once from the tablet palette so neighbouring colour regions catch
- * light at slightly different heights, like molded clay/plastic. This is a
- * bump map only: there is no per-frame CPU work and no expensive displacement
- * tessellation.
+ * light at slightly different heights, like molded clay/plastic. The same
+ * small map drives both bump lighting and a very shallow vertex displacement;
+ * there is no per-frame CPU image work and no generated high-poly mesh.
  */
 
 export const POLISHED_SURFACE_PROFILE = Object.freeze({
   reliefWidth: 256,
   reliefHeight: 128,
   bumpScale: 0.055,
+  displacementScale: 0.065,
+  displacementBias: -0.0325,
   maxAnisotropy: 4,
   clearcoat: 0.32,
 });
@@ -154,6 +156,9 @@ export function applyPolishedTexture(material, texture, renderer) {
   material.map = texture;
   material.bumpMap = relief;
   material.bumpScale = relief ? POLISHED_SURFACE_PROFILE.bumpScale : 0;
+  material.displacementMap = relief;
+  material.displacementScale = relief ? POLISHED_SURFACE_PROFILE.displacementScale : 0;
+  material.displacementBias = relief ? POLISHED_SURFACE_PROFILE.displacementBias : 0;
   material.color.setHex(0xffffff);
   material.emissive.setHex(0x000000);
   material.emissiveMap = null;
