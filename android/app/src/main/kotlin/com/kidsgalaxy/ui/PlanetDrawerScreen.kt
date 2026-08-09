@@ -90,7 +90,10 @@ fun PlanetDrawerScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
             )
         },
     ) { padding ->
@@ -132,7 +135,9 @@ fun PlanetDrawerScreen(
                         state = state,
                         planetName = planetName.ifBlank { defaultName },
                         onBack = { step = CreationStep.FRIENDS },
-                        onLaunch = { viewModel.sendPlanet(planetName.ifBlank { defaultName }) },
+                        onLaunch = {
+                            viewModel.sendPlanet(planetName.ifBlank { defaultName })
+                        },
                     )
             }
         }
@@ -144,7 +149,9 @@ fun PlanetDrawerScreen(
             title = { Text(stringResource(R.string.oops)) },
             text = { Text(error) },
             confirmButton = {
-                TextButton(onClick = viewModel::clearError) { Text(stringResource(R.string.ok)) }
+                TextButton(onClick = viewModel::clearError) {
+                    Text(stringResource(R.string.ok))
+                }
             },
         )
     }
@@ -173,7 +180,10 @@ fun PlanetDrawerScreen(
 private fun StepHeader(step: CreationStep) {
     val labels = listOf("1  Style", "2  Draw", "3  Friends", "4  Launch")
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         labels.forEachIndexed { index, label ->
@@ -181,7 +191,12 @@ private fun StepHeader(step: CreationStep) {
             Text(
                 text = if (active) "● $label" else label,
                 modifier = Modifier.weight(1f),
-                color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                color =
+                    if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                 textAlign = TextAlign.Center,
             )
@@ -196,12 +211,23 @@ private fun StyleStep(
     onNext: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text("First, pick your planet shape!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("You will paint it on the next screen.", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "First, pick your planet shape!",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "You will paint it on the next screen.",
+            style = MaterialTheme.typography.titleMedium,
+        )
         StyleRow(
             first = PlanetStyle.CLASSIC,
             firstEmoji = "🌍",
@@ -227,7 +253,13 @@ private fun StyleStep(
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(64.dp)) {
+        Button(
+            onClick = onNext,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+        ) {
             Text("Next: Paint it!  🎨", fontSize = 20.sp)
         }
     }
@@ -244,9 +276,26 @@ private fun StyleRow(
     selected: PlanetStyle,
     onSelect: (PlanetStyle) -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        StyleButton(first, firstEmoji, firstLabel, selected == first, onSelect, Modifier.weight(1f))
-        StyleButton(second, secondEmoji, secondLabel, selected == second, onSelect, Modifier.weight(1f))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        StyleButton(
+            style = first,
+            emoji = firstEmoji,
+            label = firstLabel,
+            selected = selected == first,
+            onSelect = onSelect,
+            modifier = Modifier.weight(1f),
+        )
+        StyleButton(
+            style = second,
+            emoji = secondEmoji,
+            label = secondLabel,
+            selected = selected == second,
+            onSelect = onSelect,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -260,16 +309,34 @@ private fun StyleButton(
     modifier: Modifier,
 ) {
     val content: @Composable () -> Unit = {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Text(emoji, fontSize = 44.sp)
-            Text(label, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(
+                label,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
             Text(if (selected) "✓ Picked" else "Tap to pick")
         }
     }
     if (selected) {
-        Button(onClick = { onSelect(style) }, modifier = modifier.height(132.dp)) { content() }
+        Button(
+            onClick = { onSelect(style) },
+            modifier = modifier.height(132.dp),
+        ) {
+            content()
+        }
     } else {
-        OutlinedButton(onClick = { onSelect(style) }, modifier = modifier.height(132.dp)) { content() }
+        OutlinedButton(
+            onClick = { onSelect(style) },
+            modifier = modifier.height(132.dp),
+        ) {
+            content()
+        }
     }
 }
 
@@ -285,12 +352,20 @@ private fun DrawingStep(
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             "Paint your ${styleLabel(state.planetStyle)} planet",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
-        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+        ) {
             val sideBySide = maxWidth > maxHeight && maxWidth >= 600.dp
             val nameField: @Composable (Modifier) -> Unit = { fieldModifier ->
                 OutlinedTextField(
@@ -312,7 +387,10 @@ private fun DrawingStep(
                     onContinueStroke = viewModel::continueStroke,
                     onEndStroke = viewModel::endStroke,
                     onCanvasSizeChanged = viewModel::onCanvasSizeChanged,
-                    modifier = canvasModifier.semantics { contentDescription = canvasDescription },
+                    modifier =
+                        canvasModifier.semantics {
+                            contentDescription = canvasDescription
+                        },
                 )
             }
             val controls: @Composable (Modifier) -> Unit = { controlsModifier ->
@@ -333,30 +411,63 @@ private fun DrawingStep(
 
             if (sideBySide) {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    canvas(Modifier.weight(1f).fillMaxHeight().padding(16.dp))
+                    canvas(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(16.dp),
+                    )
                     Column(
-                        modifier = Modifier.width(SIDE_PANEL_WIDTH).fillMaxHeight().verticalScroll(rememberScrollState()),
+                        modifier =
+                            Modifier
+                                .width(SIDE_PANEL_WIDTH)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState()),
                     ) {
-                        nameField(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                        nameField(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
                         controls(Modifier)
                     }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    nameField(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                    nameField(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                     canvas(
-                        Modifier.weight(1f).fillMaxWidth().heightIn(min = MIN_CANVAS_HEIGHT).padding(horizontal = 16.dp),
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .heightIn(min = MIN_CANVAS_HEIGHT)
+                            .padding(horizontal = 16.dp),
                     )
                     controls(Modifier)
                 }
             }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("← Style") }
-            Button(onClick = onNext, enabled = state.canLaunch, modifier = Modifier.weight(2f)) {
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("← Style")
+            }
+            Button(
+                onClick = onNext,
+                enabled = state.canLaunch,
+                modifier = Modifier.weight(2f),
+            ) {
                 Text("Next: Space friends  🚀")
             }
         }
@@ -371,12 +482,23 @@ private fun FriendsStep(
     onNext: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text("Add space friends!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Pick as many as you like. They will move around your planet!", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Add space friends!",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "Pick as many as you like. They will move around your planet!",
+            style = MaterialTheme.typography.titleMedium,
+        )
         CompanionRow(
             first = PlanetCompanion.MOON,
             firstEmoji = "🌙",
@@ -398,9 +520,22 @@ private fun FriendsStep(
             onToggle = onToggle,
         )
         Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("← Paint") }
-            Button(onClick = onNext, modifier = Modifier.weight(2f)) { Text("Next: Launch!  ✨") }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("← Paint")
+            }
+            Button(
+                onClick = onNext,
+                modifier = Modifier.weight(2f),
+            ) {
+                Text("Next: Launch!  ✨")
+            }
         }
     }
 }
@@ -416,9 +551,26 @@ private fun CompanionRow(
     selected: Set<PlanetCompanion>,
     onToggle: (PlanetCompanion) -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        CompanionButton(first, firstEmoji, firstLabel, first in selected, onToggle, Modifier.weight(1f))
-        CompanionButton(second, secondEmoji, secondLabel, second in selected, onToggle, Modifier.weight(1f))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        CompanionButton(
+            companion = first,
+            emoji = firstEmoji,
+            label = firstLabel,
+            selected = first in selected,
+            onToggle = onToggle,
+            modifier = Modifier.weight(1f),
+        )
+        CompanionButton(
+            companion = second,
+            emoji = secondEmoji,
+            label = secondLabel,
+            selected = second in selected,
+            onToggle = onToggle,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -432,16 +584,29 @@ private fun CompanionButton(
     modifier: Modifier,
 ) {
     val content: @Composable () -> Unit = {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Text(emoji, fontSize = 44.sp)
             Text(label, fontSize = 19.sp, fontWeight = FontWeight.Bold)
             Text(if (selected) "✓ Added" else "Tap to add")
         }
     }
     if (selected) {
-        Button(onClick = { onToggle(companion) }, modifier = modifier.height(132.dp)) { content() }
+        Button(
+            onClick = { onToggle(companion) },
+            modifier = modifier.height(132.dp),
+        ) {
+            content()
+        }
     } else {
-        OutlinedButton(onClick = { onToggle(companion) }, modifier = modifier.height(132.dp)) { content() }
+        OutlinedButton(
+            onClick = { onToggle(companion) },
+            modifier = modifier.height(132.dp),
+        ) {
+            content()
+        }
     }
 }
 
@@ -453,17 +618,32 @@ private fun LaunchStep(
     onLaunch: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text("Your space world is ready!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("$planetName  •  ${styleLabel(state.planetStyle)}", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Your space world is ready!",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "$planetName  •  ${styleLabel(state.planetStyle)}",
+            style = MaterialTheme.typography.titleLarge,
+        )
         Text(
             if (state.companions.isEmpty()) {
                 "No space friends this time."
             } else {
-                "Friends: ${state.companions.sortedBy { it.ordinal }.joinToString { companionLabel(it) }}"
+                val friends =
+                    state.companions
+                        .sortedBy { it.ordinal }
+                        .joinToString { companionLabel(it) }
+                "Friends: $friends"
             },
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
@@ -477,11 +657,21 @@ private fun LaunchStep(
         Button(
             onClick = onLaunch,
             enabled = state.canLaunch,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(72.dp),
         ) {
-            Text(if (state.isSending) "Flying to the galaxy…" else "🚀  Send to Galaxy", fontSize = 22.sp)
+            Text(
+                if (state.isSending) "Flying to the galaxy…" else "🚀  Send to Galaxy",
+                fontSize = 22.sp,
+            )
         }
-        OutlinedButton(onClick = onBack, enabled = !state.isSending, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = onBack,
+            enabled = !state.isSending,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text("← Change space friends")
         }
     }
@@ -510,5 +700,9 @@ private fun animationSummary(state: DrawingUiState): String {
     if (PlanetCompanion.STARS in state.companions) effects += "stars twinkle"
     if (PlanetCompanion.SATELLITE in state.companions) effects += "satellite circles"
     if (PlanetCompanion.ASTRONAUT in state.companions) effects += "astronaut floats"
-    return if (effects.isEmpty()) "Your painted planet will gently spin in space." else "Animation: ${effects.joinToString()}."
+    return if (effects.isEmpty()) {
+        "Your painted planet will gently spin in space."
+    } else {
+        "Animation: ${effects.joinToString()}."
+    }
 }
