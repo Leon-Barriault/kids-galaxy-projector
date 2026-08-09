@@ -8,19 +8,14 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 
-/**
- * Response returned by POST /api/upload.
- *
- * Field names are mapped explicitly so the Kotlin properties stay idiomatic
- * camelCase even though the server speaks snake_case, and so ProGuard's
- * renaming cannot break deserialization in release builds.
- */
 data class UploadResponse(
     @SerializedName("status") val status: String,
     @SerializedName("message") val message: String,
     @SerializedName("planet_id") val planetId: String? = null,
     @SerializedName("name") val name: String? = null,
     @SerializedName("url") val url: String? = null,
+    @SerializedName("style") val style: String? = null,
+    @SerializedName("companions") val companions: List<String> = emptyList(),
 )
 
 interface PlanetApi {
@@ -29,5 +24,7 @@ interface PlanetApi {
     suspend fun uploadPlanet(
         @Part file: MultipartBody.Part,
         @Part("name") name: RequestBody,
+        @Part("style") style: RequestBody,
+        @Part("companions") companions: RequestBody,
     ): Response<UploadResponse>
 }
