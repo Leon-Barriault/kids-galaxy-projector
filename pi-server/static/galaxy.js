@@ -10,16 +10,21 @@ import * as THREE from 'three';
 
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
+import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
+import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
 import { installSculptedPlanetRings } from './projector/SculptedPlanetRings.js';
+import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
 const GALLERY_SIZE = 12;
 
 installSculptedPlanetRings();
+installHighFidelityPlanetFeatures();
+installThemedGalaxyEnvironment();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
@@ -33,6 +38,7 @@ const celebration = new CelebrationEffect({
 
 const animator = new PlanetAnimator();
 const galaxyScene = new GalaxyScene(container, animator);
+applyDesktopVisualUpgrade(galaxyScene);
 const environment = new GalaxyEnvironment(galaxyScene.scene);
 const cameraController = new CameraController(galaxyScene.renderer);
 const behaviorController = new ProjectorBehaviorController({
