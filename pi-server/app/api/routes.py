@@ -152,6 +152,8 @@ def build_router(
         request: Request,
         file: UploadFile = File(...),
         name: str = Form("My Planet"),
+        style: str = Form("classic"),
+        companions: str = Form(""),
     ):
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
@@ -161,6 +163,8 @@ def build_router(
                 image_bytes=content,
                 content_type=file.content_type,
                 raw_name=name,
+                raw_style=style,
+                raw_companions=companions,
                 client_key=client_key(request),
                 max_size=settings.max_file_size,
                 max_dimension=settings.max_dimension,
@@ -171,10 +175,11 @@ def build_router(
                 status_code=_status_for(e), detail=e.user_message
             ) from e
         logger.info(
-            "Planet received from %s: %s (%s)",
+            "Planet received from %s: %s (%s, %s)",
             client_key(request),
             planet.filename,
             planet.display_name,
+            planet.style,
         )
         return {
             "status": "success",
@@ -182,6 +187,8 @@ def build_router(
             "planet_id": planet.id,
             "name": planet.display_name,
             "url": planet.url,
+            "style": planet.style,
+            "companions": list(planet.companions),
         }
 
     @router.delete(
