@@ -3,25 +3,24 @@ import * as THREE from 'three';
 /**
  * Pi-friendly sculpted-toy surface treatment.
  *
- * The projector no longer wraps the child's full PNG directly around the base
- * sphere. The sphere becomes a coherent clay body and the drawing is converted
- * once, at texture-load time, into rounded raised colour accents. Two concentric
- * accent shells create a darker bevel/side and a brighter rounded top, which is
- * much closer to the molded ribbons and blobs in the visual reference than a
- * painted balloon.
+ * The base sphere is a coherent clay body rather than a PNG-wrapped balloon.
+ * The child's drawing is converted once, at texture-load time, into a raised
+ * colour shell with a darker rounded shoulder and a brighter top surface. This
+ * makes broad brush strokes read like molded ribbons/blobs while keeping the
+ * child's exact layout and palette identity.
  */
 
 const BASE_CLAY_COLOR = 0xf2ede6;
 
 const TABLET_PALETTE = [
-  { rgb: [0xe5, 0x39, 0x35], toy: 0xff6259 }, // red -> warm coral
-  { rgb: [0xff, 0x98, 0x00], toy: 0xffa63f }, // orange
-  { rgb: [0xff, 0xeb, 0x3b], toy: 0xffe566 }, // yellow
-  { rgb: [0x4c, 0xaf, 0x50], toy: 0x62ca78 }, // green
-  { rgb: [0x21, 0x96, 0xf3], toy: 0x55aaff }, // blue
-  { rgb: [0x9c, 0x27, 0xb0], toy: 0xb25ed1 }, // purple
-  { rgb: [0xe9, 0x1e, 0x63], toy: 0xf55f99 }, // pink
-  { rgb: [0x00, 0x00, 0x00], toy: 0x41434d }, // black -> charcoal
+  { rgb: [0xe5, 0x39, 0x35], toy: 0xff6259 },
+  { rgb: [0xff, 0x98, 0x00], toy: 0xffa63f },
+  { rgb: [0xff, 0xeb, 0x3b], toy: 0xffe566 },
+  { rgb: [0x4c, 0xaf, 0x50], toy: 0x62ca78 },
+  { rgb: [0x21, 0x96, 0xf3], toy: 0x55aaff },
+  { rgb: [0x9c, 0x27, 0xb0], toy: 0xb25ed1 },
+  { rgb: [0xe9, 0x1e, 0x63], toy: 0xf55f99 },
+  { rgb: [0x00, 0x00, 0x00], toy: 0x41434d },
 ];
 
 export const POLISHED_SURFACE_PROFILE = Object.freeze({
@@ -29,17 +28,15 @@ export const POLISHED_SURFACE_PROFILE = Object.freeze({
   textureHeight: 128,
   accentEdgeRadius: 1.068,
   accentRadius: 1.082,
-  accentBumpScale: 0.068,
-  accentDisplacementScale: 0.034,
+  accentBumpScale: 0.078,
+  accentDisplacementScale: 0.056,
   accentEdgeAlphaTest: 0.07,
-  accentAlphaTest: 0.28,
+  accentAlphaTest: 0.22,
   maxAnisotropy: 4,
-  clearcoat: 0.06,
+  clearcoat: 0.04,
 });
 
 function paintPresence(r, g, b) {
-  // White is the tablet's untouched surface. Antialiased brush edges remain a
-  // gradient here and become the rounded shoulder of the molded accent.
   const dr = 255 - r;
   const dg = 255 - g;
   const db = 255 - b;
@@ -112,6 +109,17 @@ function configureTexture(texture, renderer, colorSpace) {
   texture.needsUpdate = true;
 }
 
+function stylizedToyRgb(toyHex, presence) {
+  const toy = new THREE.Color(toyHex);
+  // Antialiased edges become the darker molded side wall. Fully painted areas
+  // get a small warm highlight so the colour top reads separately from the base.
+  const shoulder = THREE.MathUtils.clamp((0.86 - presence) / 0.7, 0, 1);
+  const darken = shoulder * 0.28;
+  const brighten = THREE.MathUtils.clamp((presence - 0.68) / 0.32, 0, 1) * 0.055;
+  toy.offsetHSL(0, -shoulder * 0.035, brighten - darken);
+  return toy;
+}
+
 function prepareArtwork(texture) {
   if (typeof document === 'undefined' || !texture?.image) return null;
 
@@ -155,15 +163,8 @@ function prepareArtwork(texture) {
     });
     const meaningfulColors = counts.filter((count) => count > pixelCount * 0.01).length;
     const dominantShare = paintedPixels > 0 ? counts[dominantIndex] / paintedPixels : 0;
-
-    // A nearly filled multicolour drawing gets its dominant paint colour as the
-    // body, with the remaining colours molded above it. Sparse drawings keep a
-    // warm ivory clay body so every child stroke becomes a visible raised piece.
-    const useDominantAsBody =
-      coverage > 0.72 && meaningfulColors >= 2 && dominantShare > 0.38;
-    const baseColor = useDominantAsBody
-      ? TABLET_PALETTE[dominantIndex].toy
-      : BASE_CLAY_COLOR;
+    const useDominantAsBody = coverage > 0.72 && meaningfulColors >= 2 && dominantShare > 0.38;
+    const baseColor = useDominantAsBody ? TABLET_PALETTE[dominantIndex].toy : BASE_CLAY_COLOR;
 
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = width;
@@ -193,7 +194,7 @@ function prepareArtwork(texture) {
       maskImage.data[index + 2] = maskValue;
       maskImage.data[index + 3] = 255;
 
-      const toy = new THREE.Color(TABLET_PALETTE[paletteIndex].toy);
+      const toy = stylizedToyRgb(TABLET_PALETTE[paletteIndex].toy, presence);
       colourImage.data[index] = Math.round(toy.r * 255);
       colourImage.data[index + 1] = Math.round(toy.g * 255);
       colourImage.data[index + 2] = Math.round(toy.b * 255);
@@ -204,8 +205,8 @@ function prepareArtwork(texture) {
     colourContext.putImageData(colourImage, 0, 0);
 
     return {
-      mask: textureFromCanvas(softenedCanvas(maskCanvas, 2.4), THREE.NoColorSpace),
-      colour: textureFromCanvas(softenedCanvas(colourCanvas, 1.05), THREE.SRGBColorSpace),
+      mask: textureFromCanvas(softenedCanvas(maskCanvas, 2.0), THREE.NoColorSpace),
+      colour: textureFromCanvas(softenedCanvas(colourCanvas, 0.75), THREE.SRGBColorSpace),
       baseColor,
       coverage,
       useDominantAsBody,
@@ -229,10 +230,10 @@ export function createPaintMask(texture) {
 export function createPolishedPlanetMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: BASE_CLAY_COLOR,
-    roughness: 0.49,
+    roughness: 0.56,
     metalness: 0.003,
     clearcoat: POLISHED_SURFACE_PROFILE.clearcoat,
-    clearcoatRoughness: 0.58,
+    clearcoatRoughness: 0.66,
   });
 }
 
@@ -252,10 +253,10 @@ export function createMoldedAccentEdgeMaterial() {
 export function createMoldedAccentMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: 0.44,
+    roughness: 0.46,
     metalness: 0.003,
-    clearcoat: 0.1,
-    clearcoatRoughness: 0.48,
+    clearcoat: 0.08,
+    clearcoatRoughness: 0.54,
     alphaTest: POLISHED_SURFACE_PROFILE.accentAlphaTest,
     transparent: false,
     depthWrite: true,
@@ -290,14 +291,7 @@ export function applySculptedArtwork(
   renderer,
 ) {
   const artwork = prepareArtwork(sourceTexture);
-  if (!artwork) {
-    configureTexture(sourceTexture, renderer, THREE.SRGBColorSpace);
-    baseMaterial.map = sourceTexture;
-    baseMaterial.color.setHex(0xffffff);
-    baseMaterial.needsUpdate = true;
-    return null;
-  }
-
+  if (!artwork) return null;
   configureTexture(artwork.mask, renderer, THREE.NoColorSpace);
   configureTexture(artwork.colour, renderer, THREE.SRGBColorSpace);
 
@@ -312,8 +306,8 @@ export function applySculptedArtwork(
   edgeMaterial.map = artwork.colour;
   edgeMaterial.alphaMap = artwork.mask;
   edgeMaterial.bumpMap = artwork.mask;
-  edgeMaterial.bumpScale = 0.024;
-  edgeMaterial.color.setHex(0xc1b8b0);
+  edgeMaterial.bumpScale = 0.03;
+  edgeMaterial.color.setHex(0xb8ada5);
   edgeMaterial.needsUpdate = true;
 
   accentMaterial.map = artwork.colour;
@@ -332,15 +326,30 @@ export function applySculptedArtwork(
   return artwork;
 }
 
-// Backward-compatible helpers retained for any external/manual projector tools.
+// Compatibility hooks used by the current planet entity. The first pass turns
+// the sphere into a coherent body colour; the second pass makes the drawing a
+// visibly raised sculpted shell. Keeping this split avoids duplicating artwork
+// processing in the per-frame renderer and preserves the existing lifecycle.
 export function applyPolishedTexture(material, texture, renderer) {
-  configureTexture(texture, renderer, THREE.SRGBColorSpace);
-  material.map = texture;
-  material.color.setHex(0xffffff);
+  const artwork = prepareArtwork(texture);
+  if (!artwork) {
+    configureTexture(texture, renderer, THREE.SRGBColorSpace);
+    material.map = texture;
+    material.color.setHex(0xffffff);
+    material.needsUpdate = true;
+    return null;
+  }
+
+  material.map = null;
+  material.bumpMap = null;
+  material.displacementMap = null;
+  material.color.setHex(artwork.baseColor);
   material.emissive.setHex(0x000000);
   material.emissiveIntensity = 0;
   material.needsUpdate = true;
-  return null;
+  artwork.mask.dispose();
+  artwork.colour.dispose();
+  return { sculptedBase: true, baseColor: artwork.baseColor };
 }
 
 export function applyMoldedAccentTexture(material, texture, renderer) {
@@ -352,6 +361,13 @@ export function applyMoldedAccentTexture(material, texture, renderer) {
   material.alphaMap = artwork.mask;
   material.bumpMap = artwork.mask;
   material.bumpScale = POLISHED_SURFACE_PROFILE.accentBumpScale;
+  material.displacementMap = artwork.mask;
+  material.displacementScale = POLISHED_SURFACE_PROFILE.accentDisplacementScale;
+  material.displacementBias = 0;
+  material.color.setHex(0xffffff);
+  material.emissive.setHex(0x000000);
+  material.emissiveIntensity = 0;
   material.needsUpdate = true;
+  texture.dispose();
   return artwork.mask;
 }
