@@ -14,6 +14,7 @@ import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
+import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMask.js';
 import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
@@ -25,9 +26,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Install the artwork and physical-ring implementations first so the later
-// high-fidelity/theme wrappers retain them when they add shadows and holidays.
+// Install artwork/ring implementations first so later high-fidelity/theme
+// wrappers retain them when adding shadows and seasonal behavior.
 installKidArtworkUpgrade();
+installKidArtworkFaithfulMask();
 installKidArtworkPresentationFix();
 installSaturnPlanetRings();
 installHighFidelityPlanetFeatures();
