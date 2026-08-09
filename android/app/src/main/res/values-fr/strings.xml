@@ -11,7 +11,7 @@
     <string name="style_ringed">Avec anneau</string>
     <string name="style_cratered">Avec cratères</string>
     <string name="style_spiky">Pics montagneux</string>
-    <string name="style_spiky_help">Les pics montagneux forment une planète complète avec plusieurs sommets de hauteurs différentes tout autour.</string>
+    <string name="style_spiky_help"></string>
     <string name="picked">✓ Choisi</string>
     <string name="tap_to_pick">Touche pour choisir</string>
     <string name="next_paint">Suivant : Peins-la!  🎨</string>
