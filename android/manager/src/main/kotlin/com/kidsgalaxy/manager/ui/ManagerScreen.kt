@@ -70,6 +70,7 @@ fun ManagerScreen(
     galaxy: GalaxyTarget,
     language: UiLanguage,
     onToggleLanguage: () -> Unit,
+    onProjectorLanguageChange: (String) -> Unit,
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
@@ -135,6 +136,14 @@ fun ManagerScreen(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        ProjectorLanguageControl(
+            selectedLanguage = state.projectorLanguage,
+            loading = state.isProjectorLanguageLoading,
+            updating = state.isUpdatingProjectorLanguage,
+            onSelect = onProjectorLanguageChange,
+        )
 
         if (state.planets.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -277,6 +286,95 @@ fun ManagerScreen(
 }
 
 @Composable
+private fun ProjectorLanguageControl(
+    selectedLanguage: String,
+    loading: Boolean,
+    updating: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(CardBg)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.projector_language),
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(R.string.projector_language_hint),
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            if (loading || updating) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Accent,
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            LanguageChoiceButton(
+                label = stringResource(R.string.projector_english),
+                selected = selectedLanguage == "en",
+                enabled = !loading && !updating,
+                onClick = { onSelect("en") },
+                modifier = Modifier.weight(1f),
+            )
+            LanguageChoiceButton(
+                label = stringResource(R.string.projector_french),
+                selected = selectedLanguage == "fr",
+                enabled = !loading && !updating,
+                onClick = { onSelect("fr") },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageChoiceButton(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+        ) {
+            Text("✓ $label")
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+        ) {
+            Text(label)
+        }
+    }
+}
+
+@Composable
 private fun managerStatusText(status: ManagerStatus): String =
     when (status) {
         is ManagerStatus.Stored ->
@@ -288,6 +386,16 @@ private fun managerStatusText(status: ManagerStatus): String =
 
         is ManagerStatus.Cleared ->
             stringResource(R.string.status_cleared, status.count)
+
+        is ManagerStatus.ProjectorLanguageChanged ->
+            stringResource(
+                R.string.status_projector_language_changed,
+                if (status.language == "fr") {
+                    stringResource(R.string.projector_french)
+                } else {
+                    stringResource(R.string.projector_english)
+                },
+            )
     }
 
 @Composable
@@ -296,6 +404,10 @@ private fun managerErrorText(error: ManagerError): String =
         is ManagerError.LoadFailed -> stringResource(R.string.error_load_failed, error.code)
         is ManagerError.DeleteFailed -> stringResource(R.string.error_delete_failed, error.code)
         is ManagerError.ClearFailed -> stringResource(R.string.error_clear_failed, error.code)
+        is ManagerError.BehaviorLoadFailed ->
+            stringResource(R.string.error_behavior_load_failed, error.code)
+        is ManagerError.BehaviorUpdateFailed ->
+            stringResource(R.string.error_behavior_update_failed, error.code)
         ManagerError.Network -> stringResource(R.string.error_network)
     }
 
