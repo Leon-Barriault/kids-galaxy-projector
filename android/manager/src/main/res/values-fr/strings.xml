@@ -3,6 +3,14 @@
     <string name="app_name">Gestionnaire Kids Galaxy</string>
     <string name="manager_title">Gestionnaire Kids Galaxy</string>
     <string name="planets_stored_on">Planètes enregistrées sur %1$s</string>
+    <string name="status_planets_stored">%1$d planète(s) enregistrée(s)</string>
+    <string name="status_removed_named">« %1$s » supprimée</string>
+    <string name="status_planet_removed">Planète supprimée</string>
+    <string name="status_cleared">%1$d planète(s) supprimée(s)</string>
+    <string name="error_load_failed">Impossible de charger les planètes (%1$d)</string>
+    <string name="error_delete_failed">Échec de la suppression (%1$d)</string>
+    <string name="error_clear_failed">Impossible de vider la galerie (%1$d)</string>
+    <string name="error_network">Erreur réseau</string>
     <string name="language_toggle_description">Basculer entre l’anglais et le français</string>
     <string name="refresh">Actualiser</string>
     <string name="clearing">Suppression…</string>
