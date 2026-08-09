@@ -46,6 +46,14 @@ class DrawingViewModel(
         _uiState.update { it.copy(ringColorArgb = colorArgb) }
     }
 
+    fun changeCraterColor(colorArgb: Int) {
+        _uiState.update { it.copy(craterColorArgb = colorArgb) }
+    }
+
+    fun changeMountainColor(colorArgb: Int) {
+        _uiState.update { it.copy(mountainColorArgb = colorArgb) }
+    }
+
     fun toggleCompanion(companion: PlanetCompanion) {
         _uiState.update { state ->
             val next =
