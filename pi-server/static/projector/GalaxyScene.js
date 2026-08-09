@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { applyPiRenderBudget } from './ProjectorQuality.js';
+
 const THEMES = {
   default: {
     background: 0x050818,
@@ -51,8 +53,12 @@ export class GalaxyScene {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    applyPiRenderBudget(
+      this.renderer,
+      window.innerWidth,
+      window.innerHeight,
+      window.devicePixelRatio,
+    );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
