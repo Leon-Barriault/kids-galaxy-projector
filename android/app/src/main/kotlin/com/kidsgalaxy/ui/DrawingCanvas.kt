@@ -58,6 +58,7 @@ private const val GUIDE_STROKE_WIDTH = 5f
 private fun DrawScope.drawRingPreview(
     guide: PlanetGuide,
     ringColorArgb: Int,
+    front: Boolean,
 ) {
     val centre = Offset(guide.centreX, guide.centreY)
     val ringWidth = guide.radius * 3.05f
@@ -71,31 +72,45 @@ private fun DrawScope.drawRingPreview(
     val base = Color(ringColorArgb)
     val darker = lerp(base, Color.Black, 0.24f)
     val lighter = lerp(base, Color.White, 0.28f)
+    val startAngle = if (front) -1f else 179f
+    val sweepAngle = 182f
 
-    // The ring is intentionally painted after the child's strokes. The dark
-    // outline keeps even a pure-white ring visible and the opaque bands stop
-    // planet paint from visually swallowing the ring.
+    // The upper half is drawn before the opaque planet and therefore appears
+    // behind it. The lower half is drawn after the child's painting and sits
+    // in front. A small arc overlap avoids seams at the left/right edges.
     rotate(degrees = -14f, pivot = centre) {
-        drawOval(
+        drawArc(
             color = FEATURE_OUTLINE_COLOR,
+            startAngle = startAngle,
+            sweepAngle = sweepAngle,
+            useCenter = false,
             topLeft = topLeft,
             size = size,
             style = Stroke(width = guide.radius * 0.205f),
         )
-        drawOval(
+        drawArc(
             color = darker,
+            startAngle = startAngle,
+            sweepAngle = sweepAngle,
+            useCenter = false,
             topLeft = topLeft,
             size = size,
             style = Stroke(width = guide.radius * 0.176f),
         )
-        drawOval(
+        drawArc(
             color = base,
+            startAngle = startAngle,
+            sweepAngle = sweepAngle,
+            useCenter = false,
             topLeft = topLeft,
             size = size,
             style = Stroke(width = guide.radius * 0.13f),
         )
-        drawOval(
+        drawArc(
             color = lighter,
+            startAngle = startAngle,
+            sweepAngle = sweepAngle,
+            useCenter = false,
             topLeft = topLeft,
             size = size,
             style = Stroke(width = guide.radius * 0.052f),
@@ -247,12 +262,17 @@ fun DrawingCanvas(
         if (guide != null && guide.isValid) {
             val centre = Offset(guide.centreX, guide.centreY)
 
-            // The paintable texture stays the same guide disc for every form.
+            if (planetStyle == PlanetStyle.RINGED) {
+                drawRingPreview(guide, ringColorArgb, front = false)
+            }
+
+            // The tablet texture has a white base. Drawing that opaque disc
+            // here hides the back half of a ring exactly where the planet is
+            // in front, then the child strokes are painted on top of it.
             drawCircle(
-                color = GUIDE_OUTLINE_COLOR,
+                color = Color.White,
                 radius = guide.radius,
                 center = centre,
-                style = Stroke(width = GUIDE_STROKE_WIDTH),
             )
 
             val clip =
@@ -294,10 +314,15 @@ fun DrawingCanvas(
                 }
             }
 
-            // Physical feature previews sit above the paint, matching how the
-            // projector renders them as separate geometry on the finished world.
+            drawCircle(
+                color = GUIDE_OUTLINE_COLOR,
+                radius = guide.radius,
+                center = centre,
+                style = Stroke(width = GUIDE_STROKE_WIDTH),
+            )
+
             when (planetStyle) {
-                PlanetStyle.RINGED -> drawRingPreview(guide, ringColorArgb)
+                PlanetStyle.RINGED -> drawRingPreview(guide, ringColorArgb, front = true)
                 PlanetStyle.CRATERED -> drawCraterPreview(guide, craterColorArgb)
                 PlanetStyle.SPIKY -> drawMountainPreview(guide, mountainColorArgb)
                 PlanetStyle.CLASSIC -> Unit
