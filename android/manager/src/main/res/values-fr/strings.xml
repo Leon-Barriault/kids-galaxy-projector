@@ -24,4 +24,18 @@
     <string name="shape_cratered">Avec cratères</string>
     <string name="shape_spiky">Pics montagneux</string>
     <string name="remove_named">Supprimer %1$s</string>
+
+    <string name="choose_managed_galaxy">Choisir la galaxie à gérer</string>
+    <string name="current_galaxy">Actuelle : %1$s</string>
+    <string name="searching_local_network">Recherche sur le réseau local…</string>
+    <string name="nearby_galaxies">Galaxies à proximité</string>
+    <string name="galaxy_checking">Vérification…</string>
+    <string name="galaxy_reachable">✓ Accessible</string>
+    <string name="galaxy_unreachable_retry">⚠ Inaccessible — touche pour réessayer</string>
+    <string name="or_enter_address">Ou entrer une adresse</string>
+    <string name="invalid_galaxy_address">Adresse de galaxie invalide</string>
+    <string name="galaxy_could_not_be_reached">Impossible de joindre la galaxie</string>
+    <string name="verifying">Vérification…</string>
+    <string name="manage_this_address">Gérer cette adresse</string>
+    <string name="manual_galaxy">Galaxie manuelle</string>
 </resources>
