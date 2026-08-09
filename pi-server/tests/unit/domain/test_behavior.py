@@ -6,6 +6,7 @@ from app.domain.behavior import (
     BehaviorMode,
     GalaxyBehaviorSettings,
     GalaxyTheme,
+    ProjectorLanguage,
     SeasonalThemeResolver,
 )
 
@@ -52,10 +53,11 @@ def test_manual_mode_overrides_the_calendar(resolver):
     assert behavior.ambient_effects is False
 
 
-def test_auto_mode_keeps_operator_motion_settings(resolver):
+def test_auto_mode_keeps_operator_motion_and_language_settings(resolver):
     settings = GalaxyBehaviorSettings(
         planet_speed=0.75,
         ambient_effects=False,
+        projector_language=ProjectorLanguage.FRENCH,
     )
 
     behavior = resolver.effective(settings, date(2026, 12, 25))
@@ -63,6 +65,7 @@ def test_auto_mode_keeps_operator_motion_settings(resolver):
     assert behavior.theme == GalaxyTheme.CHRISTMAS
     assert behavior.planet_speed == 0.75
     assert behavior.ambient_effects is False
+    assert behavior.projector_language == ProjectorLanguage.FRENCH
 
 
 @pytest.mark.parametrize("speed", [0.24, 2.01, -1.0, 5.0])
