@@ -204,7 +204,7 @@ def main() -> int:
         wait_for(
             page,
             f"(() => {{ const v = window.kidsGalaxy.kidPlanets.get('{first}'); "
-            "return v && v.accentMesh && v.accentMesh.material.alphaMap; }})()",
+            "return v && v.accentMesh && v.accentMesh.material.alphaMap; })()",
         )
         ids = planet_ids(page)
         check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
