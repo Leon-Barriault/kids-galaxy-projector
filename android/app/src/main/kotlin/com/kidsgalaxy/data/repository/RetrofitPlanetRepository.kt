@@ -46,8 +46,16 @@ class RetrofitPlanetRepository(
                         .sortedBy { it.ordinal }
                         .joinToString(",") { it.wireValue }
                         .toTextPart()
+                val ringColorPart = design.ringColorArgb.toRgbHex().toTextPart()
 
-                val response = api.uploadPlanet(filePart, namePart, stylePart, companionPart)
+                val response =
+                    api.uploadPlanet(
+                        filePart,
+                        namePart,
+                        stylePart,
+                        companionPart,
+                        ringColorPart,
+                    )
                 if (!response.isSuccessful) {
                     throw UploadRejectedException(response.code())
                 }
@@ -55,6 +63,8 @@ class RetrofitPlanetRepository(
         }
 
     private fun String.toTextPart() = toRequestBody(TEXT_MEDIA_TYPE.toMediaType())
+
+    private fun Int.toRgbHex(): String = "#%06x".format(this and 0x00FFFFFF)
 
     private companion object {
         const val TAG = "KidsGalaxyRepo"
