@@ -17,6 +17,8 @@ data class UploadResponse(
     @SerializedName("style") val style: String? = null,
     @SerializedName("companions") val companions: List<String> = emptyList(),
     @SerializedName("ring_color") val ringColor: String? = null,
+    @SerializedName("crater_color") val craterColor: String? = null,
+    @SerializedName("mountain_color") val mountainColor: String? = null,
 )
 
 interface PlanetApi {
@@ -28,5 +30,7 @@ interface PlanetApi {
         @Part("style") style: RequestBody,
         @Part("companions") companions: RequestBody,
         @Part("ring_color") ringColor: RequestBody,
+        @Part("crater_color") craterColor: RequestBody,
+        @Part("mountain_color") mountainColor: RequestBody,
     ): Response<UploadResponse>
 }
