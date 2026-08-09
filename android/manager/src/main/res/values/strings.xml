@@ -3,6 +3,14 @@
     <string name="app_name">Kids Galaxy Manager</string>
     <string name="manager_title">Kids Galaxy Manager</string>
     <string name="planets_stored_on">Planets stored on %1$s</string>
+    <string name="status_planets_stored">%1$d planet(s) stored</string>
+    <string name="status_removed_named">Removed “%1$s”</string>
+    <string name="status_planet_removed">Planet removed</string>
+    <string name="status_cleared">Cleared %1$d planet(s)</string>
+    <string name="error_load_failed">Could not load planets (%1$d)</string>
+    <string name="error_delete_failed">Delete failed (%1$d)</string>
+    <string name="error_clear_failed">Could not clear the gallery (%1$d)</string>
+    <string name="error_network">Network error</string>
     <string name="language_toggle_description">Switch between English and French</string>
     <string name="refresh">Refresh</string>
     <string name="clearing">Clearing…</string>
