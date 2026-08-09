@@ -123,14 +123,21 @@ export function createPolishedPlanetMaterial() {
 
 export function createPolishedFeatureMaterial(
   color,
-  { roughness = 0.38, clearcoat = 0.36, metalness = 0.01 } = {},
+  {
+    roughness = 0.38,
+    clearcoat = 0.36,
+    metalness = 0.01,
+    side = THREE.FrontSide,
+  } = {},
 ) {
+  const resolvedColor = color?.isColor ? color.clone() : new THREE.Color(color);
   return new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(color),
+    color: resolvedColor,
     roughness,
     metalness,
     clearcoat,
     clearcoatRoughness: Math.min(0.6, roughness + 0.04),
+    side,
   });
 }
 
