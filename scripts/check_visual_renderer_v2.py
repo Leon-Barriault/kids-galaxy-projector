@@ -3,7 +3,16 @@
 
 from __future__ import annotations
 
+import base64
+
 import check_visual_renderer as visual
+
+
+def save_data_url(data_url: str, filename: str) -> None:
+    if not data_url or "," not in data_url:
+        return
+    payload = data_url.split(",", 1)[1]
+    (visual.ARTIFACT_DIR / filename).write_bytes(base64.b64decode(payload))
 
 
 def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
@@ -28,7 +37,7 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
 
           // Soft studio-style lighting comparable to the supplied toy/clay
           // references. Keep enough contrast to see the raised sidewalls while
-          // avoiding the previous blown-out white highlights.
+          // avoiding blown-out white highlights.
           g.sunLight.visible = true;
           g.sunLight.position.set(3.5, 4.2, 5.8);
           g.sunLight.intensity = 2.2;
@@ -69,6 +78,44 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
         [planet_id, include_ring],
     )
     page.wait_for_timeout(650)
+
+    faithful = page.evaluate(
+        """
+        (id) => {
+          const p = window.kidsGalaxy.kidPlanets.get(id);
+          return Boolean(
+            p?.mesh?.material?.userData?.kidsGalaxyFaithfulKidDrawing &&
+            p?.accentMesh?.material?.userData?.kidsGalaxyFaithfulKidDrawing
+          );
+        }
+        """,
+        planet_id,
+    )
+    visual.check(faithful, "shape-preserving kid artwork material is active on the rendered mesh")
+
+    if not include_ring:
+        mask_data = page.evaluate(
+            """
+            (id) => {
+              const p = window.kidsGalaxy.kidPlanets.get(id);
+              const image = p?.accentMesh?.material?.alphaMap?.image;
+              return image?.toDataURL ? image.toDataURL('image/png') : null;
+            }
+            """,
+            planet_id,
+        )
+        top_data = page.evaluate(
+            """
+            (id) => {
+              const p = window.kidsGalaxy.kidPlanets.get(id);
+              const image = p?.accentMesh?.material?.map?.image;
+              return image?.toDataURL ? image.toDataURL('image/png') : null;
+            }
+            """,
+            planet_id,
+        )
+        save_data_url(mask_data, "active-accent-mask.png")
+        save_data_url(top_data, "active-accent-colour.png")
 
 
 visual.isolate_planet = isolate_planet
