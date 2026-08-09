@@ -1,4 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Kids Galaxy Manager</string>
+    <string name="manager_title">Kids Galaxy Manager</string>
+    <string name="planets_stored_on">Planets stored on %1$s</string>
+    <string name="language_toggle_description">Switch between English and French</string>
+    <string name="refresh">Refresh</string>
+    <string name="clearing">Clearing…</string>
+    <string name="clear_all_count">Clear all (%1$d)</string>
+    <string name="no_planets">No planets yet — kids can start drawing!</string>
+    <string name="remove_every_planet">Remove every planet?</string>
+    <string name="remove_every_planet_body">This deletes all %1$d planet(s) from %2$s and empties its projector. It cannot be undone.</string>
+    <string name="clear_all">Clear all</string>
+    <string name="keep_them">Keep them</string>
+    <string name="remove_planet">Remove planet?</string>
+    <string name="remove_planet_body">“%1$s” will leave %2$s and be deleted from the server. This cannot be undone.</string>
+    <string name="remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="something_went_wrong">Something went wrong</string>
+    <string name="planet_id">id %1$s</string>
+    <string name="planet_shape">Shape: %1$s</string>
+    <string name="shape_classic">Classic</string>
+    <string name="shape_ringed">Ringed</string>
+    <string name="shape_cratered">Cratered</string>
+    <string name="shape_spiky">Spiky mountains</string>
+    <string name="remove_named">Remove %1$s</string>
 </resources>
