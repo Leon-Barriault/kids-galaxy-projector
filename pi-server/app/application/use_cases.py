@@ -45,7 +45,7 @@ class SubmitPlanetUseCase:
     2. Domain image acceptance rules (content-type, emptiness, size, magic bytes).
     3. Style / companion / ring-color normalisation (domain validation).
     4. Image re-encoding + security sanitisation (ImageProcessor).
-    5. Cosmetic surface styling (SurfaceStyler) – only after security re-encode.
+    5. Cosmetic surface styling (SurfaceStyler) - only after security re-encode.
     6. Persist the planet (classic or designed path).
     7. Record the successful upload for the rate limiter.
     8. Prune old planets so disk usage stays bounded.
