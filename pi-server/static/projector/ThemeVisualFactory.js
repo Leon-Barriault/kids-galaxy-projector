@@ -1,5 +1,14 @@
 import * as THREE from 'three';
 
+const EASTER_EGG_PALETTE = [
+  0xf7a8cf,
+  0xb8a5ff,
+  0x8eddf5,
+  0xffd778,
+  0xa8e7a0,
+  0xf3b58a,
+];
+
 export function normalizeTheme(theme) {
   return ['halloween', 'christmas', 'easter'].includes(theme) ? theme : 'default';
 }
@@ -8,7 +17,12 @@ export function asteroidStyleForTheme(theme) {
   const normalized = normalizeTheme(theme);
   if (normalized === 'halloween') return 'pumpkin';
   if (normalized === 'christmas') return 'snowball';
+  if (normalized === 'easter') return 'easter-egg';
   return 'rock';
+}
+
+export function easterEggColorFor(index) {
+  return new THREE.Color(EASTER_EGG_PALETTE[Math.abs(index) % EASTER_EGG_PALETTE.length]);
 }
 
 function deformPumpkin(geometry) {
@@ -48,6 +62,42 @@ function deformSnowball(geometry) {
   return geometry;
 }
 
+function deformEasterEgg(geometry, radius) {
+  const position = geometry.getAttribute('position');
+  const vertex = new THREE.Vector3();
+  for (let index = 0; index < position.count; index += 1) {
+    vertex.fromBufferAttribute(position, index);
+    vertex.y *= 1.28;
+    const normalizedY = THREE.MathUtils.clamp(vertex.y / (radius * 1.28), -1, 1);
+    const taper = normalizedY > 0
+      ? 1 - normalizedY * 0.17
+      : 1 + Math.abs(normalizedY) * 0.035;
+    vertex.x *= taper;
+    vertex.z *= taper;
+    position.setXYZ(index, vertex.x, vertex.y, vertex.z);
+  }
+  position.needsUpdate = true;
+
+  const colors = new Float32Array(position.count * 3);
+  for (let index = 0; index < position.count; index += 1) {
+    const normalizedY = THREE.MathUtils.clamp(
+      (position.getY(index) / (radius * 1.28) + 1) / 2,
+      0,
+      1,
+    );
+    const stripe = 0.82 + (0.5 + 0.5 * Math.sin(normalizedY * Math.PI * 9)) * 0.18;
+    const dotRipple = 0.96 + Math.sin(normalizedY * Math.PI * 23) * 0.025;
+    const tone = THREE.MathUtils.clamp(stripe * dotRipple, 0.78, 1);
+    colors[index * 3] = tone;
+    colors[index * 3 + 1] = tone;
+    colors[index * 3 + 2] = tone;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  geometry.userData.kidsGalaxyEasterEggPattern = true;
+  return geometry;
+}
+
 export function createAsteroidGeometry(theme, radius = 0.16) {
   const style = asteroidStyleForTheme(theme);
   let geometry;
@@ -57,6 +107,9 @@ export function createAsteroidGeometry(theme, radius = 0.16) {
   } else if (style === 'snowball') {
     geometry = deformSnowball(new THREE.IcosahedronGeometry(radius, 3));
     geometry.userData.kidsGalaxySnowball = true;
+  } else if (style === 'easter-egg') {
+    geometry = deformEasterEgg(new THREE.SphereGeometry(radius, 34, 26), radius);
+    geometry.userData.kidsGalaxyEasterEgg = true;
   } else {
     geometry = new THREE.IcosahedronGeometry(radius, 1);
     geometry.userData.kidsGalaxyAsteroidRock = true;
@@ -83,6 +136,16 @@ export function createAsteroidMaterial(theme) {
       metalness: 0,
       clearcoat: 0.025,
       clearcoatRoughness: 0.9,
+    });
+  }
+  if (style === 'easter-egg') {
+    return new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      roughness: 0.43,
+      metalness: 0.002,
+      clearcoat: 0.14,
+      clearcoatRoughness: 0.5,
     });
   }
   return new THREE.MeshStandardMaterial({
@@ -151,6 +214,90 @@ export function createWitchOnBroom() {
   hand.position.set(0.09, 0.01, 0.02);
 
   group.add(dress, head, brim, crown, handle, bristles, hand);
+  group.scale.setScalar(1.05);
+  group.traverse((object) => {
+    if (!object.isMesh) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
+  return group;
+}
+
+export function createWhiteBunny() {
+  const group = new THREE.Group();
+  group.userData.kidsGalaxyWhiteBunny = true;
+
+  const fur = physicalMaterial(0xf8f7f3, 0.58, 0.08);
+  const pink = physicalMaterial(0xf5a9bd, 0.54, 0.08);
+  const eye = physicalMaterial(0x22242a, 0.38, 0.11);
+  const eggMaterial = physicalMaterial(0xb99cf3, 0.42, 0.13);
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.105, 28, 22), fur);
+  body.scale.set(1, 1.22, 0.92);
+  body.position.y = -0.015;
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 28, 22), fur.clone());
+  head.position.y = 0.145;
+
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.04, 18, 14), fur.clone());
+  tail.position.set(-0.085, -0.015, -0.075);
+
+  const earGeometry = new THREE.SphereGeometry(0.052, 22, 16);
+  const leftEar = new THREE.Mesh(earGeometry, fur.clone());
+  leftEar.scale.set(0.56, 1.65, 0.48);
+  leftEar.position.set(-0.043, 0.285, 0);
+  leftEar.rotation.z = 0.12;
+  const rightEar = new THREE.Mesh(earGeometry.clone(), fur.clone());
+  rightEar.scale.set(0.56, 1.65, 0.48);
+  rightEar.position.set(0.043, 0.285, 0);
+  rightEar.rotation.z = -0.12;
+
+  const innerEarGeometry = new THREE.SphereGeometry(0.034, 18, 14);
+  const leftInner = new THREE.Mesh(innerEarGeometry, pink);
+  leftInner.scale.set(0.42, 1.6, 0.28);
+  leftInner.position.set(-0.043, 0.292, 0.041);
+  leftInner.rotation.z = 0.12;
+  const rightInner = new THREE.Mesh(innerEarGeometry.clone(), pink.clone());
+  rightInner.scale.set(0.42, 1.6, 0.28);
+  rightInner.position.set(0.043, 0.292, 0.041);
+  rightInner.rotation.z = -0.12;
+
+  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 14, 10), eye);
+  leftEye.position.set(-0.03, 0.16, 0.075);
+  const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 14, 10), eye.clone());
+  rightEye.position.set(0.03, 0.16, 0.075);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.011, 14, 10), pink.clone());
+  nose.scale.set(1.1, 0.8, 0.8);
+  nose.position.set(0, 0.13, 0.084);
+
+  const egg = new THREE.Mesh(
+    deformEasterEgg(new THREE.SphereGeometry(0.047, 22, 16), 0.047),
+    eggMaterial,
+  );
+  egg.position.set(0, 0.015, 0.095);
+  egg.rotation.z = 0.16;
+
+  const pawGeometry = new THREE.SphereGeometry(0.027, 16, 12);
+  const leftPaw = new THREE.Mesh(pawGeometry, fur.clone());
+  leftPaw.position.set(-0.055, 0.018, 0.09);
+  const rightPaw = new THREE.Mesh(pawGeometry.clone(), fur.clone());
+  rightPaw.position.set(0.055, 0.018, 0.09);
+
+  group.add(
+    body,
+    head,
+    tail,
+    leftEar,
+    rightEar,
+    leftInner,
+    rightInner,
+    leftEye,
+    rightEye,
+    nose,
+    egg,
+    leftPaw,
+    rightPaw,
+  );
   group.scale.setScalar(1.05);
   group.traverse((object) => {
     if (!object.isMesh) return;
