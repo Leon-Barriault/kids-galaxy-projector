@@ -68,7 +68,7 @@ fun DrawingControls(
     onClear: () -> Unit,
     onLaunch: () -> Unit,
     modifier: Modifier = Modifier,
-    showLaunchAction: Boolean = true,
+    showLaunchAction: Boolean = false,
 ) {
     Column(
         modifier =
@@ -94,7 +94,11 @@ fun DrawingControls(
                             .clip(CircleShape)
                             .background(Color(colorArgb))
                             .then(
-                                if (selected) Modifier.border(4.dp, Color.White, CircleShape) else Modifier,
+                                if (selected) {
+                                    Modifier.border(4.dp, Color.White, CircleShape)
+                                } else {
+                                    Modifier
+                                },
                             ).selectable(
                                 selected = selected,
                                 role = Role.RadioButton,
@@ -116,10 +120,17 @@ fun DrawingControls(
                     colors =
                         ButtonDefaults.buttonColors(
                             containerColor =
-                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
                         ),
                     contentPadding = ButtonDefaults.TextButtonContentPadding,
-                    modifier = Modifier.weight(1f).heightIn(min = TOUCH_TARGET),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = TOUCH_TARGET),
                 ) {
                     Text(stringResource(labelFor(width)), fontSize = 16.sp)
                 }
@@ -134,7 +145,10 @@ fun DrawingControls(
                 onClick = onUndo,
                 enabled = canUndo,
                 contentPadding = ButtonDefaults.TextButtonContentPadding,
-                modifier = Modifier.weight(1f).heightIn(min = TOUCH_TARGET),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = TOUCH_TARGET),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
@@ -145,8 +159,14 @@ fun DrawingControls(
                 onClick = onClear,
                 enabled = canUndo,
                 contentPadding = ButtonDefaults.TextButtonContentPadding,
-                modifier = Modifier.weight(1f).heightIn(min = TOUCH_TARGET),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = TOUCH_TARGET),
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
             ) {
                 Icon(Icons.Default.Clear, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
@@ -158,9 +178,15 @@ fun DrawingControls(
             Button(
                 onClick = onLaunch,
                 enabled = canLaunch,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                    ),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(
@@ -171,7 +197,11 @@ fun DrawingControls(
                     Spacer(Modifier.width(12.dp))
                     Text(stringResource(R.string.sending_to_galaxy), fontSize = 18.sp)
                 } else {
-                    Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(28.dp))
+                    Icon(
+                        Icons.Default.RocketLaunch,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                    )
                     Spacer(Modifier.width(12.dp))
                     Text(stringResource(R.string.launch_into_galaxy), fontSize = 18.sp)
                 }
