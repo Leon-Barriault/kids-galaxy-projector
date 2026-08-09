@@ -15,6 +15,30 @@ function alignMaterialTextures(material) {
   });
 }
 
+function restoreKidSrgbBody(material) {
+  if (!material?.color?.convertSRGBToLinear) return;
+  // KidArtworkUpgrade receives ordinary 8-bit tablet RGB. Those values were
+  // previously assigned as if already linear, which made saturated tablet
+  // blue/green render much paler after output colour conversion. Interpret the
+  // stored channels as sRGB exactly once so projected colours match the tablet.
+  material.color.convertSRGBToLinear();
+  material.userData.kidsGalaxyKidSrgbCorrected = true;
+}
+
+function removePaleShoulderHalo(edgeMaterial, topMaterial) {
+  if (!edgeMaterial || !topMaterial?.alphaMap) return;
+  // The original edge mask was deliberately dilated beyond the coloured
+  // feature texture. At that shoulder perimeter the colour map was white,
+  // producing a visible white outline. The shell radius already supplies real
+  // sidewall depth, so use the same anti-aliased silhouette as the raised top
+  // with a slightly lower threshold for a restrained same-hue shoulder.
+  edgeMaterial.alphaMap = topMaterial.alphaMap;
+  edgeMaterial.bumpMap = topMaterial.bumpMap;
+  edgeMaterial.alphaTest = 0.18;
+  edgeMaterial.needsUpdate = true;
+  edgeMaterial.userData.kidsGalaxyNoPaleAccentHalo = true;
+}
+
 /** Keep the child's recognizable drawing on the visible/front hemisphere. */
 export function installKidArtworkPresentationFix() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyKidArtworkPresentationFix) return;
@@ -26,6 +50,8 @@ export function installKidArtworkPresentationFix() {
 
     alignMaterialTextures(this.accentEdgeMesh.material);
     alignMaterialTextures(this.accentMesh.material);
+    restoreKidSrgbBody(this.mesh.material);
+    removePaleShoulderHalo(this.accentEdgeMesh.material, this.accentMesh.material);
     this.mesh.material.userData.kidsGalaxyKidDesignFrontAligned = true;
     this.mesh.material.userData.kidsGalaxyKidDesignFrontU = 0.25;
   }
