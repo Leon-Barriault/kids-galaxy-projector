@@ -15,6 +15,7 @@ import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
 import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMask.js';
+import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
 import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
@@ -27,9 +28,12 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 const GALLERY_SIZE = 12;
 
 // Install artwork/ring implementations first so later high-fidelity/theme
-// wrappers retain them when adding shadows and seasonal behavior.
+// wrappers retain them when adding shadows and seasonal behavior. The faithful
+// mask remains a fallback; the motif projection is the active interpretation
+// that keeps the child's visible composition recognizable on the planet front.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
+installKidArtworkMotifProjection();
 installKidArtworkPresentationFix();
 installSaturnPlanetRings();
 installHighFidelityPlanetFeatures();
@@ -77,8 +81,8 @@ function animate() {
 }
 
 /**
- * Stable diagnostics contract used by scripts/check_projector.py and by kiosk
- * operators inspecting a live projector from the browser console.
+ * Stable diagnostics contract used by projector QA and by kiosk operators
+ * inspecting a live projector from the browser console.
  */
 window.kidsGalaxy = {
   scene: galaxyScene.scene,
