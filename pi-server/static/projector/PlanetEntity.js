@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 
+import {
+  applyPolishedTexture,
+  createPolishedFeatureMaterial,
+  createPolishedPlanetMaterial,
+} from './PlanetSurface.js';
+
 const VALID_STYLES = new Set(['classic', 'ringed', 'cratered', 'spiky']);
 const VALID_COMPANIONS = new Set(['moon', 'stars', 'satellite', 'astronaut']);
 const DEFAULT_RING_COLOR = '#d8a6ff';
@@ -34,6 +40,7 @@ export class PlanetEntity {
     this.scene = scene;
     this.animator = animator;
     this.disposed = false;
+    this.reliefMap = null;
     this.style = VALID_STYLES.has(payload.style) ? payload.style : 'classic';
     this.ringColor = this.normalizeFeatureColor(payload.ring_color, DEFAULT_RING_COLOR);
     this.craterColor = this.normalizeFeatureColor(payload.crater_color, DEFAULT_CRATER_COLOR);
@@ -49,21 +56,12 @@ export class PlanetEntity {
 
     Object.assign(this, animator.orbitParamsFor(payload.id, gallerySize));
 
-    this.mesh = new THREE.Mesh(
-      this.createPlanetGeometry(),
-      new THREE.MeshStandardMaterial({
-        color: 0x9fb4d8,
-        roughness: 0.45,
-        metalness: 0.08,
-        emissive: 0x223355,
-        emissiveIntensity: 0.35,
-      }),
-    );
+    this.mesh = new THREE.Mesh(this.createPlanetGeometry(), createPolishedPlanetMaterial());
     this.mesh.scale.setScalar(celebrate ? 0.01 : 1);
     scene.add(this.mesh);
 
     if (this.style === 'ringed') this.addPlanetRing();
-    if (this.style === 'cratered') this.addCraterInteriors();
+    if (this.style === 'cratered') this.addCraterDetails();
     if (this.style === 'spiky') this.addMountainPeaks();
     this.addSelectedCompanions();
 
@@ -114,48 +112,122 @@ export class PlanetEntity {
     geometry.computeVertexNormals();
   }
 
-  addCraterInteriors() {
+  createCraterBowlGeometry(radius, depth) {
+    const radialSegments = 5;
+    const angularSegments = 28;
+    const positions = [0, 0, -depth];
+    const indices = [];
+
+    for (let ring = 1; ring <= radialSegments; ring += 1) {
+      const t = ring / radialSegments;
+      const ringRadius = radius * t;
+      const z = -depth * (1 - t * t);
+      for (let segment = 0; segment < angularSegments; segment += 1) {
+        const angle = (segment / angularSegments) * Math.PI * 2;
+        positions.push(Math.cos(angle) * ringRadius, Math.sin(angle) * ringRadius, z);
+      }
+    }
+
+    for (let segment = 0; segment < angularSegments; segment += 1) {
+      const next = (segment + 1) % angularSegments;
+      indices.push(0, 1 + next, 1 + segment);
+    }
+    for (let ring = 1; ring < radialSegments; ring += 1) {
+      const innerStart = 1 + (ring - 1) * angularSegments;
+      const outerStart = 1 + ring * angularSegments;
+      for (let segment = 0; segment < angularSegments; segment += 1) {
+        const next = (segment + 1) % angularSegments;
+        const inner = innerStart + segment;
+        const innerNext = innerStart + next;
+        const outer = outerStart + segment;
+        const outerNext = outerStart + next;
+        indices.push(inner, outerNext, outer, inner, innerNext, outerNext);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  addCraterDetails() {
     const outward = new THREE.Vector3(0, 0, 1);
-    this.craterDefinitions().forEach(({ direction, depth, radius }) => {
-      const interior = new THREE.Mesh(
-        new THREE.CircleGeometry(radius, 32),
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(this.craterColor),
-          roughness: 0.9,
-          metalness: 0,
-          side: THREE.DoubleSide,
-        }),
-      );
-      interior.position.copy(direction).multiplyScalar(1.05 * (1 - depth) + 0.008);
-      interior.quaternion.setFromUnitVectors(outward, direction);
-      this.mesh.add(interior);
+    const bowlMaterial = createPolishedFeatureMaterial(this.craterColor, {
+      roughness: 0.62,
+      clearcoat: 0.2,
     });
+    const rimColor = new THREE.Color(this.craterColor).offsetHSL(0, -0.05, 0.08);
+    const rimMaterial = createPolishedFeatureMaterial(rimColor, {
+      roughness: 0.5,
+      clearcoat: 0.24,
+    });
+
+    this.craterDefinitions().forEach(({ direction, depth, radius }) => {
+      const crater = new THREE.Group();
+      crater.position.copy(direction).multiplyScalar(1.046);
+      crater.quaternion.setFromUnitVectors(outward, direction);
+
+      const bowl = new THREE.Mesh(
+        this.createCraterBowlGeometry(radius * 0.9, depth * 0.72),
+        bowlMaterial.clone(),
+      );
+      const rim = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.91, radius * 0.075, 8, 28),
+        rimMaterial.clone(),
+      );
+      rim.position.z = 0.006;
+      crater.add(bowl, rim);
+      this.mesh.add(crater);
+    });
+
+    bowlMaterial.dispose();
+    rimMaterial.dispose();
   }
 
   mountainDefinitions() {
     const phase = (this.animator.hashId(this.id) % 628) / 100;
     const rotation = new THREE.Matrix4().makeRotationY(phase);
-    return MOUNTAIN_SPECS.map(([x, y, z, height]) => ({
+    return MOUNTAIN_SPECS.map(([x, y, z, height], index) => ({
       direction: new THREE.Vector3(x, y, z).normalize().applyMatrix4(rotation).normalize(),
       height,
+      seed: this.animator.hashId(`${this.id}-mountain-${index}`),
     }));
+  }
+
+  createRoundedPeakGeometry(baseRadius, height) {
+    const profile = [
+      new THREE.Vector2(baseRadius * 0.9, -height * 0.5),
+      new THREE.Vector2(baseRadius, -height * 0.32),
+      new THREE.Vector2(baseRadius * 0.82, -height * 0.05),
+      new THREE.Vector2(baseRadius * 0.58, height * 0.22),
+      new THREE.Vector2(baseRadius * 0.3, height * 0.4),
+      new THREE.Vector2(baseRadius * 0.08, height * 0.5),
+    ];
+    const geometry = new THREE.LatheGeometry(profile, 18);
+    geometry.computeVertexNormals();
+    return geometry;
   }
 
   addMountainPeaks() {
     const up = new THREE.Vector3(0, 1, 0);
-    this.mountainDefinitions().forEach(({ direction, height }, index) => {
-      const coneHeight = 0.18 + height * 0.72;
-      const baseRadius = 0.13 + (index % 3) * 0.025;
+    this.mountainDefinitions().forEach(({ direction, height, seed }, index) => {
+      const peakHeight = 0.2 + height * 0.72;
+      const baseRadius = 0.14 + (index % 3) * 0.024;
       const peak = new THREE.Mesh(
-        new THREE.ConeGeometry(baseRadius, coneHeight, 20, 2),
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(this.mountainColor),
-          roughness: 0.72,
-          metalness: 0.04,
+        this.createRoundedPeakGeometry(baseRadius, peakHeight),
+        createPolishedFeatureMaterial(this.mountainColor, {
+          roughness: 0.48,
+          clearcoat: 0.25,
         }),
       );
-      peak.position.copy(direction).multiplyScalar(1.02 + coneHeight / 2);
+      peak.position.copy(direction).multiplyScalar(1.01 + peakHeight * 0.38);
       peak.quaternion.setFromUnitVectors(up, direction);
+      peak.rotateX((((seed >> 2) % 11) - 5) * 0.018);
+      peak.rotateZ((((seed >> 5) % 13) - 6) * 0.017);
+      peak.scale.x = 0.82 + (seed % 19) / 100;
+      peak.scale.z = 0.86 + ((seed >> 4) % 17) / 100;
       this.mesh.add(peak);
     });
   }
@@ -163,12 +235,9 @@ export class PlanetEntity {
   addPlanetRing() {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.3, 1.7, 80),
-      new THREE.MeshBasicMaterial({
-        color: new THREE.Color(this.ringColor),
-        transparent: true,
-        opacity: 0.82,
-        side: THREE.DoubleSide,
-        depthWrite: false,
+      createPolishedFeatureMaterial(this.ringColor, {
+        roughness: 0.32,
+        clearcoat: 0.5,
       }),
     );
     ring.rotation.x = Math.PI / 2.4;
@@ -200,7 +269,7 @@ export class PlanetEntity {
       case 'moon':
         return new THREE.Mesh(
           new THREE.SphereGeometry(0.24, 24, 20),
-          new THREE.MeshStandardMaterial({ color: 0xbfc5d1, roughness: 0.92, metalness: 0 }),
+          createPolishedFeatureMaterial(0xbfc5d1, { roughness: 0.72, clearcoat: 0.12 }),
         );
       case 'stars':
         return this.createStars();
@@ -355,15 +424,7 @@ export class PlanetEntity {
       return;
     }
 
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = this.scene.renderer.capabilities.getMaxAnisotropy();
-    const material = this.mesh.material;
-    material.map = texture;
-    material.emissive = new THREE.Color(0xffffff);
-    material.emissiveMap = texture;
-    material.emissiveIntensity = 0.55;
-    material.color = new THREE.Color(0xffffff);
-    material.needsUpdate = true;
+    this.reliefMap = applyPolishedTexture(this.mesh.material, texture, this.scene.renderer);
   }
 
   disposeObject(object) {
@@ -373,7 +434,13 @@ export class PlanetEntity {
       if (!child.material) return;
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       materials.forEach((material) => {
-        if (material.map) material.map.dispose();
+        const textures = new Set([
+          material.map,
+          material.bumpMap,
+          material.normalMap,
+          material.emissiveMap,
+        ]);
+        textures.forEach((texture) => texture?.dispose());
         material.dispose();
       });
     });
@@ -383,6 +450,7 @@ export class PlanetEntity {
     if (this.disposed) return;
     this.disposed = true;
     this.disposeObject(this.mesh);
+    this.reliefMap = null;
     this.decorations.forEach((object) => this.disposeObject(object));
     this.companions.forEach(({ object }) => this.disposeObject(object));
     this.scene.remove(this.ring);
