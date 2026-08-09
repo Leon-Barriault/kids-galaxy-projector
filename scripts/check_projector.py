@@ -2,14 +2,19 @@
 """
 Smoke test for the projector page.
 
-`static/galaxy.js` is the one part of this project with no unit tests: it needs
-a WebGL context, a live server and a real EventSource, so there is nothing to
-fake it with. This drives the real page in headless Chromium against a real
-server instead, and asserts the behaviours that have actually broken before:
+`static/galaxy.js` needs a WebGL context, a live server and a real EventSource,
+so this drives the real page in headless Chromium against a real server. It
+asserts the behaviours that have actually broken before, plus the Pi-friendly
+polished renderer contract:
 
   * a page load produces exactly one planet per stored drawing - the SSE stream
     primes every new subscriber with the current planet, so the newest one
     arrives twice and must be deduplicated
+  * kid planets use the polished physical material and a derived relief map
+  * the actual galaxy sun is the dominant directional lighting reference
+  * cratered planets own recessed bowl/rim geometry
+  * mountain planets own rounded lathed peak geometry
+  * the polished path does not enable expensive real-time shadow maps
   * a live upload appears without a reload
   * a delete removes the planet from the sky
   * the gallery is capped, and the planet dropped is the oldest
@@ -92,11 +97,17 @@ class Server:
             self._process.wait(timeout=10)
         shutil.rmtree(self.uploads, ignore_errors=True)
 
-    def upload(self, name: str, colour: tuple[int, int, int] = (200, 30, 30)) -> str:
+    def upload(
+        self,
+        name: str,
+        colour: tuple[int, int, int] = (200, 30, 30),
+        **design: str,
+    ) -> str:
+        data = {"name": name, **design}
         response = httpx.post(
             f"{self.base}/api/upload",
             files={"file": ("planet.png", png_bytes(colour), "image/png")},
-            data={"name": name},
+            data=data,
             timeout=10,
         )
         response.raise_for_status()
@@ -132,8 +143,18 @@ def planet_ids(page) -> list[str]:
 def main() -> int:
     with Server() as server, sync_playwright() as pw:
         first = server.upload("Alpha", (220, 40, 40))
-        second = server.upload("Beta", (40, 220, 40))
-        third = server.upload("Gamma", (40, 40, 220))
+        second = server.upload(
+            "Beta",
+            (40, 220, 40),
+            style="cratered",
+            crater_color="#73808f",
+        )
+        third = server.upload(
+            "Gamma",
+            (40, 40, 220),
+            style="spiky",
+            mountain_color="#d98242",
+        )
 
         browser = pw.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
         page = browser.new_page()
@@ -144,10 +165,68 @@ def main() -> int:
         print("\nload")
         page.goto(f"{server.base}/", wait_until="load")
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3")
+        wait_for(
+            page,
+            "Array.from(window.kidsGalaxy.kidPlanets.values())"
+            ".every((v) => v.mesh.material.map && v.mesh.material.bumpMap)",
+        )
         ids = planet_ids(page)
         check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
         check(len(set(ids)) == len(ids), "no duplicate planet is created by the SSE priming frame")
         check(set(ids) == {first, second, third}, "the three planets are the three that were stored")
+
+        print("\npolished Pi renderer")
+        polished = page.evaluate(
+            "(() => {"
+            "const p = window.kidsGalaxy.kidPlanets.values().next().value;"
+            "const g = window.kidsGalaxy.engine.galaxyScene;"
+            "return {"
+            "material: p.mesh.material.type,"
+            "hasRelief: Boolean(p.mesh.material.bumpMap),"
+            "bumpScale: p.mesh.material.bumpScale,"
+            "emissive: p.mesh.material.emissiveIntensity,"
+            "sunType: g.sunLight.type,"
+            "sunIntensity: g.sunLight.intensity,"
+            "ambientIntensity: g.ambientLight.intensity,"
+            "fillIntensity: g.fillLight.intensity,"
+            "shadows: g.renderer.shadowMap.enabled"
+            "};"
+            "})()"
+        )
+        check(polished["material"] == "MeshPhysicalMaterial", "kid planet uses physical material")
+        check(polished["hasRelief"], "child colours produce a molded relief map")
+        check(polished["bumpScale"] > 0, "relief changes surface normals")
+        check(polished["emissive"] == 0, "texture is no longer flattened by self-emission")
+        check(polished["sunType"] == "PointLight", "galaxy sun owns the physical key light")
+        check(
+            polished["sunIntensity"] > polished["ambientIntensity"] + polished["fillIntensity"],
+            "sun is stronger than the non-directional readability fill",
+        )
+        check(not polished["shadows"], "renderer avoids expensive real-time shadow maps")
+
+        crater_geometry = page.evaluate(
+            f"(() => {{"
+            f"const e = window.kidsGalaxy.kidPlanets.get('{second}');"
+            "const types = [];"
+            "e.mesh.traverse((o) => { if (o.geometry) types.push(o.geometry.type); });"
+            "return types;"
+            "})()"
+        )
+        check("TorusGeometry" in crater_geometry, "craters have raised rounded rims")
+        check(
+            crater_geometry.count("BufferGeometry") >= 5,
+            "craters have independent recessed bowl surfaces",
+        )
+
+        mountain_geometry = page.evaluate(
+            f"(() => {{"
+            f"const e = window.kidsGalaxy.kidPlanets.get('{third}');"
+            "const types = [];"
+            "e.mesh.traverse((o) => { if (o.geometry) types.push(o.geometry.type); });"
+            "return types;"
+            "})()"
+        )
+        check("LatheGeometry" in mountain_geometry, "mountains use rounded tapered peak geometry")
 
         print("\nlive arrival over SSE")
         fourth = server.upload("Delta", (220, 220, 40))
