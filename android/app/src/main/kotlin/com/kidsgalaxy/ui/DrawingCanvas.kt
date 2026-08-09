@@ -13,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -55,65 +54,93 @@ private val FEATURE_OUTLINE_COLOR = Color(0xFF455A64)
 private val CRATER_GUIDE_COLOR = Color(0xFF4B4F58)
 private const val GUIDE_STROKE_WIDTH = 5f
 
+private fun ringArcPath(
+    guide: PlanetGuide,
+    startAngleDegrees: Float,
+    sweepAngleDegrees: Float,
+): Path {
+    val segmentCount = 72
+    val radiusX = guide.radius * 1.525f
+    val radiusY = guide.radius * 0.43f
+    return Path().apply {
+        for (segment in 0..segmentCount) {
+            val progress = segment.toFloat() / segmentCount
+            val angleDegrees = startAngleDegrees + sweepAngleDegrees * progress
+            val angle = Math.toRadians(angleDegrees.toDouble())
+            val wobble =
+                1f +
+                    sin(angle * 3.0).toFloat() * 0.012f +
+                    sin(angle * 7.0 + 0.9).toFloat() * 0.006f
+            val point =
+                Offset(
+                    guide.centreX + cos(angle).toFloat() * radiusX * wobble,
+                    guide.centreY + sin(angle).toFloat() * radiusY * wobble,
+                )
+            if (segment == 0) {
+                moveTo(point.x, point.y)
+            } else {
+                lineTo(point.x, point.y)
+            }
+        }
+    }
+}
+
 private fun DrawScope.drawRingPreview(
     guide: PlanetGuide,
     ringColorArgb: Int,
     front: Boolean,
 ) {
     val centre = Offset(guide.centreX, guide.centreY)
-    val ringWidth = guide.radius * 3.05f
-    val ringHeight = guide.radius * 0.86f
-    val topLeft =
-        Offset(
-            guide.centreX - ringWidth / 2f,
-            guide.centreY - ringHeight / 2f,
-        )
-    val size = Size(ringWidth, ringHeight)
     val base = Color(ringColorArgb)
     val darker = lerp(base, Color.Black, 0.24f)
     val lighter = lerp(base, Color.White, 0.28f)
     val startAngle = if (front) -1f else 179f
-    val sweepAngle = 182f
+    val path = ringArcPath(guide, startAngle, 182f)
 
     // The upper half is drawn before the opaque planet and therefore appears
     // behind it. The lower half is drawn after the child's painting and sits
-    // in front. A small arc overlap avoids seams at the left/right edges.
+    // in front. The same subtle multi-harmonic wobble used by the projector
+    // keeps this preview organic without making the ring look distorted.
     rotate(degrees = -14f, pivot = centre) {
-        drawArc(
+        drawPath(
+            path = path,
             color = FEATURE_OUTLINE_COLOR,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = false,
-            topLeft = topLeft,
-            size = size,
-            style = Stroke(width = guide.radius * 0.205f),
+            style =
+                Stroke(
+                    width = guide.radius * 0.205f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
         )
-        drawArc(
+        drawPath(
+            path = path,
             color = darker,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = false,
-            topLeft = topLeft,
-            size = size,
-            style = Stroke(width = guide.radius * 0.176f),
+            style =
+                Stroke(
+                    width = guide.radius * 0.176f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
         )
-        drawArc(
+        drawPath(
+            path = path,
             color = base,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = false,
-            topLeft = topLeft,
-            size = size,
-            style = Stroke(width = guide.radius * 0.13f),
+            style =
+                Stroke(
+                    width = guide.radius * 0.13f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
         )
-        drawArc(
+        drawPath(
+            path = path,
             color = lighter,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = false,
-            topLeft = topLeft,
-            size = size,
-            style = Stroke(width = guide.radius * 0.052f),
+            style =
+                Stroke(
+                    width = guide.radius * 0.052f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
         )
     }
 }
