@@ -48,10 +48,14 @@
     <string name="space_activity_hint">Control the persistent and intermittent objects flying through the projected galaxy.</string>
     <string name="asteroid_belt">Asteroid belt</string>
     <string name="asteroid_belt_hint">A broad rocky belt circles outside the kid planets.</string>
+    <string name="easter_egg_belt">Easter egg belt</string>
+    <string name="easter_egg_belt_hint">Pastel decorated Easter eggs circle outside the kid planets instead of rocks.</string>
     <string name="comets">Comets</string>
     <string name="comets_hint">Comets periodically cross the galaxy. Their bright head stays sunward and their tail points away from the sun.</string>
     <string name="flyby_asteroids">Asteroid fly-bys</string>
     <string name="flyby_asteroids_hint">Small groups of asteroids occasionally fly in and back out of the scene.</string>
+    <string name="easter_egg_flybys">Easter egg fly-bys</string>
+    <string name="easter_egg_flybys_hint">Small groups of colorful Easter eggs occasionally fly through the scene.</string>
     <string name="frequency_rare">Rare</string>
     <string name="frequency_normal">Normal</string>
     <string name="frequency_frequent">Frequent</string>
@@ -64,6 +68,7 @@
     <string name="theme_halloween">Halloween</string>
     <string name="theme_easter">Easter</string>
     <string name="theme_christmas">Christmas</string>
+    <string name="theme_easter_effects">Easter look: asteroid activity becomes pastel Easter eggs and astronaut companions become white bunnies.</string>
     <string name="enabled_seasonal_themes">Enabled seasonal themes</string>
     <string name="ambient_theme_effects">Ambient theme effects</string>
     <string name="ambient_theme_effects_hint">Enable the subtle particles and extra motion that belong to the active theme.</string>
