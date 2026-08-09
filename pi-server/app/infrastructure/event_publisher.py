@@ -28,7 +28,7 @@ class InMemoryEventPublisher(EventPublisher):
         """
         Args:
             queue_size: Maximum number of pending events per subscriber.
-                Small on purpose – a projector that falls behind should not
+                Small on purpose - a projector that falls behind should not
                 accumulate an unbounded backlog.
         """
         self._queue_size = queue_size
