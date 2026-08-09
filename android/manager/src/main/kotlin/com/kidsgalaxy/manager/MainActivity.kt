@@ -85,8 +85,12 @@ class MainActivity : ComponentActivity() {
                             languageStore.save(language.toggled())
                             recreate()
                         },
+                        onProjectorLanguageChange = managerViewModel::setProjectorLanguage,
                         onConfigureGalaxy = { showGalaxyPicker = true },
-                        onRefresh = managerViewModel::refresh,
+                        onRefresh = {
+                            managerViewModel.refresh()
+                            managerViewModel.refreshBehavior()
+                        },
                         onDelete = managerViewModel::deletePlanet,
                         onClearAll = managerViewModel::clearAll,
                         onClearError = managerViewModel::clearError,
