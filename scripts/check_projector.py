@@ -9,10 +9,11 @@ sculpted renderer contract:
 
   * a page load produces exactly one planet per stored drawing
   * kid drawings become a coherent body plus limited raised accent shapes
+  * raised accents have a wider molded shoulder below their coloured top
   * the child's full PNG is never wrapped flat over the whole globe
-  * sun orbit guides stay smooth while only a ringed planet owns ring wobble
+  * sun orbit guides are circular while only a ringed planet owns ring wobble
   * the actual galaxy sun is the dominant directional lighting reference
-  * ringed planets own a wide flat, graded, gently wobbled ring
+  * ringed planets own a wide flat, graded, visibly handmade ring
   * cratered planets own recessed bowl/rim geometry
   * mountain planets own varied terrain-range geometry, not identical spikes
   * the polished path does not enable expensive real-time shadow maps
@@ -204,7 +205,8 @@ def main() -> int:
         wait_for(
             page,
             f"(() => {{ const v = window.kidsGalaxy.kidPlanets.get('{first}'); "
-            "return v && v.accentMesh && v.accentMesh.material.alphaMap; })()",
+            "return v && v.accentEdgeMesh?.material.alphaMap && "
+            "v.accentMesh?.material.alphaMap; })()",
         )
         ids = planet_ids(page)
         check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
@@ -216,6 +218,7 @@ def main() -> int:
             f"(() => {{"
             f"const p = window.kidsGalaxy.kidPlanets.get('{first}');"
             "const g = window.kidsGalaxy.engine.galaxyScene;"
+            "const edge = p.accentEdgeMesh;"
             "const a = p.accentMesh;"
             "const alphaCanvas = a.material.alphaMap?.image;"
             "let coverage = 0;"
@@ -228,8 +231,15 @@ def main() -> int:
             "}"
             "return {"
             "material: p.mesh.material.type,"
+            "baseRadius: p.mesh.geometry.parameters.radius,"
             "baseHasFlatTexture: Boolean(p.mesh.material.map),"
             "baseHasDisplacement: Boolean(p.mesh.material.displacementMap),"
+            "edgeVisible: edge.visible,"
+            "edgeMaterial: edge.material.type,"
+            "edgeHasColour: Boolean(edge.material.map),"
+            "edgeHasMask: Boolean(edge.material.alphaMap),"
+            "edgeRadius: edge.geometry.parameters.radius,"
+            "edgeAlphaTest: edge.material.alphaTest,"
             "accentVisible: a.visible,"
             "accentMaterial: a.material.type,"
             "accentHasColour: Boolean(a.material.map),"
@@ -239,6 +249,7 @@ def main() -> int:
             "accentBumpScale: a.material.bumpScale,"
             "accentDisplacementScale: a.material.displacementScale,"
             "accentRadius: a.geometry.parameters.radius,"
+            "accentAlphaTest: a.material.alphaTest,"
             "accentCoverage: coverage,"
             "emissive: p.mesh.material.emissiveIntensity,"
             "sunType: g.sunLight.type,"
@@ -259,7 +270,22 @@ def main() -> int:
             not polished["baseHasDisplacement"],
             "base sphere stays coherent instead of inflating under paint",
         )
-        check(polished["accentVisible"], "kid drawing produces a separate raised accent shell")
+        check(polished["edgeVisible"], "kid accents include a separate molded shoulder layer")
+        check(
+            polished["edgeMaterial"] == "MeshPhysicalMaterial",
+            "molded shoulder uses physical toy material",
+        )
+        check(polished["edgeHasColour"], "molded shoulder follows the interpreted kid palette")
+        check(polished["edgeHasMask"], "molded shoulder follows the interpreted accent shapes")
+        check(
+            polished["baseRadius"] < polished["edgeRadius"] < polished["accentRadius"],
+            "molded shoulder sits between the body and raised colour top",
+        )
+        check(
+            polished["edgeAlphaTest"] < polished["accentAlphaTest"],
+            "molded shoulder has a wider rounded silhouette than the colour top",
+        )
+        check(polished["accentVisible"], "kid drawing produces a separate raised colour top")
         check(
             polished["accentMaterial"] == "MeshPhysicalMaterial",
             "raised artwork uses physical toy material",
@@ -297,10 +323,21 @@ def main() -> int:
             "const ring = e.decorations[0];"
             "const orbit = e.ring;"
             "const colors = ring.geometry.getAttribute('color');"
+            "const ringPositions = ring.geometry.getAttribute('position');"
+            "const orbitPositions = orbit.geometry.getAttribute('position');"
             "let min = 1; let max = 0;"
+            "let outerMin = Infinity; let outerMax = 0;"
+            "let orbitMin = Infinity; let orbitMax = 0;"
             "for (let i = 0; i < colors.count; i += 1) {"
             "const lightness = (colors.getX(i) + colors.getY(i) + colors.getZ(i)) / 3;"
             "min = Math.min(min, lightness); max = Math.max(max, lightness);"
+            "const rr = Math.hypot(ringPositions.getX(i), ringPositions.getY(i));"
+            "if (rr > 1.8) { outerMin = Math.min(outerMin, rr); outerMax = Math.max(outerMax, rr); }"
+            "}"
+            "for (let i = 0; i < orbitPositions.count; i += 1) {"
+            "const rr = Math.hypot("
+            "orbitPositions.getX(i), orbitPositions.getY(i), orbitPositions.getZ(i));"
+            "orbitMin = Math.min(orbitMin, rr); orbitMax = Math.max(orbitMax, rr);"
             "}"
             "return {"
             "type: ring.geometry.type,"
@@ -308,23 +345,45 @@ def main() -> int:
             "outer: ring.geometry.userData.outerRadius,"
             "hasGradient: Boolean(colors),"
             "hasWobble: Boolean(ring.geometry.userData.kidsGalaxyRingWobble),"
+            "wobbleTarget: ring.geometry.userData.kidsGalaxyRingWobbleTarget,"
             "wobbleAmplitude: ring.geometry.userData.wobbleAmplitude,"
+            "outerRadialSpread: outerMax - outerMin,"
             "vertexColors: ring.material.vertexColors,"
             "spread: max - min,"
             "orbitGuide: Boolean(orbit.geometry.userData.kidsGalaxyOrbitGuide),"
-            "orbitWobble: Boolean(orbit.geometry.userData.kidsGalaxyRingWobble)"
+            "circularGuide: Boolean(orbit.geometry.userData.kidsGalaxyCircularGuide),"
+            "orbitWobble: Boolean(orbit.geometry.userData.kidsGalaxyRingWobble),"
+            "orbitRadiusSpread: orbitMax - orbitMin,"
+            "orbitEccentricity: e.e"
             "};"
             "})()"
         )
         check(ring_details["type"] == "RingGeometry", "planet ring is a flat annular band")
         check(ring_details["outer"] - ring_details["inner"] >= 0.8, "planet ring is visibly wide")
         check(ring_details["hasGradient"], "planet ring carries radial colour gradation")
-        check(ring_details["hasWobble"], "only the planet ring owns the handmade wobble")
-        check(ring_details["wobbleAmplitude"] < 0.04, "planet ring wobble remains subtle")
+        check(ring_details["hasWobble"], "ringed planet owns the handmade ring wobble")
+        check(
+            ring_details["wobbleTarget"] == "planet-decoration",
+            "wobble is explicitly scoped to the planet decoration",
+        )
+        check(
+            0.08 <= ring_details["wobbleAmplitude"] <= 0.14,
+            "planet-ring wobble is strong enough to be visible without becoming chaotic",
+        )
+        check(
+            ring_details["outerRadialSpread"] >= 0.12,
+            "planet ring has a visibly wavy outer silhouette",
+        )
         check(ring_details["vertexColors"], "planet ring displays the colour gradation")
         check(ring_details["spread"] > 0.12, "white planet rings retain dark-to-light contrast")
-        check(ring_details["orbitGuide"], "sun orbit path is explicitly a smooth orbit guide")
+        check(ring_details["orbitGuide"], "sun orbit path is explicitly an orbit guide")
+        check(ring_details["circularGuide"], "sun orbit guide is explicitly circular")
         check(not ring_details["orbitWobble"], "sun orbit guide never receives ring wobble")
+        check(
+            ring_details["orbitRadiusSpread"] < 0.001,
+            "sun orbit guide has constant radius with no visual wobble",
+        )
+        check(ring_details["orbitEccentricity"] == 0, "kid planet follows the same circular sun path")
 
         crater_geometry = page.evaluate(
             f"(() => {{"
