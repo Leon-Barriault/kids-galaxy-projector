@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.kidsgalaxy.manager.data.ApiFactory
+import com.kidsgalaxy.manager.data.BehaviorSettingsDto
 import com.kidsgalaxy.manager.data.ManagerApi
 import com.kidsgalaxy.manager.data.PlanetDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,10 @@ sealed interface ManagerStatus {
     data class Cleared(
         val count: Int,
     ) : ManagerStatus
+
+    data class ProjectorLanguageChanged(
+        val language: String,
+    ) : ManagerStatus
 }
 
 sealed interface ManagerError {
@@ -40,6 +45,14 @@ sealed interface ManagerError {
         val code: Int,
     ) : ManagerError
 
+    data class BehaviorLoadFailed(
+        val code: Int,
+    ) : ManagerError
+
+    data class BehaviorUpdateFailed(
+        val code: Int,
+    ) : ManagerError
+
     data object Network : ManagerError
 }
 
@@ -48,6 +61,9 @@ data class ManagerUiState(
     val isLoading: Boolean = false,
     val deletingIds: Set<String> = emptySet(),
     val isClearing: Boolean = false,
+    val projectorLanguage: String = "en",
+    val isProjectorLanguageLoading: Boolean = true,
+    val isUpdatingProjectorLanguage: Boolean = false,
     val error: ManagerError? = null,
     val status: ManagerStatus? = null,
 ) {
@@ -59,9 +75,11 @@ class ManagerViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ManagerUiState())
     val uiState: StateFlow<ManagerUiState> = _uiState.asStateFlow()
+    private var behaviorSettings: BehaviorSettingsDto? = null
 
     init {
         refresh()
+        refreshBehavior()
     }
 
     fun refresh() {
@@ -90,6 +108,86 @@ class ManagerViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        error = ManagerError.Network,
+                    )
+                }
+            }
+        }
+    }
+
+    fun refreshBehavior() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProjectorLanguageLoading = true) }
+            try {
+                val response = api.getBehavior()
+                if (response.isSuccessful) {
+                    val settings = response.body()?.settings
+                    if (settings != null) {
+                        behaviorSettings = settings
+                        _uiState.update {
+                            it.copy(
+                                projectorLanguage = settings.projectorLanguage,
+                                isProjectorLanguageLoading = false,
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(isProjectorLanguageLoading = false) }
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isProjectorLanguageLoading = false,
+                            error = ManagerError.BehaviorLoadFailed(response.code()),
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isProjectorLanguageLoading = false,
+                        error = ManagerError.Network,
+                    )
+                }
+            }
+        }
+    }
+
+    fun setProjectorLanguage(language: String) {
+        val normalized = language.lowercase()
+        if (normalized !in setOf("en", "fr")) return
+        if (_uiState.value.isUpdatingProjectorLanguage) return
+        val current = behaviorSettings ?: return
+        if (current.projectorLanguage == normalized) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingProjectorLanguage = true, error = null) }
+            try {
+                val response =
+                    api.updateBehavior(
+                        current.copy(projectorLanguage = normalized),
+                    )
+                if (response.isSuccessful) {
+                    val settings = response.body()?.settings ?: current.copy(projectorLanguage = normalized)
+                    behaviorSettings = settings
+                    _uiState.update {
+                        it.copy(
+                            projectorLanguage = settings.projectorLanguage,
+                            isUpdatingProjectorLanguage = false,
+                            status = ManagerStatus.ProjectorLanguageChanged(settings.projectorLanguage),
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isUpdatingProjectorLanguage = false,
+                            error = ManagerError.BehaviorUpdateFailed(response.code()),
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isUpdatingProjectorLanguage = false,
                         error = ManagerError.Network,
                     )
                 }
