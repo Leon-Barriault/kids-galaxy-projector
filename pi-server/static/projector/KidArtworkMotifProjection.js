@@ -125,14 +125,14 @@ function analyse(disc) {
   if (!context) return null;
   const pixels = context.getImageData(0, 0, DISC_SIZE, DISC_SIZE).data;
   const counts = new Array(PALETTE.length).fill(0);
-  const centre = (DISC_SIZE - 1) / 2;
-  const radius = DISC_SIZE * 0.485;
 
+  // The tablet has already clipped real drawings to its circular planet guide.
+  // Count every non-white pixel in the uploaded square instead of imposing a
+  // second radial crop here. A second crop under-counted broad strokes near the
+  // guide edge and could make this layer disagree with the base-body palette,
+  // causing the body colour itself to be raised as a giant accent belt.
   for (let y = 0; y < DISC_SIZE; y += 1) {
     for (let x = 0; x < DISC_SIZE; x += 1) {
-      const nx = (x - centre) / radius;
-      const ny = (y - centre) / radius;
-      if (nx * nx + ny * ny > 1) continue;
       const index = (y * DISC_SIZE + x) * 4;
       const r = pixels[index];
       const g = pixels[index + 1];
@@ -359,6 +359,8 @@ function applyMotifProjection(entity, sourceTexture) {
   entity.mesh.material.userData.kidsGalaxyKidMotifProjection = true;
   entity.mesh.material.userData.kidsGalaxyKidDesignMapping = 'front-motif-and-smaller-back-echo';
   entity.mesh.material.userData.kidsGalaxyFaithfulAccentPixels = maps.accentPixels;
+  entity.mesh.material.userData.kidsGalaxyMotifDominantPalette = analysis.dominant;
+  entity.mesh.material.userData.kidsGalaxyMotifAccentPalettes = [...analysis.accents];
   return true;
 }
 
