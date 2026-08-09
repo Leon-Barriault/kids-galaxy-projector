@@ -39,6 +39,13 @@ data class BehaviorSettingsDto(
     @SerializedName("planet_speed") val planetSpeed: Double = 1.0,
     @SerializedName("ambient_effects") val ambientEffects: Boolean = true,
     @SerializedName("projector_language") val projectorLanguage: String = "en",
+    @SerializedName("asteroid_belt_enabled") val asteroidBeltEnabled: Boolean = false,
+    @SerializedName("comets_enabled") val cometsEnabled: Boolean = false,
+    @SerializedName("comet_frequency") val cometFrequency: String = "normal",
+    @SerializedName("flyby_asteroids_enabled") val flybyAsteroidsEnabled: Boolean = false,
+    @SerializedName("flyby_frequency") val flybyFrequency: String = "normal",
+    @SerializedName("enabled_themes")
+    val enabledThemes: List<String> = listOf("default", "halloween", "easter", "christmas"),
 )
 
 data class BehaviorStateDto(
