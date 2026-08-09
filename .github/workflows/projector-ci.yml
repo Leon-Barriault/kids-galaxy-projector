@@ -1,0 +1,30 @@
+name: Projector CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  javascript-syntax:
+    name: Projector JavaScript syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse projector ES modules
+        run: |
+          node --version
+          for file in pi-server/static/galaxy.js pi-server/static/projector/*.js; do
+            echo "Checking ${file}"
+            node --input-type=module --check < "${file}"
+          done
+      - name: Keep projector offline
+        run: |
+          if grep -rnE "https?://" \
+              pi-server/static/index.html \
+              pi-server/static/galaxy.js \
+              pi-server/static/projector/; then
+            echo "::error::Projector runtime must remain fully self-hosted."
+            exit 1
+          fi
