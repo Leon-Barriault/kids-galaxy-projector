@@ -48,6 +48,20 @@
     <string name="sending_to_galaxy">Envoi vers la galaxie…</string>
     <string name="drawing_canvas_description">Zone de dessin. Glisse ton doigt pour peindre ta planète.</string>
 
+    <string name="choose_galaxy">Choisis une galaxie</string>
+    <string name="current_galaxy">Actuelle : %1$s</string>
+    <string name="searching_local_network">Recherche sur le réseau local…</string>
+    <string name="nearby_galaxies">Galaxies à proximité</string>
+    <string name="galaxy_checking">Vérification…</string>
+    <string name="galaxy_reachable">✓ Accessible</string>
+    <string name="galaxy_unreachable_retry">⚠ Inaccessible — touche pour réessayer</string>
+    <string name="or_enter_address">Ou entre une adresse</string>
+    <string name="invalid_galaxy_address">Adresse de galaxie invalide</string>
+    <string name="galaxy_could_not_be_reached">Impossible de joindre la galaxie</string>
+    <string name="verifying">Vérification…</string>
+    <string name="use_this_address">Utiliser cette adresse</string>
+    <string name="cancel">Annuler</string>
+
     <string name="oops">Oups!</string>
     <string name="ok">OK</string>
     <string name="launched_title">🚀 Planète lancée!</string>
