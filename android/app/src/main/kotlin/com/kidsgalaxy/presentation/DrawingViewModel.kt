@@ -16,13 +16,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Presentation logic for the kid planet creation flow. */
+/**
+ * Presentation logic for the kid planet-creation flow.
+ *
+ * Responsibilities:
+ * - Hold the single source of truth ([DrawingUiState]) as a [StateFlow].
+ * - Translate pointer events into domain [StrokePath]s.
+ * - Expose simple intents (change colour, undo, launch, …) that the Compose
+ *   UI can call without knowing about coroutines or the network.
+ * - Map domain / network failures into child-friendly error messages.
+ *
+ * The ViewModel depends only on the [SendPlanetUseCase] port, so the whole
+ * state machine is unit-testable on the JVM with a fake use case.
+ */
 class DrawingViewModel(
     private val sendPlanet: SendPlanetUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DrawingUiState())
     val uiState: StateFlow<DrawingUiState> = _uiState.asStateFlow()
 
+    /** Points collected for the stroke that is currently being drawn. */
     private val currentPoints = mutableListOf<Point>()
 
     fun choosePlanetStyle(style: PlanetStyle) {
@@ -53,6 +66,10 @@ class DrawingViewModel(
         _uiState.update { it.copy(currentStrokeWidth = width) }
     }
 
+    /**
+     * Called when the Compose canvas reports a new size after layout.
+     * The size is required later to project the drawing onto the square texture.
+     */
     fun onCanvasSizeChanged(
         width: Float,
         height: Float,
@@ -62,15 +79,21 @@ class DrawingViewModel(
         _uiState.update { it.copy(drawing = it.drawing.withCanvasSize(size)) }
     }
 
+    /** Begin a new stroke at the given point. */
     fun startStroke(point: Point) {
         currentPoints.clear()
         currentPoints.add(point)
     }
 
+    /** Append a point to the stroke that is currently in progress. */
     fun continueStroke(point: Point) {
         currentPoints.add(point)
     }
 
+    /**
+     * Finish the current stroke and commit it to the drawing history.
+     * Empty or single-point strokes are ignored (they would not be renderable).
+     */
     fun endStroke() {
         if (currentPoints.isEmpty()) return
 
@@ -101,6 +124,10 @@ class DrawingViewModel(
         _uiState.update { it.copy(showSuccess = false) }
     }
 
+    /**
+     * Reset the drawing after a successful launch while preserving the
+     * child's current colour and stroke-width preferences.
+     */
     fun startNewPlanet() {
         _uiState.update {
             DrawingUiState(
@@ -111,6 +138,13 @@ class DrawingViewModel(
         }
     }
 
+    /**
+     * Launch the current drawing into the galaxy.
+     *
+     * Double-taps are ignored while a send is already in flight. On completion
+     * the UI state is updated to show either a success celebration or a
+     * child-friendly error message.
+     */
     fun sendPlanet(planetName: String) {
         if (_uiState.value.isSending) return
 
@@ -134,6 +168,10 @@ class DrawingViewModel(
         }
     }
 
+    /**
+     * Map a failure cause into a short, reassuring message suitable for a
+     * 4–10-year-old (and the volunteer helping them).
+     */
     private fun messageFor(cause: Throwable?): String =
         when {
             cause is UploadRejectedException ->
