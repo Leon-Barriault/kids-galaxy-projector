@@ -3,6 +3,7 @@ package com.kidsgalaxy.manager.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,7 +114,10 @@ private fun AdminHeader(
     onRefresh: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -240,7 +244,13 @@ private fun ThemeCard(
                 fontSize = 13.sp,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ThemeChoice("default", R.string.theme_default, settings, enabled, onManualThemeChange)
+                ThemeChoice(
+                    "default",
+                    R.string.theme_default,
+                    settings,
+                    enabled,
+                    onManualThemeChange,
+                )
                 ThemeChoice(
                     "halloween",
                     R.string.theme_halloween,
@@ -250,7 +260,13 @@ private fun ThemeCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ThemeChoice("easter", R.string.theme_easter, settings, enabled, onManualThemeChange)
+                ThemeChoice(
+                    "easter",
+                    R.string.theme_easter,
+                    settings,
+                    enabled,
+                    onManualThemeChange,
+                )
                 ThemeChoice(
                     "christmas",
                     R.string.theme_christmas,
@@ -301,7 +317,7 @@ private fun ThemeCard(
 private fun SettingsCard(
     title: String,
     subtitle: String,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier =
@@ -311,11 +327,8 @@ private fun SettingsCard(
                 .background(AdminCard)
                 .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(title, color = AdminText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(subtitle, color = AdminMuted, fontSize = 13.sp)
-        content()
-    }
+        content = content,
+    )
 }
 
 @Composable
