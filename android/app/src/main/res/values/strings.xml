@@ -1,8 +1,42 @@
 <resources>
     <string name="app_name">Kids Galaxy</string>
 
+    <!-- Creation flow -->
+    <string name="screen_title">Create Your Planet 🌍</string>
+    <string name="step_style">1  Style</string>
+    <string name="step_draw">2  Draw</string>
+    <string name="step_friends">3  Friends</string>
+    <string name="style_intro_title">First, pick your planet shape!</string>
+    <string name="style_intro_body">You will paint it on the next screen.</string>
+    <string name="style_classic">Classic</string>
+    <string name="style_ringed">Ringed</string>
+    <string name="style_cratered">Craters</string>
+    <string name="style_spiky">Spiky mountains</string>
+    <string name="style_spiky_help">Spiky mountains means one whole planet with different-height peaks all around it.</string>
+    <string name="picked">✓ Picked</string>
+    <string name="tap_to_pick">Tap to pick</string>
+    <string name="next_paint">Next: Paint it!  🎨</string>
+    <string name="paint_your_planet">Paint your %1$s planet</string>
+    <string name="crater_paint_hint">The crater circles are part of your planet. Pick any brush color and paint inside them!</string>
+    <string name="ring_color_title">Ring color</string>
+    <string name="ring_color_hint">Pick the color of the ring around your planet.</string>
+    <string name="back_style">← Style</string>
+    <string name="next_friends">Next: Space friends  🚀</string>
+    <string name="friends_title">Add space friends!</string>
+    <string name="friends_body">Pick as many as you like. They will move around your planet!</string>
+    <string name="friend_moon">Moon</string>
+    <string name="friend_stars">Stars</string>
+    <string name="friend_satellite">Satellite</string>
+    <string name="friend_astronaut">Astronaut</string>
+    <string name="added">✓ Added</string>
+    <string name="tap_to_add">Tap to add</string>
+    <string name="back_paint">← Paint</string>
+    <string name="launch">🚀  Launch!</string>
+    <string name="launching">Flying to the galaxy…</string>
+    <string name="language_toggle">EN / FR</string>
+    <string name="language_toggle_description">Switch between English and French</string>
+
     <!-- Drawing screen -->
-    <string name="screen_title">Draw Your Planet 🌍</string>
     <string name="name_your_planet">Name your planet</string>
     <string name="name_placeholder">e.g. Sparkle World</string>
     <string name="pick_a_color">Pick a color</string>
@@ -14,7 +48,7 @@
     <string name="clear">Clear</string>
     <string name="launch_into_galaxy">Launch into the Galaxy!</string>
     <string name="sending_to_galaxy">Sending to the Galaxy…</string>
-    <string name="drawing_canvas_description">Drawing area. Drag to draw your planet.</string>
+    <string name="drawing_canvas_description">Drawing area. Drag to paint your planet.</string>
 
     <!-- Dialogs -->
     <string name="oops">Oops!</string>
