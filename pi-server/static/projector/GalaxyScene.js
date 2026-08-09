@@ -5,34 +5,34 @@ import { applyPiRenderBudget } from './ProjectorQuality.js';
 const THEMES = {
   default: {
     background: 0x050818,
-    ambient: 0x8798c9,
-    ambientIntensity: 0.16,
-    fill: 0x788dc0,
-    fillIntensity: 0.11,
+    ambient: 0x8fa2d2,
+    ambientIntensity: 0.18,
+    fill: 0x8298cd,
+    fillIntensity: 0.13,
     particles: null,
   },
   halloween: {
     background: 0x10051d,
-    ambient: 0x9572c5,
-    ambientIntensity: 0.15,
-    fill: 0x9366a7,
-    fillIntensity: 0.11,
+    ambient: 0x9d79cc,
+    ambientIntensity: 0.18,
+    fill: 0x9b6eaf,
+    fillIntensity: 0.14,
     particles: [0xff8a2b, 0xa66cff, 0x75ff76],
   },
   easter: {
     background: 0x11172f,
-    ambient: 0xc1c0ff,
-    ambientIntensity: 0.18,
-    fill: 0x9eabe3,
-    fillIntensity: 0.12,
+    ambient: 0xc9c8ff,
+    ambientIntensity: 0.21,
+    fill: 0xa7b5ed,
+    fillIntensity: 0.15,
     particles: [0xffb7d9, 0xffe69a, 0xaeefff, 0xc8f7b2],
   },
   christmas: {
     background: 0x03120f,
-    ambient: 0x97d3b8,
-    ambientIntensity: 0.16,
-    fill: 0x76a797,
-    fillIntensity: 0.11,
+    ambient: 0x9fdbc0,
+    ambientIntensity: 0.19,
+    fill: 0x7eaf9f,
+    fillIntensity: 0.14,
     particles: [0xff4f4f, 0x63df84, 0xffd66b, 0xf4f8ff],
   },
 };
@@ -61,7 +61,7 @@ export class GalaxyScene {
     );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.24;
+    this.renderer.toneMappingExposure = 1.38;
     container.appendChild(this.renderer.domElement);
 
     this.addLights();
@@ -82,7 +82,7 @@ export class GalaxyScene {
     // These lights only keep the projector's night side readable. They carry
     // no directional cue: the actual sun at the galaxy origin is the dominant
     // key light for planet highlights, crater rims, and mountain relief.
-    this.ambientLight = new THREE.AmbientLight(0x8798c9, THEMES.default.ambientIntensity);
+    this.ambientLight = new THREE.AmbientLight(0x8fa2d2, THEMES.default.ambientIntensity);
     this.scene.add(this.ambientLight);
     this.fillLight = new THREE.HemisphereLight(
       THEMES.default.fill,
