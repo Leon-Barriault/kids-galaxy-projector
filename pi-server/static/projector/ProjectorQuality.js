@@ -37,6 +37,10 @@ export function applyPiRenderBudget(
   const pixelRatio = renderPixelRatioForViewport(width, height, devicePixelRatio);
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(width, height);
+
+  // WebGLRenderer is not an Object3D and therefore does not receive Three's
+  // usual userData bag. Create our own lightweight diagnostics container.
+  renderer.userData ??= {};
   renderer.userData.kidsGalaxyRenderScale = pixelRatio;
   renderer.userData.kidsGalaxyInternalWidth = Math.round(width * pixelRatio);
   renderer.userData.kidsGalaxyInternalHeight = Math.round(height * pixelRatio);
