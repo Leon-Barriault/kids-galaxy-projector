@@ -24,4 +24,18 @@
     <string name="shape_cratered">Cratered</string>
     <string name="shape_spiky">Spiky mountains</string>
     <string name="remove_named">Remove %1$s</string>
+
+    <string name="choose_managed_galaxy">Choose managed galaxy</string>
+    <string name="current_galaxy">Current: %1$s</string>
+    <string name="searching_local_network">Searching the local network…</string>
+    <string name="nearby_galaxies">Nearby galaxies</string>
+    <string name="galaxy_checking">Checking…</string>
+    <string name="galaxy_reachable">✓ Reachable</string>
+    <string name="galaxy_unreachable_retry">⚠ Unreachable — tap to retry</string>
+    <string name="or_enter_address">Or enter an address</string>
+    <string name="invalid_galaxy_address">Invalid galaxy address</string>
+    <string name="galaxy_could_not_be_reached">Galaxy could not be reached</string>
+    <string name="verifying">Verifying…</string>
+    <string name="manage_this_address">Manage this address</string>
+    <string name="manual_galaxy">Manual Galaxy</string>
 </resources>
