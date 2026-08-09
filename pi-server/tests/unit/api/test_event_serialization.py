@@ -7,6 +7,7 @@ from app.application.events import (
 )
 from app.domain.behavior import (
     BehaviorMode,
+    EventFrequency,
     GalaxyBehavior,
     GalaxyTheme,
     ProjectorLanguage,
@@ -92,6 +93,11 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
         ambient_effects=True,
         mode=BehaviorMode.MANUAL,
         projector_language=ProjectorLanguage.FRENCH,
+        asteroid_belt_enabled=True,
+        comets_enabled=True,
+        comet_frequency=EventFrequency.FREQUENT,
+        flyby_asteroids_enabled=True,
+        flyby_frequency=EventFrequency.RARE,
     )
 
     assert serialize_event(GalaxyBehaviorChanged(behavior)) == (
@@ -102,5 +108,10 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
             "ambient_effects": True,
             "mode": "manual",
             "projector_language": "fr",
+            "asteroid_belt_enabled": True,
+            "comets_enabled": True,
+            "comet_frequency": "frequent",
+            "flyby_asteroids_enabled": True,
+            "flyby_frequency": "rare",
         },
     )
