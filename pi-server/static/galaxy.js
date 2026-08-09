@@ -13,6 +13,7 @@ import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
+import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
 
 const GALLERY_SIZE = 12;
 
@@ -22,16 +23,23 @@ const celebration = new CelebrationEffect({
   statusEl: document.getElementById('status'),
   celebrationEl: document.getElementById('celebration'),
   sparklesEl: document.getElementById('sparkles'),
+  badgeLabelEl: document.getElementById('badge-label'),
+  hintEl: document.getElementById('hint'),
 });
 
 const animator = new PlanetAnimator();
 const galaxyScene = new GalaxyScene(container, animator);
 const cameraController = new CameraController(galaxyScene.renderer);
+const behaviorController = new ProjectorBehaviorController({
+  scene: galaxyScene,
+  celebration,
+});
 const planetLoader = new PlanetLoader({
   scene: galaxyScene,
   animator,
   celebration,
   gallerySize: GALLERY_SIZE,
+  behaviorController,
 });
 
 const clock = new THREE.Clock();
@@ -60,6 +68,7 @@ window.kidsGalaxy = {
     animator,
     cameraController,
     celebration,
+    behaviorController,
   },
 };
 
