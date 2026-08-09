@@ -13,7 +13,15 @@ from app.application.events import (
 def serialize_application_event(event: ApplicationEvent) -> tuple[str, dict]:
     """Return the SSE event name and JSON payload for an application event."""
     if isinstance(event, PlanetCreated):
-        return "planet", event.planet.to_payload()
+        payload = event.planet.to_payload()
+        # Preserve the original SSE contract for ordinary classic planets.
+        # Projectors already default missing fields to classic/no companions,
+        # while richer designs retain the metadata needed to render them.
+        if event.planet.style == "classic":
+            payload.pop("style", None)
+        if not event.planet.companions:
+            payload.pop("companions", None)
+        return "planet", payload
     if isinstance(event, PlanetRemoved):
         return "planet", {
             "has_planet": False,
