@@ -8,6 +8,8 @@ endpoint and the SSE stream emit, so the two can never drift apart.
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from app.domain.planet_customization import DEFAULT_RING_COLOR
+
 #: Response when no child has drawn anything yet.
 NO_PLANET_PAYLOAD: dict = {"has_planet": False}
 
@@ -22,6 +24,7 @@ class Planet:
     created_at: float
     style: str = "classic"
     companions: tuple[str, ...] = ()
+    ring_color: str = DEFAULT_RING_COLOR
 
     @property
     def url(self) -> str:
@@ -35,7 +38,7 @@ class Planet:
 
     def to_payload(self) -> dict:
         """Wire format shared by REST scene endpoints and the SSE stream."""
-        return {
+        payload = {
             "has_planet": True,
             "id": self.id,
             "url": self.url,
@@ -44,3 +47,6 @@ class Planet:
             "style": self.style,
             "companions": list(self.companions),
         }
+        if self.style == "ringed":
+            payload["ring_color"] = self.ring_color
+        return payload
