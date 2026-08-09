@@ -17,6 +17,7 @@ import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlane
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
+import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installSculptedPlanetRings } from './projector/SculptedPlanetRings.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
@@ -24,6 +25,7 @@ const GALLERY_SIZE = 12;
 
 installSculptedPlanetRings();
 installHighFidelityPlanetFeatures();
+installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
 const container = document.getElementById('canvas-container');
