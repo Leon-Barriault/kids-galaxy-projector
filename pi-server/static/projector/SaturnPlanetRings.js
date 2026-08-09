@@ -3,10 +3,12 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 
 const INNER_RADIUS = 1.28;
-const OUTER_RADIUS = 2.18;
-const CASSINI_INNER = 1.72;
+const OUTER_RADIUS = 2.2;
+const CASSINI_INNER = 1.73;
 const CASSINI_OUTER = 1.82;
-const DUST_COUNT = 1900;
+const FINE_DUST_COUNT = 16000;
+const MICRO_DUST_COUNT = 9000;
+const SPARKLE_COUNT = 1300;
 
 function seededRandom(seed) {
   let state = seed || 0x6d2b79f5;
@@ -19,73 +21,87 @@ function seededRandom(seed) {
   };
 }
 
-function selectedIceColour(entity, lightness = 0.08) {
-  const selected = new THREE.Color(entity.ringColor);
-  return new THREE.Color(0xf4f1e9).lerp(selected, 0.32).offsetHSL(0, -0.08, lightness);
+function gaussian(value, centre, width) {
+  const delta = (value - centre) / width;
+  return Math.exp(-delta * delta * 0.5);
 }
 
-function selectedRockColour(entity) {
-  const selected = new THREE.Color(entity.ringColor);
-  return new THREE.Color(0x595a5e).lerp(selected, 0.16).offsetHSL(0, -0.16, -0.02);
+function normalizedRadius(radius) {
+  return THREE.MathUtils.clamp(
+    (radius - INNER_RADIUS) / (OUTER_RADIUS - INNER_RADIUS),
+    0,
+    1,
+  );
 }
 
-function radialSample(random, minimum, maximum) {
+function radialTone(radius) {
+  const t = normalizedRadius(radius);
+  const brightMiddle = gaussian(t, 0.46, 0.19) * 0.15;
+  const secondBand = gaussian(t, 0.73, 0.1) * 0.045;
+  const edgeShade = Math.pow(Math.abs(t - 0.5) * 2, 1.35) * 0.105;
+  const fineStrata =
+    Math.sin(t * Math.PI * 16 + 0.4) * 0.012 +
+    Math.sin(t * Math.PI * 37 - 0.8) * 0.005;
+  return brightMiddle + secondBand - edgeShade + fineStrata;
+}
+
+function densityAt(radius) {
+  if (radius > CASSINI_INNER && radius < CASSINI_OUTER) return 0.055;
+  if (radius > 1.465 && radius < 1.49) return 0.24;
+  if (radius > 1.985 && radius < 2.015) return 0.3;
+  const t = normalizedRadius(radius);
+  const edgeFade = Math.sin(Math.PI * THREE.MathUtils.clamp(t, 0, 1));
+  const broad = 0.42 + gaussian(t, 0.43, 0.23) * 0.5 + gaussian(t, 0.74, 0.12) * 0.18;
+  return THREE.MathUtils.clamp(broad * (0.55 + edgeFade * 0.45), 0.12, 1);
+}
+
+function radialSample(random, minimum = INNER_RADIUS, maximum = OUTER_RADIUS) {
   const min2 = minimum * minimum;
   const max2 = maximum * maximum;
   return Math.sqrt(min2 + random() * (max2 - min2));
 }
 
-function sampleRingRadius(random, minimum, maximum) {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+function sampleRingRadius(random, minimum = INNER_RADIUS, maximum = OUTER_RADIUS) {
+  let fallback = radialSample(random, minimum, maximum);
+  for (let attempt = 0; attempt < 32; attempt += 1) {
     const radius = radialSample(random, minimum, maximum);
-    if (radius > CASSINI_INNER && radius < CASSINI_OUTER) {
-      if (random() < 0.9) continue;
-    }
-    // Natural narrow gaps keep the ring from becoming a filled plate.
-    const fineGap =
-      (radius > 1.47 && radius < 1.50) ||
-      (radius > 1.96 && radius < 1.985);
-    if (fineGap && random() < 0.72) continue;
-    return radius;
+    fallback = radius;
+    if (random() <= densityAt(radius)) return radius;
   }
-  return radialSample(random, minimum, maximum);
+  return fallback;
 }
 
-function particleMaterial(color, roughness) {
-  return new THREE.MeshPhysicalMaterial({
-    color,
-    roughness,
-    metalness: 0.015,
-    clearcoat: 0.035,
-    clearcoatRoughness: 0.78,
-  });
+function selectedIceColour(entity, radius, randomTone = 0) {
+  const selected = new THREE.Color(entity.ringColor);
+  const naturalIce = new THREE.Color(0xe7e3d9).lerp(selected, 0.24);
+  return naturalIce.offsetHSL(0, -0.045, radialTone(radius) + randomTone);
 }
 
-function createParticleBand(
-  entity,
-  {
-    count,
-    minimum,
-    maximum,
-    kind,
-    speed,
-    seedSuffix,
-  },
-) {
+function selectedRockColour(entity, radius, randomTone = 0) {
+  const selected = new THREE.Color(entity.ringColor);
+  const naturalRock = new THREE.Color(0xaaa69c).lerp(selected, 0.13);
+  return naturalRock.offsetHSL(0, -0.055, radialTone(radius) * 0.62 + randomTone);
+}
+
+function createChunkBand(entity, { count, minimum, maximum, kind, speed, seedSuffix }) {
   const random = seededRandom(entity.animator.hashId(`${entity.id}-${seedSuffix}`));
   const ice = kind !== 'rock';
   const geometry = ice
-    ? new THREE.IcosahedronGeometry(0.026, 0)
-    : new THREE.DodecahedronGeometry(0.031, 0);
-  const material = particleMaterial(
-    ice ? selectedIceColour(entity) : selectedRockColour(entity),
-    ice ? 0.56 : 0.79,
-  );
+    ? new THREE.IcosahedronGeometry(0.009, 0)
+    : new THREE.DodecahedronGeometry(0.01, 0);
+  const material = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    roughness: ice ? 0.64 : 0.78,
+    metalness: 0.004,
+    clearcoat: ice ? 0.055 : 0.018,
+    clearcoatRoughness: 0.78,
+  });
   const particles = new THREE.InstancedMesh(geometry, material, count);
   particles.userData.kidsGalaxySaturnParticles = true;
   particles.userData.kidsGalaxyRingParticleKind = kind;
   particles.userData.kidsGalaxyRingAngularSpeed = speed;
   particles.userData.particleCount = count;
+  particles.userData.maxParticleRadius = 0.032;
   particles.frustumCulled = false;
 
   const matrix = new THREE.Matrix4();
@@ -98,33 +114,31 @@ function createParticleBand(
   for (let index = 0; index < count; index += 1) {
     const radius = sampleRingRadius(random, minimum, maximum);
     const angle = random() * Math.PI * 2;
-    const verticalThickness = 0.012 + ((radius - INNER_RADIUS) / (OUTER_RADIUS - INNER_RADIUS)) * 0.018;
+    const thickness = 0.008 + normalizedRadius(radius) * 0.012;
     position.set(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius,
-      (random() - 0.5) * verticalThickness,
+      (random() - 0.5) * thickness,
     );
     euler.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
     quaternion.setFromEuler(euler);
 
-    const rareLargePiece = random() > 0.93;
-    const size = ice
-      ? 0.45 + random() * (rareLargePiece ? 1.9 : 1.05)
-      : 0.5 + random() * (rareLargePiece ? 1.65 : 0.95);
+    const rareChunk = random() > 0.975;
+    const baseSize = 0.52 + random() * (rareChunk ? 2.7 : 0.92);
     scale.set(
-      size * (0.74 + random() * 0.52),
-      size * (0.72 + random() * 0.56),
-      size * (0.6 + random() * 0.48),
+      baseSize * (0.72 + random() * 0.5),
+      baseSize * (0.7 + random() * 0.54),
+      baseSize * (0.58 + random() * 0.46),
     );
     matrix.compose(position, quaternion, scale);
     particles.setMatrixAt(index, matrix);
 
-    if (ice) {
-      colour.copy(selectedIceColour(entity, -0.04 + random() * 0.16));
-      if (random() < 0.18) colour.lerp(new THREE.Color(0xffffff), 0.34);
-    } else {
-      colour.copy(selectedRockColour(entity)).offsetHSL(0, 0, -0.08 + random() * 0.14);
-    }
+    const tone = -0.035 + random() * 0.075;
+    colour.copy(
+      ice
+        ? selectedIceColour(entity, radius, tone)
+        : selectedRockColour(entity, radius, tone),
+    );
     particles.setColorAt(index, colour);
   }
 
@@ -133,27 +147,26 @@ function createParticleBand(
   return particles;
 }
 
-function createDust(entity) {
-  const random = seededRandom(entity.animator.hashId(`${entity.id}-saturn-dust`));
-  const positions = new Float32Array(DUST_COUNT * 3);
-  const colors = new Float32Array(DUST_COUNT * 3);
-  const ice = selectedIceColour(entity, 0.04);
-  const rock = selectedRockColour(entity);
+function createPointLayer(entity, { count, size, opacity, speed, seedSuffix, rockChance = 0.08 }) {
+  const random = seededRandom(entity.animator.hashId(`${entity.id}-${seedSuffix}`));
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
   const colour = new THREE.Color();
 
-  for (let index = 0; index < DUST_COUNT; index += 1) {
-    const radius = sampleRingRadius(random, INNER_RADIUS, OUTER_RADIUS);
+  for (let index = 0; index < count; index += 1) {
+    const radius = sampleRingRadius(random);
     const angle = random() * Math.PI * 2;
-    const thickness = 0.018 + random() * 0.028;
+    const thickness = 0.007 + random() * 0.016;
     positions[index * 3] = Math.cos(angle) * radius;
     positions[index * 3 + 1] = Math.sin(angle) * radius;
     positions[index * 3 + 2] = (random() - 0.5) * thickness;
 
-    if (random() < 0.83) {
-      colour.copy(ice).offsetHSL(0, -0.02, -0.08 + random() * 0.17);
-    } else {
-      colour.copy(rock).offsetHSL(0, 0, -0.04 + random() * 0.11);
-    }
+    const tone = -0.045 + random() * 0.085;
+    colour.copy(
+      random() < rockChance
+        ? selectedRockColour(entity, radius, tone)
+        : selectedIceColour(entity, radius, tone),
+    );
     colors[index * 3] = colour.r;
     colors[index * 3 + 1] = colour.g;
     colors[index * 3 + 2] = colour.b;
@@ -171,58 +184,59 @@ function createDust(entity) {
     geometry,
     new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 0.034,
+      size,
       vertexColors: true,
       transparent: true,
-      opacity: 0.82,
+      opacity,
       sizeAttenuation: true,
       depthWrite: false,
+      blending: THREE.NormalBlending,
     }),
   );
   points.userData.kidsGalaxySaturnDust = true;
-  points.userData.kidsGalaxyRingAngularSpeed = 0.0017;
-  points.userData.particleCount = DUST_COUNT;
+  points.userData.kidsGalaxyRingAngularSpeed = speed;
+  points.userData.particleCount = count;
+  points.userData.pointSize = size;
+  points.frustumCulled = false;
   return points;
 }
 
-function createRingGlow(entity) {
-  // A very faint point layer supplies the continuous-looking fine ice haze
-  // without putting any solid disc or opaque annulus around the planet.
-  const random = seededRandom(entity.animator.hashId(`${entity.id}-saturn-haze`));
-  const count = 700;
-  const positions = new Float32Array(count * 3);
-  const colours = new Float32Array(count * 3);
-  const tint = selectedIceColour(entity, 0.1);
+function createSparkleLayer(entity) {
+  const random = seededRandom(entity.animator.hashId(`${entity.id}-saturn-sparkles`));
+  const positions = new Float32Array(SPARKLE_COUNT * 3);
+  const colors = new Float32Array(SPARKLE_COUNT * 3);
+  const colour = new THREE.Color();
 
-  for (let index = 0; index < count; index += 1) {
-    const radius = sampleRingRadius(random, INNER_RADIUS, OUTER_RADIUS);
+  for (let index = 0; index < SPARKLE_COUNT; index += 1) {
+    const radius = sampleRingRadius(random, 1.39, 2.08);
     const angle = random() * Math.PI * 2;
     positions[index * 3] = Math.cos(angle) * radius;
     positions[index * 3 + 1] = Math.sin(angle) * radius;
-    positions[index * 3 + 2] = (random() - 0.5) * 0.018;
-    colours[index * 3] = tint.r;
-    colours[index * 3 + 1] = tint.g;
-    colours[index * 3 + 2] = tint.b;
+    positions[index * 3 + 2] = (random() - 0.5) * 0.012;
+    colour.copy(selectedIceColour(entity, radius, 0.075 + random() * 0.055));
+    colors[index * 3] = colour.r;
+    colors[index * 3 + 1] = colour.g;
+    colors[index * 3 + 2] = colour.b;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const points = new THREE.Points(
     geometry,
     new THREE.PointsMaterial({
-      size: 0.018,
+      size: 0.01,
       vertexColors: true,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.42,
       sizeAttenuation: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
   );
   points.userData.kidsGalaxySaturnHaze = true;
-  points.userData.kidsGalaxyRingAngularSpeed = 0.00135;
-  points.userData.particleCount = count;
+  points.userData.kidsGalaxyRingAngularSpeed = 0.00145;
+  points.userData.particleCount = SPARKLE_COUNT;
   return points;
 }
 
@@ -231,40 +245,57 @@ function saturnAddPlanetRing() {
   ring.userData.kidsGalaxySaturnParticleRing = true;
   ring.userData.kidsGalaxyRingIsSolid = false;
   ring.userData.kidsGalaxyDifferentialRotation = true;
+  ring.userData.kidsGalaxyFineGrainedSaturnRing = true;
   ring.userData.kidsGalaxyRingParticleCount = 0;
   ring.userData.innerRadius = INNER_RADIUS;
   ring.userData.outerRadius = OUTER_RADIUS;
   ring.userData.cassiniGap = [CASSINI_INNER, CASSINI_OUTER];
 
-  const bands = [
-    createParticleBand(this, {
-      count: 260,
+  const layers = [
+    createPointLayer(this, {
+      count: FINE_DUST_COUNT,
+      size: 0.012,
+      opacity: 0.78,
+      speed: 0.0022,
+      seedSuffix: 'saturn-fine-dust',
+      rockChance: 0.055,
+    }),
+    createPointLayer(this, {
+      count: MICRO_DUST_COUNT,
+      size: 0.0065,
+      opacity: 0.62,
+      speed: 0.00172,
+      seedSuffix: 'saturn-micro-dust',
+      rockChance: 0.035,
+    }),
+    createChunkBand(this, {
+      count: 420,
       minimum: INNER_RADIUS,
-      maximum: 1.57,
+      maximum: 1.62,
       kind: 'ice',
-      speed: 0.0037,
+      speed: 0.00325,
       seedSuffix: 'saturn-inner-ice',
     }),
-    createParticleBand(this, {
-      count: 300,
-      minimum: 1.50,
-      maximum: 1.94,
+    createChunkBand(this, {
+      count: 520,
+      minimum: 1.46,
+      maximum: 1.99,
       kind: 'ice',
-      speed: 0.00275,
+      speed: 0.00255,
       seedSuffix: 'saturn-middle-ice',
     }),
-    createParticleBand(this, {
-      count: 190,
-      minimum: 1.83,
+    createChunkBand(this, {
+      count: 240,
+      minimum: 1.84,
       maximum: OUTER_RADIUS,
       kind: 'rock',
-      speed: 0.00205,
+      speed: 0.0019,
       seedSuffix: 'saturn-outer-rock',
     }),
+    createSparkleLayer(this),
   ];
-  const dust = createDust(this);
-  const haze = createRingGlow(this);
-  [...bands, dust, haze].forEach((object) => {
+
+  layers.forEach((object) => {
     ring.add(object);
     ring.userData.kidsGalaxyRingParticleCount += object.userData.particleCount || 0;
   });
@@ -275,7 +306,7 @@ function saturnAddPlanetRing() {
   this.decorations.push(ring);
 }
 
-/** Install a Saturn-like ring made only from independently rotating particles. */
+/** Install a Saturn-like ring made from dense fine ice/dust and sparse small chunks. */
 export function installSaturnPlanetRings() {
   if (PlanetEntity.prototype.addPlanetRing === saturnAddPlanetRing) return;
   const previousUpdate = PlanetEntity.prototype.update;
