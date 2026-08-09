@@ -5,10 +5,10 @@ import { createPolishedFeatureMaterial } from './PlanetSurface.js';
 
 const INNER_RADIUS = 1.18;
 const OUTER_RADIUS = 2.1;
-const RING_DEPTH = 0.105;
-const BEVEL_SIZE = 0.024;
-const BEVEL_THICKNESS = 0.018;
-const SEGMENTS = 160;
+const RING_DEPTH = 0.125;
+const BEVEL_SIZE = 0.032;
+const BEVEL_THICKNESS = 0.024;
+const SEGMENTS = 256;
 
 function shiftedColor(color, lightnessDelta, saturationDelta = 0) {
   const result = color?.isColor ? color.clone() : new THREE.Color(color);
@@ -16,10 +16,8 @@ function shiftedColor(color, lightnessDelta, saturationDelta = 0) {
 }
 
 function radialLightness(t) {
-  // The reference reads as one molded slab, not graphic stripes. Keep the
-  // centre gently brighter while letting the rounded edges fall slightly dark.
-  const crown = Math.sin(Math.PI * t) * 0.105;
-  return -0.045 + crown - t * 0.02;
+  const crown = Math.sin(Math.PI * t) * 0.115;
+  return -0.05 + crown - t * 0.018;
 }
 
 function outlineRadius(entity, angle, radius, inner) {
@@ -29,14 +27,14 @@ function outlineRadius(entity, angle, radius, inner) {
   if (inner) {
     return (
       radius +
-      Math.sin(angle * 2 + phaseA + 0.45) * 0.011 +
-      Math.sin(angle * 5 + phaseB) * 0.004
+      Math.sin(angle * 2 + phaseA + 0.45) * 0.009 +
+      Math.sin(angle * 5 + phaseB) * 0.0035
     );
   }
   return (
     radius +
-    Math.sin(angle * 2 + phaseA) * 0.021 +
-    Math.sin(angle * 5 + phaseB + 0.35) * 0.008
+    Math.sin(angle * 2 + phaseA) * 0.019 +
+    Math.sin(angle * 5 + phaseB + 0.35) * 0.007
   );
 }
 
@@ -65,7 +63,7 @@ function createSculptedRingGeometry(entity) {
     depth: RING_DEPTH,
     steps: 1,
     bevelEnabled: true,
-    bevelSegments: 3,
+    bevelSegments: 6,
     bevelSize: BEVEL_SIZE,
     bevelThickness: BEVEL_THICKNESS,
     curveSegments: SEGMENTS,
@@ -83,8 +81,8 @@ function createSculptedRingGeometry(entity) {
       1,
     );
     const z = position.getZ(index);
-    const faceTone = z > RING_DEPTH * 0.22 ? 0.035 : z < -RING_DEPTH * 0.22 ? -0.065 : -0.025;
-    const color = shiftedColor(base, radialLightness(t) + faceTone, -0.025);
+    const faceTone = z > RING_DEPTH * 0.22 ? 0.04 : z < -RING_DEPTH * 0.22 ? -0.075 : -0.03;
+    const color = shiftedColor(base, radialLightness(t) + faceTone, -0.022);
     colors[index * 3] = color.r;
     colors[index * 3 + 1] = color.g;
     colors[index * 3 + 2] = color.b;
@@ -100,23 +98,24 @@ function createSculptedRingGeometry(entity) {
   geometry.userData.innerRadius = INNER_RADIUS;
   geometry.userData.outerRadius = OUTER_RADIUS;
   geometry.userData.thickness = RING_DEPTH;
-  geometry.userData.wobbleAmplitude = 0.029;
+  geometry.userData.wobbleAmplitude = 0.026;
+  geometry.userData.radialSegments = SEGMENTS;
   return geometry;
 }
 
 function sculptedAddPlanetRing() {
   const material = createPolishedFeatureMaterial(0xffffff, {
-    roughness: 0.55,
-    clearcoat: 0.12,
+    roughness: 0.52,
+    clearcoat: 0.13,
     side: THREE.DoubleSide,
   });
   material.vertexColors = true;
   material.needsUpdate = true;
 
   const ring = new THREE.Mesh(createSculptedRingGeometry(this), material);
+  ring.castShadow = true;
+  ring.receiveShadow = true;
   ring.userData.kidsGalaxySculptedRing = true;
-  // Show enough of the top face and the near beveled edge to make the ring
-  // read as a molded object instead of a paper-thin ellipse.
   ring.rotation.x = Math.PI / 2.55;
   ring.rotation.z = 0.18;
   this.scene.add(ring);
