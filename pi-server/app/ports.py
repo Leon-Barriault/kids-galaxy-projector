@@ -22,6 +22,7 @@ class PlanetRepository(ABC):
         image_bytes: bytes,
         style: str,
         companions: tuple[str, ...],
+        ring_color: str,
     ) -> Planet:
         """Store richer design metadata; legacy adapters fall back to classic saves."""
         return self.save(planet_id, display_name, image_bytes)
@@ -92,13 +93,13 @@ class RateLimiter(ABC):
 class SurfaceStyler(ABC):
     @abstractmethod
     def style(self, png_bytes: bytes) -> bytes:
-        """Return a styled PNG; styling is cosmetic and must be resilient."""
+        """Apply cosmetic planet-surface treatment. Implementations must not raise."""
 
 
 class ServiceAdvertiser(ABC):
     @abstractmethod
     def start(self) -> None:
-        """Begin advertising the galaxy on the local network."""
+        """Publish this galaxy on the local network."""
 
     @abstractmethod
     def stop(self) -> None:
@@ -108,6 +109,9 @@ class ServiceAdvertiser(ABC):
 class ImageProcessor(ABC):
     @abstractmethod
     def normalize_to_png(
-        self, content: bytes, max_dimension: int, target_size: int
+        self,
+        image_bytes: bytes,
+        max_dimension: int,
+        target_size: int,
     ) -> bytes:
-        """Re-encode to PNG, capped and squared for the projector."""
+        """Decode, validate dimensions and return a normalized PNG."""
