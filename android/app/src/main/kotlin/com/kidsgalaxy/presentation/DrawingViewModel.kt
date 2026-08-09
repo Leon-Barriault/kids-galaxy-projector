@@ -3,6 +3,8 @@ package com.kidsgalaxy.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kidsgalaxy.domain.model.CanvasSize
+import com.kidsgalaxy.domain.model.PlanetCompanion
+import com.kidsgalaxy.domain.model.PlanetStyle
 import com.kidsgalaxy.domain.model.Point
 import com.kidsgalaxy.domain.model.StrokePath
 import com.kidsgalaxy.domain.repository.UploadRejectedException
@@ -14,23 +16,30 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Presentation logic for the drawing screen.
- *
- * A plain [ViewModel] that receives a use case, rather than an AndroidViewModel
- * that builds its own HTTP client. That single change is what makes this class
- * unit-testable without an emulator (see DrawingViewModelTest).
- */
+/** Presentation logic for the kid planet creation flow. */
 class DrawingViewModel(
     private val sendPlanet: SendPlanetUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DrawingUiState())
     val uiState: StateFlow<DrawingUiState> = _uiState.asStateFlow()
 
-    /** Points of the stroke in progress; committed to the Drawing on release. */
     private val currentPoints = mutableListOf<Point>()
 
-    // -------------------- drawing --------------------
+    fun choosePlanetStyle(style: PlanetStyle) {
+        _uiState.update { it.copy(planetStyle = style) }
+    }
+
+    fun toggleCompanion(companion: PlanetCompanion) {
+        _uiState.update { state ->
+            val next =
+                if (companion in state.companions) {
+                    state.companions - companion
+                } else {
+                    state.companions + companion
+                }
+            state.copy(companions = next)
+        }
+    }
 
     fun changeColor(colorArgb: Int) {
         _uiState.update { it.copy(currentColorArgb = colorArgb) }
@@ -40,7 +49,6 @@ class DrawingViewModel(
         _uiState.update { it.copy(currentStrokeWidth = width) }
     }
 
-    /** Records the real drawing-surface size so the texture is undistorted. */
     fun onCanvasSizeChanged(
         width: Float,
         height: Float,
@@ -70,8 +78,6 @@ class DrawingViewModel(
                 strokeWidth = state.currentStrokeWidth,
             )
         currentPoints.clear()
-
-        // Drawing.addStroke ignores non-renderable strokes (e.g. a single tap).
         _uiState.update { it.copy(drawing = it.drawing.addStroke(stroke)) }
     }
 
@@ -83,8 +89,6 @@ class DrawingViewModel(
         _uiState.update { it.copy(drawing = it.drawing.clear()) }
     }
 
-    // -------------------- dialogs --------------------
-
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
@@ -93,23 +97,24 @@ class DrawingViewModel(
         _uiState.update { it.copy(showSuccess = false) }
     }
 
-    /** Dismiss the celebration and give the child a fresh canvas. */
     fun startNewPlanet() {
         _uiState.update {
-            it.copy(showSuccess = false, drawing = it.drawing.clear())
+            DrawingUiState(
+                drawing = it.drawing.clear(),
+                currentColorArgb = it.currentColorArgb,
+                currentStrokeWidth = it.currentStrokeWidth,
+            )
         }
     }
 
-    // -------------------- sending --------------------
-
     fun sendPlanet(planetName: String) {
-        if (_uiState.value.isSending) return // ignore double taps
+        if (_uiState.value.isSending) return
 
         _uiState.update { it.copy(isSending = true, errorMessage = null) }
-        val drawing = _uiState.value.drawing
+        val stateAtLaunch = _uiState.value
 
         viewModelScope.launch {
-            val result = sendPlanet(drawing, planetName)
+            val result = sendPlanet(stateAtLaunch.drawing, planetName, stateAtLaunch.design)
             _uiState.update { state ->
                 when (result) {
                     is SendPlanetResult.Success ->
@@ -125,13 +130,12 @@ class DrawingViewModel(
         }
     }
 
-    /** Kid-friendly wording for the failures that can actually happen here. */
     private fun messageFor(cause: Throwable?): String =
         when {
             cause is UploadRejectedException ->
                 when (cause.statusCode) {
                     429 -> "Slow down a moment - the galaxy is still catching your last planet!"
-                    400 -> "That drawing could not be sent. Try drawing it again!"
+                    400 -> "That planet could not be sent. Check its style and try again!"
                     in 500..599 -> "The galaxy server is having a hiccup. Try again in a moment."
                     else -> "Could not send planet (error ${cause.statusCode})."
                 }
