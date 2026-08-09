@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 
 import {
+  applyMoldedAccentTexture,
   applyPolishedTexture,
+  createMoldedAccentMaterial,
   createPolishedFeatureMaterial,
   createPolishedPlanetMaterial,
+  POLISHED_SURFACE_PROFILE,
 } from './PlanetSurface.js';
 
 const VALID_STYLES = new Set(['classic', 'ringed', 'cratered', 'spiky']);
@@ -64,6 +67,7 @@ export class PlanetEntity {
     this.animator = animator;
     this.disposed = false;
     this.reliefMap = null;
+    this.accentMask = null;
     this.style = VALID_STYLES.has(payload.style) ? payload.style : 'classic';
     this.ringColor = this.normalizeFeatureColor(payload.ring_color, DEFAULT_RING_COLOR);
     this.craterColor = this.normalizeFeatureColor(payload.crater_color, DEFAULT_CRATER_COLOR);
@@ -80,6 +84,13 @@ export class PlanetEntity {
     Object.assign(this, animator.orbitParamsFor(payload.id, gallerySize));
 
     this.mesh = new THREE.Mesh(this.createPlanetGeometry(), createPolishedPlanetMaterial());
+    this.accentMesh = new THREE.Mesh(
+      this.createPlanetGeometry(POLISHED_SURFACE_PROFILE.accentRadius),
+      createMoldedAccentMaterial(),
+    );
+    this.accentMesh.visible = false;
+    this.accentMesh.renderOrder = 1;
+    this.mesh.add(this.accentMesh);
     this.mesh.scale.setScalar(celebrate ? 0.01 : 1);
     scene.add(this.mesh);
 
@@ -98,8 +109,8 @@ export class PlanetEntity {
     return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
   }
 
-  createPlanetGeometry() {
-    const geometry = new THREE.SphereGeometry(1.05, 64, 48);
+  createPlanetGeometry(radius = 1.05) {
+    const geometry = new THREE.SphereGeometry(radius, 64, 48);
     if (this.style === 'cratered') this.applyCraterShape(geometry);
     return geometry;
   }
@@ -333,31 +344,51 @@ export class PlanetEntity {
     const position = geometry.attributes.position;
     const colors = new Float32Array(position.count * 3);
     const base = new THREE.Color(this.ringColor);
+    const seed = this.animator.hashId(`${this.id}-ring-wobble`);
+    const phaseA = this.seededUnit(seed, 2) * Math.PI * 2;
+    const phaseB = this.seededUnit(seed, 10) * Math.PI * 2;
 
     for (let index = 0; index < position.count; index += 1) {
-      const radius = Math.hypot(position.getX(index), position.getY(index));
+      const x = position.getX(index);
+      const y = position.getY(index);
+      const radius = Math.hypot(x, y);
+      const angle = Math.atan2(y, x);
       const t = THREE.MathUtils.clamp(
         (radius - innerRadius) / (outerRadius - innerRadius),
         0,
         1,
       );
+
+      // Two low-amplitude harmonics give the band the gently handmade edge
+      // seen in the reference without turning it into a visibly distorted ring.
+      const radialWobble =
+        Math.sin(angle * 3 + phaseA) * 0.018 + Math.sin(angle * 7 + phaseB) * 0.009;
+      const warpedRadius = radius + radialWobble;
+      const radialScale = warpedRadius / Math.max(radius, 0.001);
+      const verticalWobble = Math.sin(angle * 2 + phaseB) * 0.006;
+      position.setXYZ(index, x * radialScale, y * radialScale, verticalWobble);
+
       const color = shiftedColor(base, ringLightnessAt(t), -0.035);
       colors[index * 3] = color.r;
       colors[index * 3 + 1] = color.g;
       colors[index * 3 + 2] = color.b;
     }
 
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.userData.kidsGalaxyRingGradient = true;
+    geometry.userData.kidsGalaxyRingWobble = true;
     geometry.userData.innerRadius = innerRadius;
     geometry.userData.outerRadius = outerRadius;
+    geometry.userData.wobbleAmplitude = 0.027;
     return geometry;
   }
 
   addPlanetRing() {
     const material = createPolishedFeatureMaterial(0xffffff, {
-      roughness: 0.62,
-      clearcoat: 0.12,
+      roughness: 0.64,
+      clearcoat: 0.08,
       side: THREE.DoubleSide,
     });
     material.vertexColors = true;
@@ -549,6 +580,12 @@ export class PlanetEntity {
     }
 
     this.reliefMap = applyPolishedTexture(this.mesh.material, texture, this.scene.renderer);
+    this.accentMask = applyMoldedAccentTexture(
+      this.accentMesh.material,
+      texture,
+      this.scene.renderer,
+    );
+    this.accentMesh.visible = Boolean(this.accentMask);
   }
 
   disposeObject(object) {
@@ -560,6 +597,7 @@ export class PlanetEntity {
       materials.forEach((material) => {
         const textures = new Set([
           material.map,
+          material.alphaMap,
           material.bumpMap,
           material.normalMap,
           material.emissiveMap,
@@ -575,6 +613,7 @@ export class PlanetEntity {
     this.disposed = true;
     this.disposeObject(this.mesh);
     this.reliefMap = null;
+    this.accentMask = null;
     this.decorations.forEach((object) => this.disposeObject(object));
     this.companions.forEach(({ object }) => this.disposeObject(object));
     this.scene.remove(this.ring);
