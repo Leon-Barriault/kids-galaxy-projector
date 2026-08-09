@@ -47,6 +47,8 @@ class RetrofitPlanetRepository(
                         .joinToString(",") { it.wireValue }
                         .toTextPart()
                 val ringColorPart = design.ringColorArgb.toRgbHex().toTextPart()
+                val craterColorPart = design.craterColorArgb.toRgbHex().toTextPart()
+                val mountainColorPart = design.mountainColorArgb.toRgbHex().toTextPart()
 
                 val response =
                     api.uploadPlanet(
@@ -55,6 +57,8 @@ class RetrofitPlanetRepository(
                         stylePart,
                         companionPart,
                         ringColorPart,
+                        craterColorPart,
+                        mountainColorPart,
                     )
                 if (!response.isSuccessful) {
                     throw UploadRejectedException(response.code())
