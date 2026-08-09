@@ -13,7 +13,18 @@ from app.domain.planet import Planet
 class PlanetRepository(ABC):
     @abstractmethod
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
-        """Store the image plus its display name and return the entity."""
+        """Store a classic image plus its display name and return the entity."""
+
+    def save_designed(
+        self,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+    ) -> Planet:
+        """Store richer design metadata; legacy adapters fall back to classic saves."""
+        return self.save(planet_id, display_name, image_bytes)
 
     @abstractmethod
     def latest(self) -> Planet | None:
