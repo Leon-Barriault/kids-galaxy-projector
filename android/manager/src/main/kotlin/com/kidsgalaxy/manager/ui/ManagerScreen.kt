@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
+import com.kidsgalaxy.manager.ManagerError
+import com.kidsgalaxy.manager.ManagerStatus
 import com.kidsgalaxy.manager.ManagerUiState
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
@@ -77,6 +79,9 @@ fun ManagerScreen(
     var pendingDelete by remember { mutableStateOf<PlanetDto?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
     val languageDescription = stringResource(R.string.language_toggle_description)
+    val subtitle =
+        state.status?.let { managerStatusText(it) }
+            ?: stringResource(R.string.planets_stored_on, galaxy.name)
 
     Column(
         modifier =
@@ -97,9 +102,7 @@ fun ManagerScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text =
-                        state.statusMessage
-                            ?: stringResource(R.string.planets_stored_on, galaxy.name),
+                    text = subtitle,
                     color = TextMuted,
                     fontSize = 14.sp,
                 )
@@ -169,6 +172,7 @@ fun ManagerScreen(
                     CircularProgressIndicator(color = Accent)
                 }
             }
+
             state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
@@ -178,6 +182,7 @@ fun ManagerScreen(
                     )
                 }
             }
+
             else -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -259,17 +264,40 @@ fun ManagerScreen(
         )
     }
 
-    state.errorMessage?.let { message ->
+    state.error?.let { error ->
         AlertDialog(
             onDismissRequest = onClearError,
             title = { Text(stringResource(R.string.something_went_wrong)) },
-            text = { Text(message) },
+            text = { Text(managerErrorText(error)) },
             confirmButton = {
                 TextButton(onClick = onClearError) { Text("OK") }
             },
         )
     }
 }
+
+@Composable
+private fun managerStatusText(status: ManagerStatus): String =
+    when (status) {
+        is ManagerStatus.Stored ->
+            stringResource(R.string.status_planets_stored, status.count)
+
+        is ManagerStatus.Removed ->
+            status.name?.let { stringResource(R.string.status_removed_named, it) }
+                ?: stringResource(R.string.status_planet_removed)
+
+        is ManagerStatus.Cleared ->
+            stringResource(R.string.status_cleared, status.count)
+    }
+
+@Composable
+private fun managerErrorText(error: ManagerError): String =
+    when (error) {
+        is ManagerError.LoadFailed -> stringResource(R.string.error_load_failed, error.code)
+        is ManagerError.DeleteFailed -> stringResource(R.string.error_delete_failed, error.code)
+        is ManagerError.ClearFailed -> stringResource(R.string.error_clear_failed, error.code)
+        ManagerError.Network -> stringResource(R.string.error_network)
+    }
 
 @Composable
 private fun PlanetRow(
