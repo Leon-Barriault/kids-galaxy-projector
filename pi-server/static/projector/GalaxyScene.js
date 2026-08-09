@@ -4,33 +4,33 @@ const THEMES = {
   default: {
     background: 0x050818,
     ambient: 0x8090c0,
-    ambientIntensity: 0.24,
+    ambientIntensity: 0.14,
     fill: 0x7186b8,
-    fillIntensity: 0.16,
+    fillIntensity: 0.09,
     particles: null,
   },
   halloween: {
     background: 0x10051d,
     ambient: 0x8d6bbd,
-    ambientIntensity: 0.22,
+    ambientIntensity: 0.13,
     fill: 0x8b5f9e,
-    fillIntensity: 0.18,
+    fillIntensity: 0.1,
     particles: [0xff8a2b, 0xa66cff, 0x75ff76],
   },
   easter: {
     background: 0x11172f,
     ambient: 0xb9b7ff,
-    ambientIntensity: 0.28,
+    ambientIntensity: 0.16,
     fill: 0x95a2d9,
-    fillIntensity: 0.18,
+    fillIntensity: 0.1,
     particles: [0xffb7d9, 0xffe69a, 0xaeefff, 0xc8f7b2],
   },
   christmas: {
     background: 0x03120f,
     ambient: 0x8fcbb0,
-    ambientIntensity: 0.23,
+    ambientIntensity: 0.14,
     fill: 0x6e9f8e,
-    fillIntensity: 0.17,
+    fillIntensity: 0.09,
     particles: [0xff4f4f, 0x63df84, 0xffd66b, 0xf4f8ff],
   },
 };
@@ -157,7 +157,11 @@ export class GalaxyScene {
       );
     });
 
-    this.sunLight = new THREE.PointLight(0xfff1cf, 5.2, 130, 1.35);
+    // The gallery compresses astronomical distances into 6.5-14.75 scene
+    // units. A high intensity with inverse-square falloff keeps the actual sun
+    // visually dominant even for the outermost kid planet, while ACES tone
+    // mapping keeps the inner planets from clipping.
+    this.sunLight = new THREE.PointLight(0xfff1cf, 90, 130, 2);
     this.sunGroup.add(this.sunLight);
     return sun;
   }
