@@ -18,24 +18,19 @@ from pathlib import Path
 from app.application.event_types import ApplicationEvent
 from app.domain.behavior import GalaxyBehaviorSettings
 from app.domain.planet import Planet
+from app.domain.planet_customization import (
+    DEFAULT_CRATER_COLOR,
+    DEFAULT_MOUNTAIN_COLOR,
+    DEFAULT_RING_COLOR,
+)
 
 
 class PlanetRepository(ABC):
-    """Persistence port for Planet entities.
-
-    Implementations are responsible for:
-    - Storing the PNG bytes + sidecar metadata
-    - Generating stable, unique filenames
-    - Guaranteeing that delete / prune / clear are atomic enough for the
-      single-writer nature of the Pi server
-    """
+    """Persistence port for Planet entities."""
 
     @abstractmethod
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
-        """Store a classic image plus its display name and return the entity.
-
-        This is the minimal contract required by legacy / simple adapters.
-        """
+        """Store a classic image plus its display name and return the entity."""
 
     def save_designed(
         self,
@@ -44,14 +39,11 @@ class PlanetRepository(ABC):
         image_bytes: bytes,
         style: str,
         companions: tuple[str, ...],
-        ring_color: str,
+        ring_color: str = DEFAULT_RING_COLOR,
+        crater_color: str = DEFAULT_CRATER_COLOR,
+        mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
     ) -> Planet:
-        """Store richer design metadata; legacy adapters fall back to classic saves.
-
-        Default implementation simply calls save(), discarding the extra
-        fields. Concrete adapters that understand styles/companions override
-        this method.
-        """
+        """Store richer design metadata; legacy adapters fall back to classic saves."""
         return self.save(planet_id, display_name, image_bytes)
 
     @abstractmethod
@@ -60,40 +52,23 @@ class PlanetRepository(ABC):
 
     @abstractmethod
     def recent(self, limit: int) -> list[Planet]:
-        """Newest `limit` planets, newest first.
-
-        Implementations should return an empty list when nothing is stored.
-        """
+        """Newest `limit` planets, newest first."""
 
     @abstractmethod
     def clear(self) -> list[Planet]:
-        """Remove every stored planet and return what was removed.
-
-        The returned list is useful for logging / confirmation messages.
-        """
+        """Remove every stored planet and return what was removed."""
 
     @abstractmethod
     def prune(self, keep: int) -> None:
-        """Delete all but the newest `keep` planets.
-
-        Called after every successful upload so disk usage stays bounded.
-        """
+        """Delete all but the newest `keep` planets."""
 
     @abstractmethod
     def delete(self, planet_id: str) -> Planet | None:
-        """Remove one planet by id, returning it when found.
-
-        Returns None when the id does not exist (caller decides whether that
-        is an error).
-        """
+        """Remove one planet by id, returning it when found."""
 
     @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
-        """Resolve a public image filename inside the backing store.
-
-        Used by the static file serving path. Must reject path-traversal
-        attempts (return None for anything that escapes the upload root).
-        """
+        """Resolve a public image filename inside the backing store."""
 
 
 class BehaviorRepository(ABC):
@@ -109,10 +84,7 @@ class BehaviorRepository(ABC):
 
 
 class Clock(ABC):
-    """Abstraction over the system calendar.
-
-    Injected so seasonal theme resolution can be tested deterministically.
-    """
+    """Abstraction over the system calendar."""
 
     @abstractmethod
     def today(self) -> date:
@@ -120,11 +92,7 @@ class Clock(ABC):
 
 
 class EventPublisher(ABC):
-    """Fan-out of typed application events to connected adapters.
-
-    Typical concrete implementation is an in-memory pub/sub that feeds the
-    Server-Sent Events endpoint.
-    """
+    """Fan-out of typed application events to connected adapters."""
 
     @abstractmethod
     def publish(self, event: ApplicationEvent) -> None:
@@ -132,26 +100,15 @@ class EventPublisher(ABC):
 
     @abstractmethod
     def subscribe(self) -> AbstractAsyncContextManager:
-        """Async context manager yielding a queue of ApplicationEvent values.
-
-        The returned context manager must clean up the subscription when the
-        async with block exits.
-        """
+        """Async context manager yielding a queue of ApplicationEvent values."""
 
 
 class RateLimiter(ABC):
-    """Per-client upload cooldown.
-
-    Protects the Pi from rapid-fire uploads that would fill disk or starve
-    the image-processing pipeline.
-    """
+    """Per-client upload cooldown."""
 
     @abstractmethod
     def check(self, key: str) -> None:
-        """Raise when `key` is still within its cooldown.
-
-        Implementations should raise a domain RateLimitedError (or subclass).
-        """
+        """Raise when `key` is still within its cooldown."""
 
     @abstractmethod
     def record(self, key: str) -> None:
@@ -159,11 +116,7 @@ class RateLimiter(ABC):
 
 
 class SurfaceStyler(ABC):
-    """Cosmetic treatment applied to a security-normalised PNG.
-
-    Implementations must never raise: styling is best-effort. A failure
-    should return the original bytes unchanged so the upload still succeeds.
-    """
+    """Cosmetic treatment applied to a security-normalised PNG."""
 
     @abstractmethod
     def style(self, png_bytes: bytes) -> bytes:
@@ -183,14 +136,7 @@ class ServiceAdvertiser(ABC):
 
 
 class ImageProcessor(ABC):
-    """Security-normalising image pipeline.
-
-    Responsibilities:
-    - Decode the uploaded bytes
-    - Reject images that exceed dimension limits
-    - Re-encode to a clean PNG (strips metadata, colour profiles, etc.)
-    - Optionally resize to a target size suitable for the projector
-    """
+    """Security-normalising image pipeline."""
 
     @abstractmethod
     def normalize_to_png(
