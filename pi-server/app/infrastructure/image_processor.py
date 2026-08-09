@@ -3,6 +3,13 @@ Pillow-backed image processor.
 
 This is the only module that knows about PIL, which keeps the imaging library
 out of the domain and lets the use cases be tested without it.
+
+Responsibilities:
+- Verify that the uploaded bytes are a real, non-truncated image.
+- Enforce maximum dimension limits.
+- Re-encode to a clean PNG so any smuggled metadata or hostile payloads are
+  discarded (only decoded pixels survive).
+- Optionally downscale to a size suitable for the projector texture.
 """
 
 import logging
@@ -18,14 +25,30 @@ logger = logging.getLogger(__name__)
 
 
 class PillowImageProcessor(ImageProcessor):
+    """Concrete ImageProcessor that uses Pillow for decode / re-encode."""
+
     def normalize_to_png(
         self, content: bytes, max_dimension: int, target_size: int
     ) -> bytes:
+        """Decode, validate, and return a security-normalised PNG.
+
+        Args:
+            content: Raw uploaded bytes (PNG or JPEG).
+            max_dimension: Hard ceiling on width or height.
+            target_size: Preferred maximum side length after resizing.
+
+        Returns:
+            Clean PNG bytes ready for surface styling and storage.
+
+        Raises:
+            ImageValidationError: Corrupt, truncated, or oversized image.
+        """
         self._verify_integrity_and_dimensions(content, max_dimension)
         return self._reencode(content, target_size)
 
     @staticmethod
     def _verify_integrity_and_dimensions(content: bytes, max_dimension: int) -> None:
+        """Confirm the bytes form a valid image within the allowed size."""
         try:
             # First pass: detect truncated or corrupt data.
             with Image.open(BytesIO(content)) as img:

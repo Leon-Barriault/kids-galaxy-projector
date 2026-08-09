@@ -26,12 +26,22 @@ DEFAULT_MAX_ENTRIES = 1024
 
 
 class InMemoryRateLimiter(RateLimiter):
+    """Simple in-process rate limiter suitable for a single-Pi deployment."""
+
     def __init__(
         self,
         cooldown_seconds: float,
         clock: Callable[[], float] = time.time,
         max_entries: int = DEFAULT_MAX_ENTRIES,
     ):
+        """
+        Args:
+            cooldown_seconds: Minimum seconds between successful uploads for
+                the same client key.
+            clock: Injectable clock (defaults to time.time) for testing.
+            max_entries: Soft ceiling on the number of tracked clients; older
+                entries are evicted when the map grows beyond this size.
+        """
         self._cooldown = cooldown_seconds
         self._clock = clock
         self._max_entries = max_entries
@@ -39,6 +49,7 @@ class InMemoryRateLimiter(RateLimiter):
 
     @property
     def tracked_clients(self) -> int:
+        """Number of client keys currently held in memory (for diagnostics)."""
         return len(self._last_upload)
 
     def check(self, key: str) -> None:
@@ -54,6 +65,7 @@ class InMemoryRateLimiter(RateLimiter):
         self._evict_stale(now)
 
     def _evict_stale(self, now: float) -> None:
+        """Drop entries that can no longer affect a future check."""
         if len(self._last_upload) <= self._max_entries:
             return
 
