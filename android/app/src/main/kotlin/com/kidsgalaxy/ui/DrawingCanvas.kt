@@ -149,7 +149,10 @@ private fun DrawScope.drawMountainPreview(
             Triple(1.25 * PI, 1.11f, 1.17f),
         )
 
-    fun point(angle: Double, radiusScale: Float): Offset =
+    fun point(
+        angle: Double,
+        radiusScale: Float,
+    ): Offset =
         Offset(
             centre.x + cos(angle).toFloat() * guide.radius * radiusScale,
             centre.y + sin(angle).toFloat() * guide.radius * radiusScale,
