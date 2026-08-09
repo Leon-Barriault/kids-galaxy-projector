@@ -22,6 +22,7 @@ import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
+import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
@@ -37,6 +38,7 @@ installKidArtworkMotifProjection();
 installKidArtworkPresentationFix();
 installSaturnPlanetRings();
 installHighFidelityPlanetFeatures();
+installReferenceSurfaceTuning();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
