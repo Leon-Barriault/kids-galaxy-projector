@@ -96,10 +96,18 @@ class FileSystemPlanetRepository(PlanetRepository):
         fallback_name = stem.split("_", 1)[1] if "_" in stem else stem
 
         raw_name = metadata.get("name")
-        display_name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else fallback_name
+        display_name = (
+            raw_name.strip()
+            if isinstance(raw_name, str) and raw_name.strip()
+            else fallback_name
+        )
 
         raw_style = metadata.get("style")
-        style = raw_style.strip().lower() if isinstance(raw_style, str) and raw_style.strip() else "classic"
+        style = (
+            raw_style.strip().lower()
+            if isinstance(raw_style, str) and raw_style.strip()
+            else "classic"
+        )
 
         raw_companions = metadata.get("companions")
         companions = (
