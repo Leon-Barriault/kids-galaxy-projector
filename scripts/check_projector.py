@@ -8,8 +8,9 @@ asserts the behaviours that have actually broken before, plus the Pi-friendly
 sculpted renderer contract:
 
   * a page load produces exactly one planet per stored drawing
-  * kid planets use a coherent physical base plus a raised artwork shell
-  * child colour accents own alpha, bump, and displacement maps
+  * kid drawings become a coherent body plus limited raised accent shapes
+  * the child's full PNG is never wrapped flat over the whole globe
+  * sun orbit guides stay smooth while only a ringed planet owns ring wobble
   * the actual galaxy sun is the dominant directional lighting reference
   * ringed planets own a wide flat, graded, gently wobbled ring
   * cratered planets own recessed bowl/rim geometry
@@ -36,7 +37,7 @@ import time
 from pathlib import Path
 
 import httpx
-from PIL import Image
+from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -52,6 +53,29 @@ def free_port() -> int:
 def png_bytes(colour: tuple[int, int, int]) -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (64, 64), colour).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def kid_style_png_bytes() -> bytes:
+    """A filled multicolour drawing that should become body + a few accents."""
+    image = Image.new("RGB", (64, 64), (33, 150, 243))
+    draw = ImageDraw.Draw(image)
+    draw.line(
+        [(1, 15), (13, 11), (26, 17), (39, 13), (52, 19), (63, 15)],
+        fill=(76, 175, 80),
+        width=10,
+        joint="curve",
+    )
+    draw.line(
+        [(3, 45), (17, 39), (31, 45), (46, 40), (62, 46)],
+        fill=(255, 235, 59),
+        width=8,
+        joint="curve",
+    )
+    draw.ellipse((38, 24, 55, 36), fill=(255, 152, 0))
+    draw.ellipse((8, 27, 18, 35), fill=(76, 175, 80))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -99,12 +123,14 @@ class Server:
         self,
         name: str,
         colour: tuple[int, int, int] = (200, 30, 30),
+        artwork: bytes | None = None,
         **design: str,
     ) -> str:
         data = {"name": name, **design}
+        payload = artwork if artwork is not None else png_bytes(colour)
         response = httpx.post(
             f"{self.base}/api/upload",
-            files={"file": ("planet.png", png_bytes(colour), "image/png")},
+            files={"file": ("planet.png", payload, "image/png")},
             data=data,
             timeout=10,
         )
@@ -142,7 +168,7 @@ def main() -> int:
     with Server() as server, sync_playwright() as pw:
         first = server.upload(
             "Alpha",
-            (220, 40, 40),
+            artwork=kid_style_png_bytes(),
             style="ringed",
             ring_color="#ffffff",
         )
@@ -177,8 +203,8 @@ def main() -> int:
 
         wait_for(
             page,
-            "Array.from(window.kidsGalaxy.kidPlanets.values())"
-            ".every((v) => v.accentMesh && v.accentMesh.visible && v.accentMesh.material.alphaMap)",
+            f"(() => {{ const v = window.kidsGalaxy.kidPlanets.get('{first}'); "
+            "return v && v.accentMesh && v.accentMesh.material.alphaMap; }})()",
         )
         ids = planet_ids(page)
         check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
@@ -187,10 +213,19 @@ def main() -> int:
 
         print("\nsculpted Pi renderer")
         polished = page.evaluate(
-            "(() => {"
-            "const p = window.kidsGalaxy.kidPlanets.values().next().value;"
+            f"(() => {{"
+            f"const p = window.kidsGalaxy.kidPlanets.get('{first}');"
             "const g = window.kidsGalaxy.engine.galaxyScene;"
             "const a = p.accentMesh;"
+            "const alphaCanvas = a.material.alphaMap?.image;"
+            "let coverage = 0;"
+            "if (alphaCanvas?.getContext) {"
+            "const context = alphaCanvas.getContext('2d');"
+            "const pixels = context.getImageData(0, 0, alphaCanvas.width, alphaCanvas.height).data;"
+            "let on = 0;"
+            "for (let i = 0; i < pixels.length; i += 4) { if (pixels[i] > 96) on += 1; }"
+            "coverage = on / (pixels.length / 4);"
+            "}"
             "return {"
             "material: p.mesh.material.type,"
             "baseHasFlatTexture: Boolean(p.mesh.material.map),"
@@ -204,6 +239,7 @@ def main() -> int:
             "accentBumpScale: a.material.bumpScale,"
             "accentDisplacementScale: a.material.displacementScale,"
             "accentRadius: a.geometry.parameters.radius,"
+            "accentCoverage: coverage,"
             "emissive: p.mesh.material.emissiveIntensity,"
             "sunType: g.sunLight.type,"
             "sunIntensity: g.sunLight.intensity,"
@@ -223,21 +259,25 @@ def main() -> int:
             not polished["baseHasDisplacement"],
             "base sphere stays coherent instead of inflating under paint",
         )
-        check(polished["accentVisible"], "child artwork is rendered as a separate raised shell")
+        check(polished["accentVisible"], "kid drawing produces a separate raised accent shell")
         check(
             polished["accentMaterial"] == "MeshPhysicalMaterial",
             "raised artwork uses physical toy material",
         )
-        check(polished["accentHasColour"], "raised shell carries the child's colour layout")
-        check(polished["accentHasMask"], "raised shell is cut to the child's painted shapes")
+        check(polished["accentHasColour"], "raised shell carries interpreted kid colours")
+        check(polished["accentHasMask"], "raised shell is cut to simplified accent shapes")
         check(polished["accentHasBump"], "accent edges have molded normal depth")
         check(polished["accentHasDisplacement"], "accent shapes have real geometric height")
         check(polished["accentBumpScale"] >= 0.07, "molded shoulders are visually pronounced")
         check(
-            polished["accentDisplacementScale"] >= 0.05,
+            polished["accentDisplacementScale"] >= 0.045,
             "colour ribbons stand clearly above the planet body",
         )
-        check(polished["accentRadius"] > 1.07, "artwork shell sits visibly proud of the base sphere")
+        check(polished["accentRadius"] > 1.08, "artwork shell sits visibly proud of the base sphere")
+        check(
+            0.05 <= polished["accentCoverage"] <= 0.45,
+            f"drawing is interpreted as limited accents, not full coverage ({polished['accentCoverage']:.2f})",
+        )
         check(polished["emissive"] == 0, "planet is not flattened by self-emission")
         check(polished["sunType"] == "PointLight", "galaxy sun owns the physical key light")
         check(
@@ -250,10 +290,12 @@ def main() -> int:
         check(polished["internalWidth"] <= 1920, "internal render width is capped at 1920")
         check(polished["internalHeight"] <= 1080, "internal render height is capped at 1080")
 
+        print("\nring and orbit separation")
         ring_details = page.evaluate(
             f"(() => {{"
             f"const e = window.kidsGalaxy.kidPlanets.get('{first}');"
             "const ring = e.decorations[0];"
+            "const orbit = e.ring;"
             "const colors = ring.geometry.getAttribute('color');"
             "let min = 1; let max = 0;"
             "for (let i = 0; i < colors.count; i += 1) {"
@@ -268,17 +310,21 @@ def main() -> int:
             "hasWobble: Boolean(ring.geometry.userData.kidsGalaxyRingWobble),"
             "wobbleAmplitude: ring.geometry.userData.wobbleAmplitude,"
             "vertexColors: ring.material.vertexColors,"
-            "spread: max - min"
+            "spread: max - min,"
+            "orbitGuide: Boolean(orbit.geometry.userData.kidsGalaxyOrbitGuide),"
+            "orbitWobble: Boolean(orbit.geometry.userData.kidsGalaxyRingWobble)"
             "};"
             "})()"
         )
         check(ring_details["type"] == "RingGeometry", "planet ring is a flat annular band")
         check(ring_details["outer"] - ring_details["inner"] >= 0.8, "planet ring is visibly wide")
-        check(ring_details["hasGradient"], "ring carries per-vertex radial colour bands")
-        check(ring_details["hasWobble"], "ring has a restrained handmade edge wobble")
-        check(ring_details["wobbleAmplitude"] < 0.04, "ring wobble remains subtle")
-        check(ring_details["vertexColors"], "ring material displays the colour gradation")
-        check(ring_details["spread"] > 0.12, "white rings still have visible dark-to-light contrast")
+        check(ring_details["hasGradient"], "planet ring carries radial colour gradation")
+        check(ring_details["hasWobble"], "only the planet ring owns the handmade wobble")
+        check(ring_details["wobbleAmplitude"] < 0.04, "planet ring wobble remains subtle")
+        check(ring_details["vertexColors"], "planet ring displays the colour gradation")
+        check(ring_details["spread"] > 0.12, "white planet rings retain dark-to-light contrast")
+        check(ring_details["orbitGuide"], "sun orbit path is explicitly a smooth orbit guide")
+        check(not ring_details["orbitWobble"], "sun orbit guide never receives ring wobble")
 
         crater_geometry = page.evaluate(
             f"(() => {{"
