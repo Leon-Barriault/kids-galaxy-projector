@@ -12,7 +12,11 @@ from app.domain.image_rules import (
 )
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
-from app.domain.planet_customization import normalize_companions, normalize_planet_style
+from app.domain.planet_customization import (
+    normalize_companions,
+    normalize_planet_style,
+    normalize_ring_color,
+)
 from app.domain.scene import Scene
 from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter, SurfaceStyler
 
@@ -48,6 +52,7 @@ class SubmitPlanetUseCase:
         client_key: str,
         raw_style: str | None = None,
         raw_companions: str | None = None,
+        raw_ring_color: str | None = None,
         max_size: int = DEFAULT_MAX_SIZE,
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
@@ -60,6 +65,7 @@ class SubmitPlanetUseCase:
 
         style = normalize_planet_style(raw_style)
         companions = normalize_companions(raw_companions)
+        ring_color = normalize_ring_color(raw_ring_color)
 
         clean_png = self._image_processor.normalize_to_png(
             image_bytes, max_dimension=max_dimension, target_size=target_size
@@ -84,6 +90,7 @@ class SubmitPlanetUseCase:
                 image_bytes=clean_png,
                 style=style,
                 companions=companions,
+                ring_color=ring_color,
             )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
