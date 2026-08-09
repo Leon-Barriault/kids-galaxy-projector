@@ -1,14 +1,13 @@
-export const MAX_INTERNAL_WIDTH = 1920;
-export const MAX_INTERNAL_HEIGHT = 1080;
-export const MAX_DEVICE_PIXEL_RATIO = 1;
-export const MIN_RENDER_SCALE = 0.25;
+export const MAX_INTERNAL_WIDTH = 3840;
+export const MAX_INTERNAL_HEIGHT = 2160;
+export const MAX_DEVICE_PIXEL_RATIO = 2;
+export const MIN_RENDER_SCALE = 0.5;
 
 /**
- * Keep the browser canvas full-screen while bounding the actual WebGL buffer.
- *
- * A Pi can happily negotiate a 4K HDMI mode, but rendering this scene at 4K
- * would quadruple fragment work for very little visible benefit on a wall.
- * The browser/projector performs the final upscale instead.
+ * Keep the browser canvas full-screen while allowing a modern laptop GPU to
+ * render at native projector resolution, including 4K when the display and GPU
+ * support it. The cap protects against pathological browser DPR values rather
+ * than enforcing a low-power device budget.
  */
 export function renderPixelRatioForViewport(
   width,
@@ -28,7 +27,7 @@ export function renderPixelRatioForViewport(
   );
 }
 
-export function applyPiRenderBudget(
+export function applyDesktopRenderBudget(
   renderer,
   width,
   height,
@@ -38,11 +37,14 @@ export function applyPiRenderBudget(
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(width, height);
 
-  // WebGLRenderer is not an Object3D and therefore does not receive Three's
-  // usual userData bag. Create our own lightweight diagnostics container.
   renderer.userData ??= {};
+  renderer.userData.kidsGalaxyQualityProfile = 'laptop-high';
   renderer.userData.kidsGalaxyRenderScale = pixelRatio;
   renderer.userData.kidsGalaxyInternalWidth = Math.round(width * pixelRatio);
   renderer.userData.kidsGalaxyInternalHeight = Math.round(height * pixelRatio);
   return pixelRatio;
 }
+
+// Transitional alias for modules updated in a later cleanup pass. It now uses
+// the laptop/desktop quality profile; there is no Raspberry Pi render cap.
+export const applyPiRenderBudget = applyDesktopRenderBudget;
