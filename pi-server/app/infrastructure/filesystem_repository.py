@@ -1,10 +1,9 @@
 """
 Filesystem-backed planet repository.
 
-Layout: `<id>_<safe name>.png` alongside `<id>_<safe name>.json` holding the
-display name. The sidecar exists because the filename is lossy by design - it
-cannot carry apostrophes, accents or punctuation, and it carries the internal
-id, which must never reach the projector.
+Layout: `<id>_<safe name>.png` alongside `<id>_<safe name>.json`. The JSON
+sidecar preserves the display name and the kid-selected planet design while
+remaining backward-compatible with older name-only sidecars.
 """
 
 import json
@@ -28,6 +27,22 @@ class FileSystemPlanetRepository(PlanetRepository):
         return self._directory
 
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
+        return self.save_designed(
+            planet_id=planet_id,
+            display_name=display_name,
+            image_bytes=image_bytes,
+            style="classic",
+            companions=(),
+        )
+
+    def save_designed(
+        self,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+    ) -> Planet:
         filename = build_stored_filename(planet_id, display_name)
         image_path = self._directory / filename
         image_path.write_bytes(image_bytes)
@@ -37,15 +52,22 @@ class FileSystemPlanetRepository(PlanetRepository):
             filename=filename,
             display_name=display_name,
             created_at=image_path.stat().st_mtime,
+            style=style,
+            companions=companions,
         )
         self._write_metadata(planet)
         return planet
 
     def _write_metadata(self, planet: Planet) -> None:
         path = self._directory / planet.metadata_filename
+        payload = {
+            "name": planet.display_name,
+            "style": planet.style,
+            "companions": list(planet.companions),
+        }
         try:
             with path.open("w", encoding="utf-8") as fh:
-                json.dump({"name": planet.display_name}, fh, ensure_ascii=False)
+                json.dump(payload, fh, ensure_ascii=False)
         except OSError as e:
             logger.warning("Could not write metadata for %s: %s", planet.filename, e)
 
@@ -61,8 +83,6 @@ class FileSystemPlanetRepository(PlanetRepository):
         return [self._to_planet(image) for image in self._images_newest_first()[:limit]]
 
     def _images_newest_first(self) -> list[Path]:
-        # Secondary key on name so two saves in the same second stay ordered
-        # deterministically (integration tests and the manager list both care).
         return sorted(
             self._directory.glob("*.png"),
             key=lambda p: (p.stat().st_mtime, p.name),
@@ -72,36 +92,44 @@ class FileSystemPlanetRepository(PlanetRepository):
     def _to_planet(self, image_path: Path) -> Planet:
         stem = image_path.stem
         planet_id = stem.split("_", 1)[0] if "_" in stem else stem
+        metadata = self._read_metadata(image_path)
+        fallback_name = stem.split("_", 1)[1] if "_" in stem else stem
+
+        raw_name = metadata.get("name")
+        display_name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else fallback_name
+
+        raw_style = metadata.get("style")
+        style = raw_style.strip().lower() if isinstance(raw_style, str) and raw_style.strip() else "classic"
+
+        raw_companions = metadata.get("companions")
+        companions = (
+            tuple(item for item in raw_companions if isinstance(item, str))
+            if isinstance(raw_companions, list)
+            else ()
+        )
+
         return Planet(
             id=planet_id,
             filename=image_path.name,
-            display_name=self._read_display_name(image_path),
+            display_name=display_name,
             created_at=image_path.stat().st_mtime,
+            style=style,
+            companions=companions,
         )
 
-    def _read_display_name(self, image_path: Path) -> str:
+    def _read_metadata(self, image_path: Path) -> dict:
         meta_path = self._directory / Path(image_path.name).with_suffix(".json").name
-        if meta_path.exists():
-            try:
-                with meta_path.open("r", encoding="utf-8") as fh:
-                    name = json.load(fh).get("name")
-                if isinstance(name, str) and name.strip():
-                    return name.strip()
-            except (OSError, ValueError) as e:
-                logger.warning(
-                    "Could not read metadata for %s: %s", image_path.name, e
-                )
-
-        stem = image_path.stem
-        return stem.split("_", 1)[1] if "_" in stem else stem
+        if not meta_path.exists():
+            return {}
+        try:
+            with meta_path.open("r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, ValueError) as e:
+            logger.warning("Could not read metadata for %s: %s", image_path.name, e)
+            return {}
 
     def delete(self, planet_id: str) -> Planet | None:
-        """
-        Remove the image and its sidecar for `planet_id`.
-
-        Matching is by the id prefix of the stored filename (the same id the
-        projector and the manager app use), not by display name.
-        """
         for image_path in self._images_newest_first():
             planet = self._to_planet(image_path)
             if planet.id != planet_id:
@@ -118,15 +146,6 @@ class FileSystemPlanetRepository(PlanetRepository):
         return None
 
     def clear(self) -> list[Planet]:
-        """
-        Empty the store.
-
-        Reads every planet first so callers know what went, then deletes. A
-        failure part-way leaves the rest deleted rather than rolling back:
-        there is no transaction here, and a half-cleared gallery is a far
-        better outcome for a volunteer than an error and no idea what state
-        the Pi is in.
-        """
         removed: list[Planet] = []
         for image_path in self._images_newest_first():
             planet = self._to_planet(image_path)
