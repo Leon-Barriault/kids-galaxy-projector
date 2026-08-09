@@ -13,13 +13,31 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+sealed interface ManagerStatus {
+    data class Stored(val count: Int) : ManagerStatus
+
+    data class Removed(val name: String?) : ManagerStatus
+
+    data class Cleared(val count: Int) : ManagerStatus
+}
+
+sealed interface ManagerError {
+    data class LoadFailed(val code: Int) : ManagerError
+
+    data class DeleteFailed(val code: Int) : ManagerError
+
+    data class ClearFailed(val code: Int) : ManagerError
+
+    data object Network : ManagerError
+}
+
 data class ManagerUiState(
     val planets: List<PlanetDto> = emptyList(),
     val isLoading: Boolean = false,
     val deletingIds: Set<String> = emptySet(),
     val isClearing: Boolean = false,
-    val errorMessage: String? = null,
-    val statusMessage: String? = null,
+    val error: ManagerError? = null,
+    val status: ManagerStatus? = null,
 ) {
     val canClearAll: Boolean get() = planets.isNotEmpty() && !isClearing && !isLoading
 }
@@ -36,7 +54,7 @@ class ManagerViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val response = api.listPlanets(limit = 30)
                 if (response.isSuccessful) {
@@ -45,22 +63,22 @@ class ManagerViewModel(
                         it.copy(
                             planets = planets,
                             isLoading = false,
-                            statusMessage = "${planets.size} planet(s) stored",
+                            status = ManagerStatus.Stored(planets.size),
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = "Could not load planets (${response.code()})",
+                            error = ManagerError.LoadFailed(response.code()),
                         )
                     }
                 }
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Network error",
+                        error = ManagerError.Network,
                     )
                 }
             }
@@ -70,7 +88,7 @@ class ManagerViewModel(
     fun deletePlanet(id: String) {
         if (id in _uiState.value.deletingIds) return
         viewModelScope.launch {
-            _uiState.update { it.copy(deletingIds = it.deletingIds + id, errorMessage = null) }
+            _uiState.update { it.copy(deletingIds = it.deletingIds + id, error = null) }
             try {
                 val response = api.deletePlanet(id)
                 if (response.isSuccessful) {
@@ -79,27 +97,22 @@ class ManagerViewModel(
                         state.copy(
                             planets = state.planets.filterNot { it.id == id },
                             deletingIds = state.deletingIds - id,
-                            statusMessage =
-                                if (name != null) {
-                                    "Removed \"$name\""
-                                } else {
-                                    "Planet removed"
-                                },
+                            status = ManagerStatus.Removed(name),
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             deletingIds = it.deletingIds - id,
-                            errorMessage = "Delete failed (${response.code()})",
+                            error = ManagerError.DeleteFailed(response.code()),
                         )
                     }
                 }
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
                         deletingIds = it.deletingIds - id,
-                        errorMessage = error.message ?: "Network error",
+                        error = ManagerError.Network,
                     )
                 }
             }
@@ -109,7 +122,7 @@ class ManagerViewModel(
     fun clearAll() {
         if (_uiState.value.isClearing) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isClearing = true, errorMessage = null) }
+            _uiState.update { it.copy(isClearing = true, error = null) }
             try {
                 val response = api.clearPlanets()
                 if (response.isSuccessful) {
@@ -119,22 +132,22 @@ class ManagerViewModel(
                             planets = emptyList(),
                             deletingIds = emptySet(),
                             isClearing = false,
-                            statusMessage = "Cleared $removed planet(s)",
+                            status = ManagerStatus.Cleared(removed),
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             isClearing = false,
-                            errorMessage = "Could not clear the gallery (${response.code()})",
+                            error = ManagerError.ClearFailed(response.code()),
                         )
                     }
                 }
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
                         isClearing = false,
-                        errorMessage = error.message ?: "Network error",
+                        error = ManagerError.Network,
                     )
                 }
             }
@@ -142,7 +155,7 @@ class ManagerViewModel(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
+        _uiState.update { it.copy(error = null) }
     }
 
     companion object {
