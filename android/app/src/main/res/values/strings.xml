@@ -50,6 +50,21 @@
     <string name="sending_to_galaxy">Sending to the Galaxy…</string>
     <string name="drawing_canvas_description">Drawing area. Drag to paint your planet.</string>
 
+    <!-- Galaxy picker -->
+    <string name="choose_galaxy">Choose a galaxy</string>
+    <string name="current_galaxy">Current: %1$s</string>
+    <string name="searching_local_network">Searching the local network…</string>
+    <string name="nearby_galaxies">Nearby galaxies</string>
+    <string name="galaxy_checking">Checking…</string>
+    <string name="galaxy_reachable">✓ Reachable</string>
+    <string name="galaxy_unreachable_retry">⚠ Unreachable — tap to retry</string>
+    <string name="or_enter_address">Or enter an address</string>
+    <string name="invalid_galaxy_address">Invalid galaxy address</string>
+    <string name="galaxy_could_not_be_reached">Galaxy could not be reached</string>
+    <string name="verifying">Verifying…</string>
+    <string name="use_this_address">Use this address</string>
+    <string name="cancel">Cancel</string>
+
     <!-- Dialogs -->
     <string name="oops">Oops!</string>
     <string name="ok">OK</string>
