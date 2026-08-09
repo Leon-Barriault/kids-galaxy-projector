@@ -16,9 +16,12 @@
     <string name="tap_to_pick">Touche pour choisir</string>
     <string name="next_paint">Suivant : Peins-la!  🎨</string>
     <string name="paint_your_planet">Peins ta planète %1$s</string>
-    <string name="crater_paint_hint">Les cercles des cratères font partie de ta planète. Choisis une couleur et peins à l’intérieur!</string>
     <string name="ring_color_title">Couleur de l’anneau</string>
     <string name="ring_color_hint">Choisis la couleur de l’anneau autour de ta planète.</string>
+    <string name="crater_color_title">Couleur des cratères</string>
+    <string name="crater_color_hint">Choisis la couleur à l’intérieur des cratères.</string>
+    <string name="mountain_color_title">Couleur des montagnes</string>
+    <string name="mountain_color_hint">Choisis la couleur des sommets montagneux.</string>
     <string name="back_style">← Style</string>
     <string name="next_friends">Suivant : Amis de l’espace  🚀</string>
     <string name="friends_title">Ajoute des amis de l’espace!</string>
