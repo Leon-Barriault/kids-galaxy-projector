@@ -1,9 +1,9 @@
 """Domain rules for kid-selected planet forms and animated companions.
 
 These pure functions validate and normalise the optional design choices a
-child can make when sending a planet (style, companions, ring colour). They
-raise ValidationError on illegal values so the use-case layer can treat them
-like any other domain rule violation.
+child can make when sending a planet (style, companions and feature colours).
+They raise ValidationError on illegal values so the use-case layer can treat
+them like any other domain rule violation.
 """
 
 import re
@@ -16,8 +16,10 @@ PLANET_STYLES = frozenset({"classic", "ringed", "cratered", "spiky"})
 #: Allowed companion identifiers that can float around a planet.
 PLANET_COMPANIONS = frozenset({"moon", "stars", "satellite", "astronaut"})
 
-#: Default ring colour used when the child does not pick one.
+#: Default feature colours used when older clients do not send a value.
 DEFAULT_RING_COLOR = "#d8a6ff"
+DEFAULT_CRATER_COLOR = "#858c98"
+DEFAULT_MOUNTAIN_COLOR = "#8d6e63"
 
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -49,17 +51,30 @@ def normalize_companions(raw: str | None) -> tuple[str, ...]:
     if unknown:
         raise ValidationError("Choose only the available space friends.")
 
-    # Preserve the child's UI order while silently removing duplicates.
     return tuple(dict.fromkeys(requested))
 
 
-def normalize_ring_color(raw: str | None) -> str:
-    """Return a canonical CSS-style RGB hex value for the 3D ring.
-
-    Accepts only #RRGGBB (case-insensitive). Falls back to DEFAULT_RING_COLOR
-    when the input is blank. Raises ValidationError for any other format.
-    """
-    value = (raw or DEFAULT_RING_COLOR).strip()
+def _normalize_feature_color(
+    raw: str | None,
+    default: str,
+    feature_name: str,
+) -> str:
+    value = (raw or default).strip()
     if not _HEX_COLOR.fullmatch(value):
-        raise ValidationError("Choose one of the available ring colors.")
+        raise ValidationError(f"Choose one of the available {feature_name} colors.")
     return value.lower()
+
+
+def normalize_ring_color(raw: str | None) -> str:
+    """Return a canonical CSS-style RGB hex value for the 3D ring."""
+    return _normalize_feature_color(raw, DEFAULT_RING_COLOR, "ring")
+
+
+def normalize_crater_color(raw: str | None) -> str:
+    """Return a canonical CSS-style RGB hex value for crater interiors."""
+    return _normalize_feature_color(raw, DEFAULT_CRATER_COLOR, "crater")
+
+
+def normalize_mountain_color(raw: str | None) -> str:
+    """Return a canonical CSS-style RGB hex value for mountain peaks."""
+    return _normalize_feature_color(raw, DEFAULT_MOUNTAIN_COLOR, "mountain")
