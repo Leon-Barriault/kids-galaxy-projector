@@ -22,7 +22,7 @@ import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
 import com.kidsgalaxy.connection.SharedPreferencesUiLanguageStore
 import com.kidsgalaxy.connection.withUiLanguage
 import com.kidsgalaxy.manager.ui.GalaxyPickerDialog
-import com.kidsgalaxy.manager.ui.ManagerScreen
+import com.kidsgalaxy.manager.ui.ManagerTabbedScreen
 import java.net.URI
 
 /** Space-dark, matching the drawing app and the projector page. */
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                     modifier = Modifier.safeDrawingPadding(),
                 ) {
-                    ManagerScreen(
+                    ManagerTabbedScreen(
                         state = state,
                         galaxy = selectedGalaxy,
                         language = language,
@@ -94,6 +94,15 @@ class MainActivity : ComponentActivity() {
                         onDelete = managerViewModel::deletePlanet,
                         onClearAll = managerViewModel::clearAll,
                         onClearError = managerViewModel::clearError,
+                        onAsteroidBeltChange = managerViewModel::setAsteroidBeltEnabled,
+                        onCometsChange = managerViewModel::setCometsEnabled,
+                        onCometFrequencyChange = managerViewModel::setCometFrequency,
+                        onFlybyAsteroidsChange = managerViewModel::setFlybyAsteroidsEnabled,
+                        onFlybyFrequencyChange = managerViewModel::setFlybyFrequency,
+                        onBehaviorModeChange = managerViewModel::setBehaviorMode,
+                        onManualThemeChange = managerViewModel::setManualTheme,
+                        onThemeEnabledChange = managerViewModel::setThemeEnabled,
+                        onAmbientEffectsChange = managerViewModel::setAmbientEffects,
                     )
                 }
 
