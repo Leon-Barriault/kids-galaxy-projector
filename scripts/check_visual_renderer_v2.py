@@ -79,19 +79,21 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
     )
     page.wait_for_timeout(650)
 
-    faithful = page.evaluate(
+    motif = page.evaluate(
         """
         (id) => {
           const p = window.kidsGalaxy.kidPlanets.get(id);
           return Boolean(
-            p?.mesh?.material?.userData?.kidsGalaxyFaithfulKidDrawing &&
-            p?.accentMesh?.material?.userData?.kidsGalaxyFaithfulKidDrawing
+            p?.mesh?.material?.userData?.kidsGalaxyKidMotifProjection &&
+            p?.accentMesh?.material?.userData?.kidsGalaxyKidMotifProjection &&
+            p?.accentEdgeMesh?.material?.userData?.kidsGalaxyKidMotifProjection &&
+            p?.mesh?.material?.userData?.kidsGalaxyFaithfulKidDrawing
           );
         }
         """,
         planet_id,
     )
-    visual.check(faithful, "shape-preserving kid artwork material is active on the rendered mesh")
+    visual.check(motif, "recognizable front-motif kid artwork renderer is active on the rendered mesh")
 
     if not include_ring:
         mask_data = page.evaluate(
