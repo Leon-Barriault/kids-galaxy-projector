@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gestionnaire Kids Galaxy</string>
+    <string name="manager_title">Gestionnaire Kids Galaxy</string>
+    <string name="planets_stored_on">Planètes enregistrées sur %1$s</string>
+    <string name="language_toggle_description">Basculer entre l’anglais et le français</string>
+    <string name="refresh">Actualiser</string>
+    <string name="clearing">Suppression…</string>
+    <string name="clear_all_count">Tout effacer (%1$d)</string>
+    <string name="no_planets">Aucune planète pour le moment — les enfants peuvent commencer à dessiner!</string>
+    <string name="remove_every_planet">Supprimer toutes les planètes?</string>
+    <string name="remove_every_planet_body">Cela supprime les %1$d planète(s) de %2$s et vide son projecteur. Cette action est irréversible.</string>
+    <string name="clear_all">Tout effacer</string>
+    <string name="keep_them">Les garder</string>
+    <string name="remove_planet">Supprimer la planète?</string>
+    <string name="remove_planet_body">« %1$s » quittera %2$s et sera supprimée du serveur. Cette action est irréversible.</string>
+    <string name="remove">Supprimer</string>
+    <string name="cancel">Annuler</string>
+    <string name="something_went_wrong">Un problème est survenu</string>
+    <string name="planet_id">id %1$s</string>
+    <string name="planet_shape">Forme : %1$s</string>
+    <string name="shape_classic">Classique</string>
+    <string name="shape_ringed">Avec anneau</string>
+    <string name="shape_cratered">Avec cratères</string>
+    <string name="shape_spiky">Pics montagneux</string>
+    <string name="remove_named">Supprimer %1$s</string>
+</resources>
