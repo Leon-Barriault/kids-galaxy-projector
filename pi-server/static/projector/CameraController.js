@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+import { applyPiRenderBudget } from './ProjectorQuality.js';
+
 /** Owns projector camera, user controls, and viewport resize handling. */
 export class CameraController {
   constructor(renderer) {
@@ -35,7 +37,12 @@ export class CameraController {
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    applyPiRenderBudget(
+      this.renderer,
+      window.innerWidth,
+      window.innerHeight,
+      window.devicePixelRatio,
+    );
   }
 
   dispose() {
