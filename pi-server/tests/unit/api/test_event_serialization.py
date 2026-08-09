@@ -9,13 +9,15 @@ from app.domain.behavior import BehaviorMode, GalaxyBehavior, GalaxyTheme
 from app.domain.planet import Planet
 
 
-def planet() -> Planet:
-    return Planet(
-        id="abc",
-        filename="abc.png",
-        display_name="Blue World",
-        created_at=12.5,
-    )
+def planet(**overrides) -> Planet:
+    values = {
+        "id": "abc",
+        "filename": "abc.png",
+        "display_name": "Blue World",
+        "created_at": 12.5,
+    }
+    values.update(overrides)
+    return Planet(**values)
 
 
 def test_planet_created_serializes_to_existing_wire_contract():
@@ -27,6 +29,28 @@ def test_planet_created_serializes_to_existing_wire_contract():
             "url": "/uploads/abc.png",
             "name": "Blue World",
             "timestamp": 12.5,
+        },
+    )
+
+
+def test_designed_planet_carries_style_and_companions():
+    assert serialize_event(
+        PlanetCreated(
+            planet(
+                style="spiky",
+                companions=("moon", "astronaut"),
+            )
+        )
+    ) == (
+        "planet",
+        {
+            "has_planet": True,
+            "id": "abc",
+            "url": "/uploads/abc.png",
+            "name": "Blue World",
+            "timestamp": 12.5,
+            "style": "spiky",
+            "companions": ["moon", "astronaut"],
         },
     )
 
