@@ -1,4 +1,14 @@
-"""Ports: abstractions the application layer depends on."""
+"""Ports: abstractions the application layer depends on.
+
+These interfaces define the contracts between the application (use-case)
+layer and the outside world. Concrete implementations live in the
+infrastructure package. The application layer must never import concrete
+adapters; it only depends on these ports.
+
+Keeping the ports here (rather than inside the domain) allows the domain
+to stay free of any knowledge of persistence, events, rate-limiting, or
+image processing.
+"""
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
@@ -11,9 +21,21 @@ from app.domain.planet import Planet
 
 
 class PlanetRepository(ABC):
+    """Persistence port for Planet entities.
+
+    Implementations are responsible for:
+    - Storing the PNG bytes + sidecar metadata
+    - Generating stable, unique filenames
+    - Guaranteeing that delete / prune / clear are atomic enough for the
+      single-writer nature of the Pi server
+    """
+
     @abstractmethod
     def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
-        """Store a classic image plus its display name and return the entity."""
+        """Store a classic image plus its display name and return the entity.
+
+        This is the minimal contract required by legacy / simple adapters.
+        """
 
     def save_designed(
         self,
@@ -24,7 +46,12 @@ class PlanetRepository(ABC):
         companions: tuple[str, ...],
         ring_color: str,
     ) -> Planet:
-        """Store richer design metadata; legacy adapters fall back to classic saves."""
+        """Store richer design metadata; legacy adapters fall back to classic saves.
+
+        Default implementation simply calls save(), discarding the extra
+        fields. Concrete adapters that understand styles/companions override
+        this method.
+        """
         return self.save(planet_id, display_name, image_bytes)
 
     @abstractmethod
@@ -33,26 +60,45 @@ class PlanetRepository(ABC):
 
     @abstractmethod
     def recent(self, limit: int) -> list[Planet]:
-        """Newest `limit` planets, newest first."""
+        """Newest `limit` planets, newest first.
+
+        Implementations should return an empty list when nothing is stored.
+        """
 
     @abstractmethod
     def clear(self) -> list[Planet]:
-        """Remove every stored planet and return what was removed."""
+        """Remove every stored planet and return what was removed.
+
+        The returned list is useful for logging / confirmation messages.
+        """
 
     @abstractmethod
     def prune(self, keep: int) -> None:
-        """Delete all but the newest `keep` planets."""
+        """Delete all but the newest `keep` planets.
+
+        Called after every successful upload so disk usage stays bounded.
+        """
 
     @abstractmethod
     def delete(self, planet_id: str) -> Planet | None:
-        """Remove one planet by id, returning it when found."""
+        """Remove one planet by id, returning it when found.
+
+        Returns None when the id does not exist (caller decides whether that
+        is an error).
+        """
 
     @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
-        """Resolve a public image filename inside the backing store."""
+        """Resolve a public image filename inside the backing store.
+
+        Used by the static file serving path. Must reject path-traversal
+        attempts (return None for anything that escapes the upload root).
+        """
 
 
 class BehaviorRepository(ABC):
+    """Persistence for operator-selected galaxy behaviour settings."""
+
     @abstractmethod
     def load(self) -> GalaxyBehaviorSettings:
         """Load persisted projector behavior settings or their defaults."""
@@ -63,13 +109,22 @@ class BehaviorRepository(ABC):
 
 
 class Clock(ABC):
+    """Abstraction over the system calendar.
+
+    Injected so seasonal theme resolution can be tested deterministically.
+    """
+
     @abstractmethod
     def today(self) -> date:
         """Return the Pi's current local calendar day."""
 
 
 class EventPublisher(ABC):
-    """Fan-out of typed application events to connected adapters."""
+    """Fan-out of typed application events to connected adapters.
+
+    Typical concrete implementation is an in-memory pub/sub that feeds the
+    Server-Sent Events endpoint.
+    """
 
     @abstractmethod
     def publish(self, event: ApplicationEvent) -> None:
@@ -77,13 +132,26 @@ class EventPublisher(ABC):
 
     @abstractmethod
     def subscribe(self) -> AbstractAsyncContextManager:
-        """Async context manager yielding a queue of ApplicationEvent values."""
+        """Async context manager yielding a queue of ApplicationEvent values.
+
+        The returned context manager must clean up the subscription when the
+        async with block exits.
+        """
 
 
 class RateLimiter(ABC):
+    """Per-client upload cooldown.
+
+    Protects the Pi from rapid-fire uploads that would fill disk or starve
+    the image-processing pipeline.
+    """
+
     @abstractmethod
     def check(self, key: str) -> None:
-        """Raise when `key` is still within its cooldown."""
+        """Raise when `key` is still within its cooldown.
+
+        Implementations should raise a domain RateLimitedError (or subclass).
+        """
 
     @abstractmethod
     def record(self, key: str) -> None:
@@ -91,12 +159,20 @@ class RateLimiter(ABC):
 
 
 class SurfaceStyler(ABC):
+    """Cosmetic treatment applied to a security-normalised PNG.
+
+    Implementations must never raise: styling is best-effort. A failure
+    should return the original bytes unchanged so the upload still succeeds.
+    """
+
     @abstractmethod
     def style(self, png_bytes: bytes) -> bytes:
         """Apply cosmetic planet-surface treatment. Implementations must not raise."""
 
 
 class ServiceAdvertiser(ABC):
+    """Publishes the galaxy on the local network (mDNS / Zeroconf)."""
+
     @abstractmethod
     def start(self) -> None:
         """Publish this galaxy on the local network."""
@@ -107,6 +183,15 @@ class ServiceAdvertiser(ABC):
 
 
 class ImageProcessor(ABC):
+    """Security-normalising image pipeline.
+
+    Responsibilities:
+    - Decode the uploaded bytes
+    - Reject images that exceed dimension limits
+    - Re-encode to a clean PNG (strips metadata, colour profiles, etc.)
+    - Optionally resize to a target size suitable for the projector
+    """
+
     @abstractmethod
     def normalize_to_png(
         self,
