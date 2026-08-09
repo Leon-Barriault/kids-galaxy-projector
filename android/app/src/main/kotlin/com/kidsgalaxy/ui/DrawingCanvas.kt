@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.kidsgalaxy.domain.model.CanvasSize
+import com.kidsgalaxy.domain.model.DEFAULT_CRATER_COLOR_ARGB
+import com.kidsgalaxy.domain.model.DEFAULT_MOUNTAIN_COLOR_ARGB
 import com.kidsgalaxy.domain.model.DEFAULT_RING_COLOR_ARGB
 import com.kidsgalaxy.domain.model.PlanetGuide
 import com.kidsgalaxy.domain.model.PlanetStyle
@@ -47,8 +49,7 @@ private fun pathThrough(points: List<Point>): Path =
 
 /** Soft blue outline so the planet edge is visible without looking like a stroke. */
 private val GUIDE_OUTLINE_COLOR = Color(0xFF64B5F6)
-private val CRATER_GUIDE_COLOR = Color(0xFF757575)
-private val CRATER_FILL_COLOR = Color(0x18757575)
+private val CRATER_GUIDE_COLOR = Color(0xFF4B4F58)
 private const val GUIDE_STROKE_WIDTH = 5f
 
 @Composable
@@ -62,6 +63,8 @@ fun DrawingCanvas(
     onCanvasSizeChanged: (Float, Float) -> Unit,
     planetStyle: PlanetStyle = PlanetStyle.CLASSIC,
     ringColorArgb: Int = DEFAULT_RING_COLOR_ARGB,
+    craterColorArgb: Int = DEFAULT_CRATER_COLOR_ARGB,
+    mountainColorArgb: Int = DEFAULT_MOUNTAIN_COLOR_ARGB,
     modifier: Modifier = Modifier,
 ) {
     // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
@@ -132,28 +135,48 @@ fun DrawingCanvas(
                 }
 
                 PlanetStyle.SPIKY -> {
-                    val outline = Path()
-                    val pointCount = 64
-                    for (index in 0 until pointCount) {
-                        val angle = (2.0 * PI * index / pointCount) - PI / 2.0
-                        val spikeBand = index % 8
-                        val scale =
-                            when (spikeBand) {
-                                0 -> 1.18f
-                                1, 7 -> 1.08f
-                                else -> 1f
+                    val peakCount = 8
+                    repeat(peakCount) { index ->
+                        val angle = (2.0 * PI * index / peakCount) - PI / 2.0
+                        val halfBaseAngle = PI / 18.0
+                        val heightScale =
+                            when (index % 4) {
+                                0 -> 1.24f
+                                1 -> 1.16f
+                                2 -> 1.20f
+                                else -> 1.12f
                             }
-                        val radius = guide.radius * scale
-                        val x = guide.centreX + cos(angle).toFloat() * radius
-                        val y = guide.centreY + sin(angle).toFloat() * radius
-                        if (index == 0) outline.moveTo(x, y) else outline.lineTo(x, y)
+                        val baseRadius = guide.radius * 0.97f
+                        val tipRadius = guide.radius * heightScale
+                        val left =
+                            Offset(
+                                guide.centreX + cos(angle - halfBaseAngle).toFloat() * baseRadius,
+                                guide.centreY + sin(angle - halfBaseAngle).toFloat() * baseRadius,
+                            )
+                        val tip =
+                            Offset(
+                                guide.centreX + cos(angle).toFloat() * tipRadius,
+                                guide.centreY + sin(angle).toFloat() * tipRadius,
+                            )
+                        val right =
+                            Offset(
+                                guide.centreX + cos(angle + halfBaseAngle).toFloat() * baseRadius,
+                                guide.centreY + sin(angle + halfBaseAngle).toFloat() * baseRadius,
+                            )
+                        val peak =
+                            Path().apply {
+                                moveTo(left.x, left.y)
+                                lineTo(tip.x, tip.y)
+                                lineTo(right.x, right.y)
+                                close()
+                            }
+                        drawPath(path = peak, color = Color(mountainColorArgb))
+                        drawPath(
+                            path = peak,
+                            color = GUIDE_OUTLINE_COLOR,
+                            style = Stroke(width = 2.5f),
+                        )
                     }
-                    outline.close()
-                    drawPath(
-                        path = outline,
-                        color = GUIDE_OUTLINE_COLOR,
-                        style = Stroke(width = GUIDE_STROKE_WIDTH),
-                    )
                 }
 
                 else -> Unit
@@ -223,7 +246,7 @@ fun DrawingCanvas(
                         )
                     val craterRadius = guide.radius * radiusScale
                     drawCircle(
-                        color = CRATER_FILL_COLOR,
+                        color = Color(craterColorArgb),
                         radius = craterRadius,
                         center = craterCentre,
                     )
