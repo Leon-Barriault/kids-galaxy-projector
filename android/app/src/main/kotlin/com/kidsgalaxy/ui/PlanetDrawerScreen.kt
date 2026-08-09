@@ -1,10 +1,7 @@
 package com.kidsgalaxy.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,8 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,7 +39,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +51,6 @@ import com.kidsgalaxy.R
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
 import com.kidsgalaxy.di.ServiceLocator
-import com.kidsgalaxy.domain.model.DEFAULT_RING_COLOR_ARGB
 import com.kidsgalaxy.domain.model.PlanetCompanion
 import com.kidsgalaxy.domain.model.PlanetStyle
 import com.kidsgalaxy.presentation.DrawingUiState
@@ -65,15 +58,6 @@ import com.kidsgalaxy.presentation.DrawingViewModel
 
 private val SIDE_PANEL_WIDTH = 340.dp
 private val MIN_CANVAS_HEIGHT = 220.dp
-private val RING_COLORS =
-    listOf(
-        DEFAULT_RING_COLOR_ARGB,
-        0xFFFFC107.toInt(),
-        0xFF4FC3F7.toInt(),
-        0xFFFF7043.toInt(),
-        0xFF66BB6A.toInt(),
-        0xFFFFFFFF.toInt(),
-    )
 
 private enum class CreationStep {
     STYLE,
@@ -403,23 +387,35 @@ private fun DrawingStep(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
-        if (state.planetStyle == PlanetStyle.RINGED) {
-            RingColorPicker(
-                selectedColorArgb = state.ringColorArgb,
-                onColorChange = viewModel::changeRingColor,
-            )
-        }
-        if (state.planetStyle == PlanetStyle.CRATERED) {
-            Text(
-                stringResource(R.string.crater_paint_hint),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        when (state.planetStyle) {
+            PlanetStyle.RINGED ->
+                FeatureColorPicker(
+                    title = stringResource(R.string.ring_color_title),
+                    hint = stringResource(R.string.ring_color_hint),
+                    colors = RING_FEATURE_COLORS,
+                    selectedColorArgb = state.ringColorArgb,
+                    onColorChange = viewModel::changeRingColor,
+                )
+
+            PlanetStyle.CRATERED ->
+                FeatureColorPicker(
+                    title = stringResource(R.string.crater_color_title),
+                    hint = stringResource(R.string.crater_color_hint),
+                    colors = CRATER_FEATURE_COLORS,
+                    selectedColorArgb = state.craterColorArgb,
+                    onColorChange = viewModel::changeCraterColor,
+                )
+
+            PlanetStyle.SPIKY ->
+                FeatureColorPicker(
+                    title = stringResource(R.string.mountain_color_title),
+                    hint = stringResource(R.string.mountain_color_hint),
+                    colors = MOUNTAIN_FEATURE_COLORS,
+                    selectedColorArgb = state.mountainColorArgb,
+                    onColorChange = viewModel::changeMountainColor,
+                )
+
+            PlanetStyle.CLASSIC -> Unit
         }
         BoxWithConstraints(
             modifier =
@@ -450,6 +446,8 @@ private fun DrawingStep(
                     onCanvasSizeChanged = viewModel::onCanvasSizeChanged,
                     planetStyle = state.planetStyle,
                     ringColorArgb = state.ringColorArgb,
+                    craterColorArgb = state.craterColorArgb,
+                    mountainColorArgb = state.mountainColorArgb,
                     modifier =
                         canvasModifier.semantics {
                             contentDescription = canvasDescription
@@ -532,57 +530,6 @@ private fun DrawingStep(
                 modifier = Modifier.weight(2f),
             ) {
                 Text(stringResource(R.string.next_friends))
-            }
-        }
-    }
-}
-
-@Composable
-private fun RingColorPicker(
-    selectedColorArgb: Int,
-    onColorChange: (Int) -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            stringResource(R.string.ring_color_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            stringResource(R.string.ring_color_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RING_COLORS.forEach { colorArgb ->
-                val selected = colorArgb == selectedColorArgb
-                Box(
-                    modifier =
-                        Modifier
-                            .size(if (selected) 52.dp else 46.dp)
-                            .background(Color(colorArgb), CircleShape)
-                            .border(
-                                width = if (selected) 4.dp else 2.dp,
-                                color =
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.outline
-                                    },
-                                shape = CircleShape,
-                            ).selectable(
-                                selected = selected,
-                                role = Role.RadioButton,
-                                onClick = { onColorChange(colorArgb) },
-                            ),
-                )
             }
         }
     }
