@@ -67,5 +67,11 @@
     <string name="launched_title">🚀 Planète lancée!</string>
     <string name="launched_body">Ta planète vole maintenant dans la galaxie!\nRegarde le projecteur!</string>
     <string name="awesome">Super!</string>
+    <string name="error_draw_first">Dessine quelque chose d’abord!</string>
+    <string name="error_rate_limited">Attends un petit moment — la galaxie accueille encore ta dernière planète!</string>
+    <string name="error_invalid_planet">Cette planète n’a pas pu être envoyée. Vérifie son style et réessaie!</string>
+    <string name="error_server_hiccup">Le serveur de la galaxie a un petit problème. Réessaie dans un moment.</string>
+    <string name="error_send_code">Impossible d’envoyer la planète (erreur %1$d).</string>
+    <string name="error_wifi">Impossible de joindre la galaxie. La tablette est-elle connectée au Wi-Fi KidsGalaxy?</string>
     <string name="default_planet_name">Ma super planète</string>
 </resources>
