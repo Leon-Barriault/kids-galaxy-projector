@@ -20,16 +20,39 @@ const CRATER_SPECS = [
   { direction: [0.55, 0.65, -0.5], edge: 0.946, depth: 0.102, radius: 0.14 },
 ];
 
-const MOUNTAIN_SPECS = [
-  [0.8, 0.2, 0.55, 0.34],
-  [-0.7, 0.45, 0.5, 0.24],
-  [0.2, 0.9, -0.35, 0.42],
-  [-0.2, -0.85, 0.48, 0.3],
-  [0.65, -0.48, -0.58, 0.2],
-  [-0.75, -0.2, -0.62, 0.37],
-  [0.15, 0.42, 0.9, 0.27],
-  [0.48, 0.62, -0.64, 0.32],
+const MOUNTAIN_RANGE_SPECS = [
+  [0.8, 0.2, 0.55, 0.68, 0.34, 0.31],
+  [-0.7, 0.45, 0.5, 0.52, 0.31, 0.23],
+  [0.2, 0.9, -0.35, 0.72, 0.38, 0.34],
+  [-0.2, -0.85, 0.48, 0.58, 0.32, 0.27],
+  [0.65, -0.48, -0.58, 0.48, 0.28, 0.21],
+  [-0.75, -0.2, -0.62, 0.64, 0.36, 0.3],
 ];
+
+const RING_LIGHTNESS_STOPS = [
+  [0, -0.08],
+  [0.18, -0.03],
+  [0.43, 0.13],
+  [0.62, 0.07],
+  [0.82, -0.06],
+  [1, -0.2],
+];
+
+function shiftedColor(color, lightnessDelta, saturationDelta = 0) {
+  const result = color?.isColor ? color.clone() : new THREE.Color(color);
+  return result.offsetHSL(0, saturationDelta, lightnessDelta);
+}
+
+function ringLightnessAt(t) {
+  for (let index = 1; index < RING_LIGHTNESS_STOPS.length; index += 1) {
+    const [rightT, rightValue] = RING_LIGHTNESS_STOPS[index];
+    if (t > rightT) continue;
+    const [leftT, leftValue] = RING_LIGHTNESS_STOPS[index - 1];
+    const local = (t - leftT) / (rightT - leftT);
+    return THREE.MathUtils.lerp(leftValue, rightValue, local);
+  }
+  return RING_LIGHTNESS_STOPS[RING_LIGHTNESS_STOPS.length - 1][1];
+}
 
 /** A single kid-created planet and the Three.js resources it owns. */
 export class PlanetEntity {
@@ -62,7 +85,7 @@ export class PlanetEntity {
 
     if (this.style === 'ringed') this.addPlanetRing();
     if (this.style === 'cratered') this.addCraterDetails();
-    if (this.style === 'spiky') this.addMountainPeaks();
+    if (this.style === 'spiky') this.addMountainRanges();
     this.addSelectedCompanions();
 
     this.ring = scene.createOrbitRing(this.a, this.e, this.i);
@@ -154,14 +177,15 @@ export class PlanetEntity {
 
   addCraterDetails() {
     const outward = new THREE.Vector3(0, 0, 1);
-    const bowlMaterial = createPolishedFeatureMaterial(this.craterColor, {
-      roughness: 0.62,
-      clearcoat: 0.2,
+    const bowlColor = shiftedColor(this.craterColor, -0.08, -0.02);
+    const bowlMaterial = createPolishedFeatureMaterial(bowlColor, {
+      roughness: 0.66,
+      clearcoat: 0.1,
     });
-    const rimColor = new THREE.Color(this.craterColor).offsetHSL(0, -0.05, 0.08);
+    const rimColor = shiftedColor(this.craterColor, 0.1, -0.04);
     const rimMaterial = createPolishedFeatureMaterial(rimColor, {
-      roughness: 0.5,
-      clearcoat: 0.24,
+      roughness: 0.56,
+      clearcoat: 0.14,
     });
 
     this.craterDefinitions().forEach(({ direction, depth, radius }) => {
@@ -170,11 +194,11 @@ export class PlanetEntity {
       crater.quaternion.setFromUnitVectors(outward, direction);
 
       const bowl = new THREE.Mesh(
-        this.createCraterBowlGeometry(radius * 0.9, depth * 0.72),
+        this.createCraterBowlGeometry(radius * 0.9, depth * 0.76),
         bowlMaterial.clone(),
       );
       const rim = new THREE.Mesh(
-        new THREE.TorusGeometry(radius * 0.91, radius * 0.075, 8, 28),
+        new THREE.TorusGeometry(radius * 0.91, radius * 0.082, 9, 32),
         rimMaterial.clone(),
       );
       rim.position.z = 0.006;
@@ -189,59 +213,159 @@ export class PlanetEntity {
   mountainDefinitions() {
     const phase = (this.animator.hashId(this.id) % 628) / 100;
     const rotation = new THREE.Matrix4().makeRotationY(phase);
-    return MOUNTAIN_SPECS.map(([x, y, z, height], index) => ({
+    return MOUNTAIN_RANGE_SPECS.map(([x, y, z, width, depth, height], index) => ({
       direction: new THREE.Vector3(x, y, z).normalize().applyMatrix4(rotation).normalize(),
+      width,
+      depth,
       height,
-      seed: this.animator.hashId(`${this.id}-mountain-${index}`),
+      seed: this.animator.hashId(`${this.id}-mountain-range-${index}`),
     }));
   }
 
-  createRoundedPeakGeometry(baseRadius, height) {
-    const profile = [
-      new THREE.Vector2(baseRadius * 0.9, -height * 0.5),
-      new THREE.Vector2(baseRadius, -height * 0.32),
-      new THREE.Vector2(baseRadius * 0.82, -height * 0.05),
-      new THREE.Vector2(baseRadius * 0.58, height * 0.22),
-      new THREE.Vector2(baseRadius * 0.3, height * 0.4),
-      new THREE.Vector2(baseRadius * 0.08, height * 0.5),
+  seededUnit(seed, shift) {
+    return ((seed >>> shift) & 0xff) / 255;
+  }
+
+  createMountainRangeGeometry(width, depth, height, seed) {
+    const xSegments = 8;
+    const zSegments = 6;
+    const positions = [];
+    const colors = [];
+    const indices = [];
+    const baseColor = new THREE.Color(this.mountainColor);
+    const phase = this.seededUnit(seed, 1) * Math.PI * 2;
+    const peaks = [
+      {
+        u: -0.43 + this.seededUnit(seed, 4) * 0.18,
+        v: -0.18 + this.seededUnit(seed, 7) * 0.28,
+        su: 0.28,
+        sv: 0.38,
+        strength: 0.78 + this.seededUnit(seed, 10) * 0.22,
+      },
+      {
+        u: 0.24 + this.seededUnit(seed, 12) * 0.2,
+        v: -0.08 + this.seededUnit(seed, 15) * 0.3,
+        su: 0.34,
+        sv: 0.34,
+        strength: 0.62 + this.seededUnit(seed, 18) * 0.28,
+      },
+      {
+        u: -0.04 + this.seededUnit(seed, 20) * 0.18,
+        v: 0.28 + this.seededUnit(seed, 22) * 0.16,
+        su: 0.42,
+        sv: 0.3,
+        strength: 0.36 + this.seededUnit(seed, 24) * 0.2,
+      },
     ];
-    const geometry = new THREE.LatheGeometry(profile, 18);
+
+    const gaussian = (u, v, peak) => {
+      const du = (u - peak.u) / peak.su;
+      const dv = (v - peak.v) / peak.sv;
+      return Math.exp(-(du * du + dv * dv) * 1.65) * peak.strength;
+    };
+
+    for (let zIndex = 0; zIndex <= zSegments; zIndex += 1) {
+      const v = (zIndex / zSegments) * 2 - 1;
+      for (let xIndex = 0; xIndex <= xSegments; xIndex += 1) {
+        const u = (xIndex / xSegments) * 2 - 1;
+        const x = u * width * 0.5;
+        const z = v * depth * 0.5;
+        const radialEnvelope = Math.max(0, 1 - u * u) * Math.max(0, 1 - v * v);
+        const ridgeCentre = Math.sin(u * Math.PI * 1.15 + phase) * 0.16;
+        const ridge = Math.exp(-Math.pow((v - ridgeCentre) / 0.28, 2)) * 0.22;
+        const peakHeight = peaks.reduce((sum, peak) => sum + gaussian(u, v, peak), ridge);
+        const elevation = height * radialEnvelope * Math.min(1.15, 0.1 + peakHeight);
+        const y = elevation - 0.05;
+        positions.push(x, y, z);
+
+        const tone = -0.055 + (elevation / Math.max(height, 0.001)) * 0.15;
+        const color = shiftedColor(baseColor, tone, -0.025);
+        colors.push(color.r, color.g, color.b);
+      }
+    }
+
+    const row = xSegments + 1;
+    for (let zIndex = 0; zIndex < zSegments; zIndex += 1) {
+      for (let xIndex = 0; xIndex < xSegments; xIndex += 1) {
+        const a = zIndex * row + xIndex;
+        const b = a + 1;
+        const c = a + row;
+        const d = c + 1;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
     geometry.computeVertexNormals();
+    geometry.userData.kidsGalaxyMountainRange = true;
+    geometry.userData.width = width;
+    geometry.userData.depth = depth;
+    geometry.userData.height = height;
     return geometry;
   }
 
-  addMountainPeaks() {
+  addMountainRanges() {
     const up = new THREE.Vector3(0, 1, 0);
-    this.mountainDefinitions().forEach(({ direction, height, seed }, index) => {
-      const peakHeight = 0.2 + height * 0.72;
-      const baseRadius = 0.14 + (index % 3) * 0.024;
-      const peak = new THREE.Mesh(
-        this.createRoundedPeakGeometry(baseRadius, peakHeight),
-        createPolishedFeatureMaterial(this.mountainColor, {
-          roughness: 0.48,
-          clearcoat: 0.25,
-        }),
+    this.mountainDefinitions().forEach(({ direction, width, depth, height, seed }) => {
+      const material = createPolishedFeatureMaterial(0xffffff, {
+        roughness: 0.6,
+        clearcoat: 0.11,
+      });
+      material.vertexColors = true;
+      material.needsUpdate = true;
+
+      const range = new THREE.Mesh(
+        this.createMountainRangeGeometry(width, depth, height, seed),
+        material,
       );
-      peak.position.copy(direction).multiplyScalar(1.01 + peakHeight * 0.38);
-      peak.quaternion.setFromUnitVectors(up, direction);
-      peak.rotateX((((seed >> 2) % 11) - 5) * 0.018);
-      peak.rotateZ((((seed >> 5) % 13) - 6) * 0.017);
-      peak.scale.x = 0.82 + (seed % 19) / 100;
-      peak.scale.z = 0.86 + ((seed >> 4) % 17) / 100;
-      this.mesh.add(peak);
+      range.position.copy(direction).multiplyScalar(1.015);
+      range.quaternion.setFromUnitVectors(up, direction);
+      range.rotateY(this.seededUnit(seed, 3) * Math.PI * 2);
+      this.mesh.add(range);
     });
   }
 
+  createRingGradientGeometry(innerRadius = 1.17, outerRadius = 2.08) {
+    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 128, 8);
+    const position = geometry.attributes.position;
+    const colors = new Float32Array(position.count * 3);
+    const base = new THREE.Color(this.ringColor);
+
+    for (let index = 0; index < position.count; index += 1) {
+      const radius = Math.hypot(position.getX(index), position.getY(index));
+      const t = THREE.MathUtils.clamp(
+        (radius - innerRadius) / (outerRadius - innerRadius),
+        0,
+        1,
+      );
+      const color = shiftedColor(base, ringLightnessAt(t), -0.035);
+      colors[index * 3] = color.r;
+      colors[index * 3 + 1] = color.g;
+      colors[index * 3 + 2] = color.b;
+    }
+
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.userData.kidsGalaxyRingGradient = true;
+    geometry.userData.innerRadius = innerRadius;
+    geometry.userData.outerRadius = outerRadius;
+    return geometry;
+  }
+
   addPlanetRing() {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.5, 0.12, 12, 80),
-      createPolishedFeatureMaterial(this.ringColor, {
-        roughness: 0.32,
-        clearcoat: 0.5,
-      }),
-    );
-    ring.rotation.x = Math.PI / 2.4;
-    ring.rotation.z = 0.22;
+    const material = createPolishedFeatureMaterial(0xffffff, {
+      roughness: 0.62,
+      clearcoat: 0.12,
+      side: THREE.DoubleSide,
+    });
+    material.vertexColors = true;
+    material.needsUpdate = true;
+
+    const ring = new THREE.Mesh(this.createRingGradientGeometry(), material);
+    ring.rotation.x = Math.PI / 2.45;
+    ring.rotation.z = 0.2;
     this.scene.add(ring);
     this.decorations.push(ring);
   }
