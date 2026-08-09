@@ -1,5 +1,6 @@
 package com.kidsgalaxy.presentation
 
+import com.kidsgalaxy.domain.model.DEFAULT_RING_COLOR_ARGB
 import com.kidsgalaxy.domain.model.Drawing
 import com.kidsgalaxy.domain.model.PlanetCompanion
 import com.kidsgalaxy.domain.model.PlanetDesign
@@ -10,6 +11,7 @@ data class DrawingUiState(
     val drawing: Drawing = Drawing(),
     val planetStyle: PlanetStyle = PlanetStyle.CLASSIC,
     val companions: Set<PlanetCompanion> = emptySet(),
+    val ringColorArgb: Int = DEFAULT_RING_COLOR_ARGB,
     val currentColorArgb: Int = DEFAULT_COLOR_ARGB,
     val currentStrokeWidth: Float = DEFAULT_STROKE_WIDTH,
     val isSending: Boolean = false,
@@ -18,7 +20,7 @@ data class DrawingUiState(
 ) {
     val canUndo: Boolean get() = !drawing.isEmpty
     val canLaunch: Boolean get() = !drawing.isEmpty && !isSending
-    val design: PlanetDesign get() = PlanetDesign(planetStyle, companions)
+    val design: PlanetDesign get() = PlanetDesign(planetStyle, companions, ringColorArgb)
 
     companion object {
         const val DEFAULT_COLOR_ARGB: Int = 0xFFE53935.toInt()
