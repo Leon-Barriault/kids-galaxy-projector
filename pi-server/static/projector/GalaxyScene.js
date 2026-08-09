@@ -61,7 +61,7 @@ export class GalaxyScene {
     );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.38;
+    this.renderer.toneMappingExposure = 1.46;
     container.appendChild(this.renderer.domElement);
 
     this.addLights();
