@@ -7,6 +7,7 @@ import {
   createAsteroidMaterial,
   createPumpkinStemGeometry,
   createPumpkinStemMaterial,
+  easterEggColorFor,
   normalizeTheme,
 } from './ThemeVisualFactory.js';
 
@@ -33,6 +34,16 @@ function disposeObject(scene, object) {
   });
 }
 
+function applyThemeInstanceColor(bodies, style, index) {
+  if (style !== 'easter-egg') return;
+  const color = easterEggColorFor(index).offsetHSL(
+    (index % 5) * 0.006 - 0.012,
+    0.015,
+    (index % 3) * 0.012 - 0.008,
+  );
+  bodies.setColorAt(index, color);
+}
+
 function themedBelt() {
   const theme = normalizeTheme(this.settings?.theme);
   const style = asteroidStyleForTheme(theme);
@@ -53,6 +64,7 @@ function themedBelt() {
   bodies.userData.kidsGalaxyThemedAsteroids = true;
   bodies.userData.kidsGalaxyAsteroidStyle = style;
   bodies.userData.rockCount = BELT_BODY_COUNT;
+  if (style === 'easter-egg') bodies.userData.kidsGalaxyPastelEggs = true;
 
   const stems = style === 'pumpkin'
     ? new THREE.InstancedMesh(
@@ -86,21 +98,31 @@ function themedBelt() {
     euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
     quaternion.setFromEuler(euler);
     const size = randomBetween(0.55, 1.8);
-    scale.set(
-      size * randomBetween(0.72, 1.32),
-      size * randomBetween(0.72, 1.22),
-      size * randomBetween(0.72, 1.32),
-    );
+    if (style === 'easter-egg') {
+      scale.set(size, size, size);
+    } else {
+      scale.set(
+        size * randomBetween(0.72, 1.32),
+        size * randomBetween(0.72, 1.22),
+        size * randomBetween(0.72, 1.32),
+      );
+    }
     matrix.compose(position, quaternion, scale);
     bodies.setMatrixAt(index, matrix);
+    applyThemeInstanceColor(bodies, style, index);
 
     if (stems) {
-      localStemScale.makeScale(1 / Math.max(scale.x, 0.001), 1 / Math.max(scale.y, 0.001), 1 / Math.max(scale.z, 0.001));
+      localStemScale.makeScale(
+        1 / Math.max(scale.x, 0.001),
+        1 / Math.max(scale.y, 0.001),
+        1 / Math.max(scale.z, 0.001),
+      );
       stemMatrix.copy(matrix).multiply(localStemScale).scale(scale);
       stems.setMatrixAt(index, stemMatrix);
     }
   }
   bodies.instanceMatrix.needsUpdate = true;
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
   if (stems) stems.instanceMatrix.needsUpdate = true;
 
   const dustGeometry = new THREE.BufferGeometry();
@@ -113,14 +135,21 @@ function themedBelt() {
     dustPositions[index * 3 + 2] = Math.sin(angle) * orbitalRadius;
   }
   dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
-  const dustColor = style === 'snowball' ? 0xeaf5ff : style === 'pumpkin' ? 0xf2a04e : 0xaaa094;
+  const dustColor =
+    style === 'snowball'
+      ? 0xeaf5ff
+      : style === 'pumpkin'
+        ? 0xf2a04e
+        : style === 'easter-egg'
+          ? 0xf2c7e5
+          : 0xaaa094;
   const dust = new THREE.Points(
     dustGeometry,
     new THREE.PointsMaterial({
       color: dustColor,
-      size: style === 'snowball' ? 0.055 : 0.065,
+      size: style === 'snowball' || style === 'easter-egg' ? 0.055 : 0.065,
       transparent: true,
-      opacity: style === 'rock' ? 0.42 : 0.32,
+      opacity: style === 'rock' ? 0.42 : 0.28,
       sizeAttenuation: true,
       depthWrite: false,
     }),
@@ -160,6 +189,7 @@ function themedFlyby() {
   bodies.userData.kidsGalaxyAsteroidFlybyRocks = true;
   bodies.userData.kidsGalaxyThemedAsteroids = true;
   bodies.userData.kidsGalaxyAsteroidStyle = style;
+  if (style === 'easter-egg') bodies.userData.kidsGalaxyPastelEggs = true;
 
   const stems = style === 'pumpkin'
     ? new THREE.InstancedMesh(
@@ -188,12 +218,18 @@ function themedFlyby() {
     euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
     quaternion.setFromEuler(euler);
     const size = randomBetween(0.55, 1.4);
-    scale.set(size, size * randomBetween(0.8, 1.18), size * randomBetween(0.8, 1.18));
+    if (style === 'easter-egg') {
+      scale.setScalar(size);
+    } else {
+      scale.set(size, size * randomBetween(0.8, 1.18), size * randomBetween(0.8, 1.18));
+    }
     matrix.compose(position, quaternion, scale);
     bodies.setMatrixAt(index, matrix);
+    applyThemeInstanceColor(bodies, style, index + 2);
     stems?.setMatrixAt(index, matrix);
   }
   bodies.instanceMatrix.needsUpdate = true;
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
   if (stems) stems.instanceMatrix.needsUpdate = true;
   group.add(bodies);
   if (stems) group.add(stems);
