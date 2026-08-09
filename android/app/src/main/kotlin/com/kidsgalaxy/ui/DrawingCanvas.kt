@@ -19,9 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.kidsgalaxy.domain.model.CanvasSize
@@ -49,8 +51,133 @@ private fun pathThrough(points: List<Point>): Path =
 
 /** Soft blue outline so the planet edge is visible without looking like a stroke. */
 private val GUIDE_OUTLINE_COLOR = Color(0xFF64B5F6)
+private val FEATURE_OUTLINE_COLOR = Color(0xFF455A64)
 private val CRATER_GUIDE_COLOR = Color(0xFF4B4F58)
 private const val GUIDE_STROKE_WIDTH = 5f
+
+private fun DrawScope.drawRingPreview(
+    guide: PlanetGuide,
+    ringColorArgb: Int,
+) {
+    val centre = Offset(guide.centreX, guide.centreY)
+    val ringWidth = guide.radius * 3.05f
+    val ringHeight = guide.radius * 0.86f
+    val topLeft =
+        Offset(
+            guide.centreX - ringWidth / 2f,
+            guide.centreY - ringHeight / 2f,
+        )
+    val size = Size(ringWidth, ringHeight)
+    val base = Color(ringColorArgb)
+    val darker = lerp(base, Color.Black, 0.24f)
+    val lighter = lerp(base, Color.White, 0.28f)
+
+    // The ring is intentionally painted after the child's strokes. The dark
+    // outline keeps even a pure-white ring visible and the opaque bands stop
+    // planet paint from visually swallowing the ring.
+    rotate(degrees = -14f, pivot = centre) {
+        drawOval(
+            color = FEATURE_OUTLINE_COLOR,
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = guide.radius * 0.205f),
+        )
+        drawOval(
+            color = darker,
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = guide.radius * 0.176f),
+        )
+        drawOval(
+            color = base,
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = guide.radius * 0.13f),
+        )
+        drawOval(
+            color = lighter,
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = guide.radius * 0.052f),
+        )
+    }
+}
+
+private fun DrawScope.drawCraterPreview(
+    guide: PlanetGuide,
+    craterColorArgb: Int,
+) {
+    val craters =
+        listOf(
+            Triple(-0.34f, -0.24f, 0.22f),
+            Triple(0.30f, -0.30f, 0.16f),
+            Triple(0.18f, 0.20f, 0.23f),
+            Triple(-0.25f, 0.34f, 0.14f),
+            Triple(0.43f, 0.30f, 0.11f),
+        )
+    val base = Color(craterColorArgb)
+    val bowl = lerp(base, Color.Black, 0.16f)
+    val rim = lerp(base, Color.White, 0.17f)
+
+    craters.forEach { (xOffset, yOffset, radiusScale) ->
+        val craterCentre =
+            Offset(
+                guide.centreX + guide.radius * xOffset,
+                guide.centreY + guide.radius * yOffset,
+            )
+        val craterRadius = guide.radius * radiusScale
+        drawCircle(color = CRATER_GUIDE_COLOR, radius = craterRadius, center = craterCentre)
+        drawCircle(color = rim, radius = craterRadius * 0.91f, center = craterCentre)
+        drawCircle(color = bowl, radius = craterRadius * 0.72f, center = craterCentre)
+    }
+}
+
+private fun DrawScope.drawMountainPreview(
+    guide: PlanetGuide,
+    mountainColorArgb: Int,
+) {
+    val base = Color(mountainColorArgb)
+    val highlight = lerp(base, Color.White, 0.14f)
+    val centre = Offset(guide.centreX, guide.centreY)
+    val rangeSpecs =
+        listOf(
+            Triple(-0.50 * PI, 1.20f, 1.11f),
+            Triple(-0.13 * PI, 1.13f, 1.18f),
+            Triple(0.23 * PI, 1.17f, 1.09f),
+            Triple(0.58 * PI, 1.10f, 1.15f),
+            Triple(0.91 * PI, 1.16f, 1.08f),
+            Triple(1.25 * PI, 1.11f, 1.17f),
+        )
+
+    fun point(angle: Double, radiusScale: Float): Offset =
+        Offset(
+            centre.x + cos(angle).toFloat() * guide.radius * radiusScale,
+            centre.y + sin(angle).toFloat() * guide.radius * radiusScale,
+        )
+
+    rangeSpecs.forEachIndexed { index, (angle, firstHeight, secondHeight) ->
+        val halfWidth = PI / 10.5
+        val left = point(angle - halfWidth, 0.94f)
+        val firstPeak = point(angle - halfWidth * 0.34, firstHeight)
+        val saddle = point(angle + halfWidth * 0.05, 1.035f)
+        val secondPeak = point(angle + halfWidth * 0.43, secondHeight)
+        val right = point(angle + halfWidth, 0.94f)
+        val range =
+            Path().apply {
+                moveTo(left.x, left.y)
+                lineTo(firstPeak.x, firstPeak.y)
+                quadraticBezierTo(saddle.x, saddle.y, secondPeak.x, secondPeak.y)
+                lineTo(right.x, right.y)
+                close()
+            }
+        drawPath(path = range, color = if (index % 2 == 0) base else highlight)
+        drawPath(
+            path = range,
+            color = FEATURE_OUTLINE_COLOR,
+            style = Stroke(width = 2.5f, join = StrokeJoin.Round),
+        )
+    }
+}
 
 @Composable
 fun DrawingCanvas(
@@ -116,71 +243,6 @@ fun DrawingCanvas(
 
         if (guide != null && guide.isValid) {
             val centre = Offset(guide.centreX, guide.centreY)
-            when (planetStyle) {
-                PlanetStyle.RINGED -> {
-                    val ringWidth = guide.radius * 2.75f
-                    val ringHeight = guide.radius * 0.72f
-                    rotate(degrees = -14f, pivot = centre) {
-                        drawOval(
-                            color = Color(ringColorArgb),
-                            topLeft =
-                                Offset(
-                                    guide.centreX - ringWidth / 2f,
-                                    guide.centreY - ringHeight / 2f,
-                                ),
-                            size = Size(ringWidth, ringHeight),
-                            style = Stroke(width = guide.radius * 0.11f),
-                        )
-                    }
-                }
-
-                PlanetStyle.SPIKY -> {
-                    val peakCount = 8
-                    repeat(peakCount) { index ->
-                        val angle = (2.0 * PI * index / peakCount) - PI / 2.0
-                        val halfBaseAngle = PI / 18.0
-                        val heightScale =
-                            when (index % 4) {
-                                0 -> 1.24f
-                                1 -> 1.16f
-                                2 -> 1.20f
-                                else -> 1.12f
-                            }
-                        val baseRadius = guide.radius * 0.97f
-                        val tipRadius = guide.radius * heightScale
-                        val left =
-                            Offset(
-                                guide.centreX + cos(angle - halfBaseAngle).toFloat() * baseRadius,
-                                guide.centreY + sin(angle - halfBaseAngle).toFloat() * baseRadius,
-                            )
-                        val tip =
-                            Offset(
-                                guide.centreX + cos(angle).toFloat() * tipRadius,
-                                guide.centreY + sin(angle).toFloat() * tipRadius,
-                            )
-                        val right =
-                            Offset(
-                                guide.centreX + cos(angle + halfBaseAngle).toFloat() * baseRadius,
-                                guide.centreY + sin(angle + halfBaseAngle).toFloat() * baseRadius,
-                            )
-                        val peak =
-                            Path().apply {
-                                moveTo(left.x, left.y)
-                                lineTo(tip.x, tip.y)
-                                lineTo(right.x, right.y)
-                                close()
-                            }
-                        drawPath(path = peak, color = Color(mountainColorArgb))
-                        drawPath(
-                            path = peak,
-                            color = GUIDE_OUTLINE_COLOR,
-                            style = Stroke(width = 2.5f),
-                        )
-                    }
-                }
-
-                else -> Unit
-            }
 
             // The paintable texture stays the same guide disc for every form.
             drawCircle(
@@ -229,34 +291,13 @@ fun DrawingCanvas(
                 }
             }
 
-            if (planetStyle == PlanetStyle.CRATERED) {
-                val craters =
-                    listOf(
-                        Triple(-0.34f, -0.24f, 0.22f),
-                        Triple(0.30f, -0.30f, 0.16f),
-                        Triple(0.18f, 0.20f, 0.23f),
-                        Triple(-0.25f, 0.34f, 0.14f),
-                        Triple(0.43f, 0.30f, 0.11f),
-                    )
-                craters.forEach { (xOffset, yOffset, radiusScale) ->
-                    val craterCentre =
-                        Offset(
-                            guide.centreX + guide.radius * xOffset,
-                            guide.centreY + guide.radius * yOffset,
-                        )
-                    val craterRadius = guide.radius * radiusScale
-                    drawCircle(
-                        color = Color(craterColorArgb),
-                        radius = craterRadius,
-                        center = craterCentre,
-                    )
-                    drawCircle(
-                        color = CRATER_GUIDE_COLOR,
-                        radius = craterRadius,
-                        center = craterCentre,
-                        style = Stroke(width = 3f),
-                    )
-                }
+            // Physical feature previews sit above the paint, matching how the
+            // projector renders them as separate geometry on the finished world.
+            when (planetStyle) {
+                PlanetStyle.RINGED -> drawRingPreview(guide, ringColorArgb)
+                PlanetStyle.CRATERED -> drawCraterPreview(guide, craterColorArgb)
+                PlanetStyle.SPIKY -> drawMountainPreview(guide, mountainColorArgb)
+                PlanetStyle.CLASSIC -> Unit
             }
         } else {
             for (stroke in strokes) {
