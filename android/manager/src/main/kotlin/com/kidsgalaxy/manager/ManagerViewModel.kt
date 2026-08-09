@@ -153,8 +153,8 @@ class ManagerViewModel(
         val normalized = language.lowercase()
         if (normalized !in setOf("en", "fr")) return
         updateBehavior(
-            transform = { it.copy(projectorLanguage = normalized) },
             status = { ManagerStatus.ProjectorLanguageChanged(it.projectorLanguage) },
+            transform = { it.copy(projectorLanguage = normalized) },
         )
     }
 
@@ -217,8 +217,8 @@ class ManagerViewModel(
     }
 
     private fun updateBehavior(
-        transform: (BehaviorSettingsDto) -> BehaviorSettingsDto,
         status: ((BehaviorSettingsDto) -> ManagerStatus?)? = null,
+        transform: (BehaviorSettingsDto) -> BehaviorSettingsDto,
     ) {
         val currentState = _uiState.value
         if (currentState.isBehaviorLoading || currentState.isUpdatingBehavior) return
