@@ -21,10 +21,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.kidsgalaxy.connection.AndroidGalaxyDiscovery
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.GalaxyTargetVerifier
+import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.ApiFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,6 +62,9 @@ fun GalaxyPickerDialog(
     var manualAddress by remember { mutableStateOf("") }
     var manualError by remember { mutableStateOf<String?>(null) }
     var checkingManual by remember { mutableStateOf(false) }
+    val couldNotReach = stringResource(R.string.galaxy_could_not_be_reached)
+    val invalidAddress = stringResource(R.string.invalid_galaxy_address)
+    val manualGalaxyName = stringResource(R.string.manual_galaxy)
 
     fun checkDiscovered(target: GalaxyTarget) {
         if (healthByUrl[target.baseUrl] != null) return
@@ -93,7 +98,7 @@ fun GalaxyPickerDialog(
             if (result.reachable) {
                 onSelect(target)
             } else {
-                discoveryError = result.message ?: "Galaxy could not be reached"
+                discoveryError = result.message ?: couldNotReach
             }
         }
     }
@@ -119,7 +124,7 @@ fun GalaxyPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose managed galaxy") },
+        title = { Text(stringResource(R.string.choose_managed_galaxy)) },
         text = {
             Column(
                 modifier =
@@ -129,18 +134,19 @@ fun GalaxyPickerDialog(
                         .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Current: ${current.name}")
+                Text(stringResource(R.string.current_galaxy, current.name))
                 if (targets.isEmpty()) {
-                    Text(discoveryError ?: "Searching the local network…")
+                    Text(discoveryError ?: stringResource(R.string.searching_local_network))
                 } else {
-                    Text("Nearby galaxies")
+                    Text(stringResource(R.string.nearby_galaxies))
                     targets.forEach { target ->
                         val health = healthByUrl[target.baseUrl] ?: GalaxyHealth.CHECKING
                         val healthText =
                             when (health) {
-                                GalaxyHealth.CHECKING -> "Checking…"
-                                GalaxyHealth.REACHABLE -> "✓ Reachable"
-                                GalaxyHealth.UNREACHABLE -> "⚠ Unreachable — tap to retry"
+                                GalaxyHealth.CHECKING -> stringResource(R.string.galaxy_checking)
+                                GalaxyHealth.REACHABLE -> stringResource(R.string.galaxy_reachable)
+                                GalaxyHealth.UNREACHABLE ->
+                                    stringResource(R.string.galaxy_unreachable_retry)
                             }
                         OutlinedButton(
                             onClick = { selectWhenVerified(target) },
@@ -153,7 +159,7 @@ fun GalaxyPickerDialog(
                     discoveryError?.let { Text(it) }
                 }
 
-                Text("Or enter an address")
+                Text(stringResource(R.string.or_enter_address))
                 OutlinedTextField(
                     value = manualAddress,
                     onValueChange = {
@@ -173,10 +179,10 @@ fun GalaxyPickerDialog(
                                 GalaxyTarget.fromManual(
                                     rawAddress = manualAddress,
                                     defaultScheme = fallbackScheme,
-                                    name = "Manual Galaxy",
+                                    name = manualGalaxyName,
                                 )
                             } catch (error: IllegalArgumentException) {
-                                manualError = error.message ?: "Invalid galaxy address"
+                                manualError = error.message ?: invalidAddress
                                 return@Button
                             }
 
@@ -188,19 +194,23 @@ fun GalaxyPickerDialog(
                             if (result.reachable) {
                                 onSelect(target)
                             } else {
-                                manualError = result.message ?: "Galaxy could not be reached"
+                                manualError = result.message ?: couldNotReach
                             }
                         }
                     },
                     enabled = manualAddress.isNotBlank() && !checkingManual,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (checkingManual) "Verifying…" else "Manage this address")
+                    Text(
+                        stringResource(
+                            if (checkingManual) R.string.verifying else R.string.manage_this_address,
+                        ),
+                    )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
