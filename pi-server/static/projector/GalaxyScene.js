@@ -4,33 +4,33 @@ const THEMES = {
   default: {
     background: 0x050818,
     ambient: 0x8090c0,
-    ambientIntensity: 0.85,
-    fill: 0xaabbff,
-    fillIntensity: 0.55,
+    ambientIntensity: 0.24,
+    fill: 0x7186b8,
+    fillIntensity: 0.16,
     particles: null,
   },
   halloween: {
     background: 0x10051d,
     ambient: 0x8d6bbd,
-    ambientIntensity: 0.7,
-    fill: 0xff7a2f,
-    fillIntensity: 0.75,
+    ambientIntensity: 0.22,
+    fill: 0x8b5f9e,
+    fillIntensity: 0.18,
     particles: [0xff8a2b, 0xa66cff, 0x75ff76],
   },
   easter: {
     background: 0x11172f,
     ambient: 0xb9b7ff,
-    ambientIntensity: 1.0,
-    fill: 0xffb7d9,
-    fillIntensity: 0.65,
+    ambientIntensity: 0.28,
+    fill: 0x95a2d9,
+    fillIntensity: 0.18,
     particles: [0xffb7d9, 0xffe69a, 0xaeefff, 0xc8f7b2],
   },
   christmas: {
     background: 0x03120f,
     ambient: 0x8fcbb0,
-    ambientIntensity: 0.8,
-    fill: 0xffd27a,
-    fillIntensity: 0.75,
+    ambientIntensity: 0.23,
+    fill: 0x6e9f8e,
+    fillIntensity: 0.17,
     particles: [0xff4f4f, 0x63df84, 0xffd66b, 0xf4f8ff],
   },
 };
@@ -52,8 +52,10 @@ export class GalaxyScene {
       powerPreference: 'high-performance',
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
     container.appendChild(this.renderer.domElement);
 
     this.addLights();
@@ -71,10 +73,16 @@ export class GalaxyScene {
   }
 
   addLights() {
-    this.ambientLight = new THREE.AmbientLight(0x8090c0, 0.85);
+    // These lights only keep the projector's night side readable. They carry
+    // no directional cue: the actual sun at the galaxy origin is the dominant
+    // key light for planet highlights, crater rims, and mountain relief.
+    this.ambientLight = new THREE.AmbientLight(0x8090c0, THEMES.default.ambientIntensity);
     this.scene.add(this.ambientLight);
-    this.fillLight = new THREE.DirectionalLight(0xaabbff, 0.55);
-    this.fillLight.position.set(0, 8, 20);
+    this.fillLight = new THREE.HemisphereLight(
+      THEMES.default.fill,
+      0x080b16,
+      THEMES.default.fillIntensity,
+    );
     this.scene.add(this.fillLight);
   }
 
@@ -149,7 +157,8 @@ export class GalaxyScene {
       );
     });
 
-    this.sunGroup.add(new THREE.PointLight(0xfff5d0, 3.4, 100, 1.4));
+    this.sunLight = new THREE.PointLight(0xfff1cf, 5.2, 130, 1.35);
+    this.sunGroup.add(this.sunLight);
     return sun;
   }
 
