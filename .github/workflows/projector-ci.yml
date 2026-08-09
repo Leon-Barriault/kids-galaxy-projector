@@ -30,7 +30,7 @@ jobs:
           fi
 
   browser-smoke:
-    name: Projector WebGL smoke
+    name: Kid-design visual WebGL acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -52,7 +52,12 @@ jobs:
           pip install -r pi-server/requirements-dev.txt \
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
-      - name: Exercise the real projector page
-        run: |
-          python scripts/check_projector.py
-          python scripts/check_reference_renderer.py
+      - name: Exercise kid artwork and Saturn rings in the real projector
+        run: python scripts/check_visual_renderer.py
+      - name: Upload rendered comparison frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planet-render-comparison
+          path: artifacts/*.png
+          if-no-files-found: warn
