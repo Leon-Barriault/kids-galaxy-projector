@@ -7,13 +7,17 @@ endpoint and the SSE stream emit, so the two can never drift apart.
 A Planet represents one child's drawing after it has been accepted, sanitized,
 optionally styled, and persisted. It carries both the technical identity
 (id, filename) and the presentation choices the child made (name, style,
-companions, ring colour).
+companions and feature colours).
 """
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from app.domain.planet_customization import DEFAULT_RING_COLOR
+from app.domain.planet_customization import (
+    DEFAULT_CRATER_COLOR,
+    DEFAULT_MOUNTAIN_COLOR,
+    DEFAULT_RING_COLOR,
+)
 
 #: Response when no child has drawn anything yet.
 #: Shared constant so REST and SSE never diverge on the empty case.
@@ -33,6 +37,8 @@ class Planet:
         style: One of the allowed planet styles ("classic", "ringed", …).
         companions: Ordered tuple of companion identifiers the child selected.
         ring_color: CSS hex colour used when style == "ringed".
+        crater_color: CSS hex colour used when style == "cratered".
+        mountain_color: CSS hex colour used when style == "spiky".
     """
 
     id: str
@@ -42,6 +48,8 @@ class Planet:
     style: str = "classic"
     companions: tuple[str, ...] = ()
     ring_color: str = DEFAULT_RING_COLOR
+    crater_color: str = DEFAULT_CRATER_COLOR
+    mountain_color: str = DEFAULT_MOUNTAIN_COLOR
 
     @property
     def url(self) -> str:
@@ -54,20 +62,11 @@ class Planet:
 
     @property
     def metadata_filename(self) -> str:
-        """Sidecar JSON that preserves display and design metadata.
-
-        The image itself is stored as a PNG; the sidecar keeps the display
-        name, style, companions and ring colour so they survive restarts.
-        """
+        """Sidecar JSON that preserves display and design metadata."""
         return PurePosixPath(self.filename).with_suffix(".json").name
 
     def to_payload(self) -> dict:
-        """Wire format shared by REST scene endpoints and the SSE stream.
-
-        This is the single source of truth for the JSON shape that the
-        projector and the manager app consume. Changing a key here is the
-        only place that needs to change for both channels.
-        """
+        """Wire format shared by REST scene endpoints and the SSE stream."""
         payload = {
             "has_planet": True,
             "id": self.id,
@@ -79,4 +78,8 @@ class Planet:
         }
         if self.style == "ringed":
             payload["ring_color"] = self.ring_color
+        if self.style == "cratered":
+            payload["crater_color"] = self.crater_color
+        if self.style == "spiky":
+            payload["mountain_color"] = self.mountain_color
         return payload
