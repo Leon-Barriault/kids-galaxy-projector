@@ -41,13 +41,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.kidsgalaxy.connection.GalaxyTarget
+import com.kidsgalaxy.connection.UiLanguage
 import com.kidsgalaxy.manager.ManagerUiState
+import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
 
 private val Background = Color(0xFF0A0E2A)
@@ -61,6 +66,8 @@ private val TextMuted = Color(0xFFB0BEC5)
 fun ManagerScreen(
     state: ManagerUiState,
     galaxy: GalaxyTarget,
+    language: UiLanguage,
+    onToggleLanguage: () -> Unit,
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
@@ -69,6 +76,7 @@ fun ManagerScreen(
 ) {
     var pendingDelete by remember { mutableStateOf<PlanetDto?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
+    val languageDescription = stringResource(R.string.language_toggle_description)
 
     Column(
         modifier =
@@ -83,15 +91,30 @@ fun ManagerScreen(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Kids Galaxy Manager",
+                    text = stringResource(R.string.manager_title),
                     color = TextPrimary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = state.statusMessage ?: "Planets stored on ${galaxy.name}",
+                    text =
+                        state.statusMessage
+                            ?: stringResource(R.string.planets_stored_on, galaxy.name),
                     color = TextMuted,
                     fontSize = 14.sp,
+                )
+            }
+            TextButton(
+                onClick = onToggleLanguage,
+                modifier = Modifier.semantics { contentDescription = languageDescription },
+            ) {
+                Text(
+                    if (language == UiLanguage.ENGLISH) {
+                        "EN ●  FR"
+                    } else {
+                        "EN  ● FR"
+                    },
+                    fontWeight = FontWeight.Bold,
                 )
             }
             TextButton(onClick = onConfigureGalaxy) {
@@ -102,7 +125,11 @@ fun ManagerScreen(
                 )
             }
             IconButton(onClick = onRefresh, enabled = !state.isLoading) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Accent)
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.refresh),
+                    tint = Accent,
+                )
             }
         }
 
@@ -126,9 +153,9 @@ fun ManagerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     if (state.isClearing) {
-                        "Clearing\u2026"
+                        stringResource(R.string.clearing)
                     } else {
-                        "Clear all (${state.planets.size})"
+                        stringResource(R.string.clear_all_count, state.planets.size)
                     },
                 )
             }
@@ -145,7 +172,7 @@ fun ManagerScreen(
             state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "No planets yet \u2014 kids can start drawing!",
+                        stringResource(R.string.no_planets),
                         color = TextMuted,
                         fontSize = 16.sp,
                     )
@@ -172,11 +199,14 @@ fun ManagerScreen(
     if (confirmClearAll) {
         AlertDialog(
             onDismissRequest = { confirmClearAll = false },
-            title = { Text("Remove every planet?") },
+            title = { Text(stringResource(R.string.remove_every_planet)) },
             text = {
                 Text(
-                    "This deletes all ${state.planets.size} planet(s) from ${galaxy.name} and " +
-                        "empties its projector. It cannot be undone.",
+                    stringResource(
+                        R.string.remove_every_planet_body,
+                        state.planets.size,
+                        galaxy.name,
+                    ),
                 )
             },
             confirmButton = {
@@ -186,11 +216,13 @@ fun ManagerScreen(
                         onClearAll()
                     },
                 ) {
-                    Text("Clear all", color = Danger)
+                    Text(stringResource(R.string.clear_all), color = Danger)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClearAll = false }) { Text("Keep them") }
+                TextButton(onClick = { confirmClearAll = false }) {
+                    Text(stringResource(R.string.keep_them))
+                }
             },
         )
     }
@@ -198,11 +230,14 @@ fun ManagerScreen(
     pendingDelete?.let { planet ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Remove planet?") },
+            title = { Text(stringResource(R.string.remove_planet)) },
             text = {
                 Text(
-                    "\"${planet.name}\" will leave ${galaxy.name} and be deleted from the server. " +
-                        "This cannot be undone.",
+                    stringResource(
+                        R.string.remove_planet_body,
+                        planet.name,
+                        galaxy.name,
+                    ),
                 )
             },
             confirmButton = {
@@ -213,12 +248,12 @@ fun ManagerScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger),
                 ) {
-                    Text("Remove")
+                    Text(stringResource(R.string.remove))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -227,7 +262,7 @@ fun ManagerScreen(
     state.errorMessage?.let { message ->
         AlertDialog(
             onDismissRequest = onClearError,
-            title = { Text("Something went wrong") },
+            title = { Text(stringResource(R.string.something_went_wrong)) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = onClearError) { Text("OK") }
@@ -249,6 +284,7 @@ private fun PlanetRow(
         } else {
             baseUrl.trimEnd('/') + planet.url
         }
+    val shape = stringResource(shapeLabelResource(planet.style))
 
     Row(
         modifier =
@@ -280,7 +316,13 @@ private fun PlanetRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "id ${planet.id}",
+                text = stringResource(R.string.planet_shape, shape),
+                color = Accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = stringResource(R.string.planet_id, planet.id),
                 color = TextMuted,
                 fontSize = 12.sp,
                 style = MaterialTheme.typography.bodySmall,
@@ -296,10 +338,18 @@ private fun PlanetRow(
             IconButton(onClick = onDeleteClick) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Remove ${planet.name}",
+                    contentDescription = stringResource(R.string.remove_named, planet.name),
                     tint = Danger,
                 )
             }
         }
     }
 }
+
+private fun shapeLabelResource(style: String): Int =
+    when (style.lowercase()) {
+        "ringed" -> R.string.shape_ringed
+        "cratered" -> R.string.shape_cratered
+        "spiky" -> R.string.shape_spiky
+        else -> R.string.shape_classic
+    }
