@@ -1,8 +1,9 @@
 /** Coordinates persisted galaxy behavior with the live projector scene. */
 export class ProjectorBehaviorController {
-  constructor({ scene, celebration }) {
+  constructor({ scene, celebration, environment = null }) {
     this.scene = scene;
     this.celebration = celebration;
+    this.environment = environment;
     this.current = null;
   }
 
@@ -10,6 +11,7 @@ export class ProjectorBehaviorController {
     if (!behavior || typeof behavior !== 'object') return;
     this.current = behavior;
     this.scene.applyBehavior(behavior);
+    this.environment?.applyBehavior(behavior);
     this.celebration.setLanguage(behavior.projector_language);
   }
 
