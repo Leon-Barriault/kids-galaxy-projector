@@ -2,9 +2,9 @@
 """Real-browser smoke test for the Raspberry Pi projector page.
 
 The projector depends on WebGL, EventSource and the live FastAPI server, so
-this test drives the real page in headless Chromium. It covers the rendering
-contracts most likely to regress on the field device, including textured rock
-rings and the manager-controlled galaxy environment.
+this test drives the real page in headless Chromium. It protects the sculpted
+toy rendering contract, including the continuous molded ring used by ringed
+planets and the manager-controlled galaxy environment.
 """
 
 from __future__ import annotations
@@ -63,7 +63,9 @@ def kid_style_png_bytes() -> bytes:
 class Server:
     def __init__(self) -> None:
         self.port = free_port()
-        self.uploads = Path(tempfile.mkdtemp(prefix="kg-projector-"))
+        self.root = Path(tempfile.mkdtemp(prefix="kg-projector-"))
+        self.uploads = self.root / "uploads"
+        self.state = self.root / "state"
         self.base = f"http://127.0.0.1:{self.port}"
         self._process: subprocess.Popen | None = None
 
@@ -72,6 +74,7 @@ class Server:
             "PATH": "/usr/bin:/bin:/usr/local/bin",
             "PYTHONPATH": str(SERVER_DIR),
             "UPLOAD_DIR": str(self.uploads),
+            "STATE_DIR": str(self.state),
             "STATIC_DIR": str(SERVER_DIR / "static"),
             "RATE_LIMIT_SECONDS": "0",
             "ENVIRONMENT": "development",
@@ -96,7 +99,7 @@ class Server:
         if self._process:
             self._process.terminate()
             self._process.wait(timeout=10)
-        shutil.rmtree(self.uploads, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def upload(
         self,
@@ -180,7 +183,10 @@ def main() -> int:
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
-        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on(
+            "console",
+            lambda message: errors.append(message.text) if message.type == "error" else None,
+        )
         page.on("pageerror", lambda error: errors.append(str(error)))
 
         print("\nload")
@@ -207,33 +213,25 @@ def main() -> int:
             f"(() => {{"
             f"const p = window.kidsGalaxy.kidPlanets.get('{first}');"
             "const g = window.kidsGalaxy.engine.galaxyScene;"
-            "const edge = p.accentEdgeMesh;"
-            "const top = p.accentMesh;"
+            "const edge = p.accentEdgeMesh; const top = p.accentMesh;"
             "return {"
             "material: p.mesh.material.type,"
             "baseRadius: p.mesh.geometry.parameters.radius,"
             "baseHasFlatTexture: Boolean(p.mesh.material.map),"
             "baseHasDisplacement: Boolean(p.mesh.material.displacementMap),"
-            "edgeVisible: edge.visible,"
-            "edgeRadius: edge.geometry.parameters.radius,"
+            "edgeVisible: edge.visible, edgeRadius: edge.geometry.parameters.radius,"
             "edgeAlphaTest: edge.material.alphaTest,"
-            "topVisible: top.visible,"
-            "topRadius: top.geometry.parameters.radius,"
+            "topVisible: top.visible, topRadius: top.geometry.parameters.radius,"
             "topAlphaTest: top.material.alphaTest,"
-            "topHasColour: Boolean(top.material.map),"
-            "topHasMask: Boolean(top.material.alphaMap),"
-            "emissive: p.mesh.material.emissiveIntensity,"
-            "sunType: g.sunLight.type,"
-            "sunIntensity: g.sunLight.intensity,"
-            "ambientIntensity: g.ambientLight.intensity,"
-            "fillIntensity: g.fillLight.intensity,"
-            "exposure: g.renderer.toneMappingExposure,"
+            "topHasColour: Boolean(top.material.map), topHasMask: Boolean(top.material.alphaMap),"
+            "emissive: p.mesh.material.emissiveIntensity, sunType: g.sunLight.type,"
+            "sunIntensity: g.sunLight.intensity, ambientIntensity: g.ambientLight.intensity,"
+            "fillIntensity: g.fillLight.intensity, exposure: g.renderer.toneMappingExposure,"
             "shadows: g.renderer.shadowMap.enabled,"
             "renderScale: g.renderer.userData.kidsGalaxyRenderScale,"
             "internalWidth: g.renderer.userData.kidsGalaxyInternalWidth,"
             "internalHeight: g.renderer.userData.kidsGalaxyInternalHeight"
-            "};"
-            "})()"
+            "}; })()"
         )
         check(polished["material"] == "MeshPhysicalMaterial", "planet body uses physical material")
         check(not polished["baseHasFlatTexture"], "child PNG is not flat-wrapped over the sphere")
@@ -245,10 +243,10 @@ def main() -> int:
         )
         check(
             polished["edgeAlphaTest"] < polished["topAlphaTest"],
-            "molded shoulder has a wider silhouette than the colour top",
+            "molded shoulder is broader than the colour top",
         )
         check(polished["topHasColour"] and polished["topHasMask"], "raised top carries kid colours")
-        check(polished["emissive"] == 0, "planet remains lit by the galaxy instead of self-emitting")
+        check(polished["emissive"] == 0, "planet remains lit instead of self-emitting")
         check(polished["sunType"] == "PointLight", "galaxy sun owns the physical key light")
         check(
             polished["sunIntensity"] > polished["ambientIntensity"] + polished["fillIntensity"],
@@ -260,25 +258,22 @@ def main() -> int:
         check(polished["internalWidth"] <= 1920, "internal width is capped at 1920")
         check(polished["internalHeight"] <= 1080, "internal height is capped at 1080")
 
-        print("\nrocky planet ring")
+        print("\nsolid sculpted planet ring")
         ring_details = page.evaluate(
             f"(() => {{"
             f"const e = window.kidsGalaxy.kidPlanets.get('{first}');"
-            "const system = e.decorations[0];"
-            "const rocks = system.children.find((o) => o.userData?.kidsGalaxyRockRing);"
-            "const dust = system.children.find((o) => o.userData?.kidsGalaxyRingDust);"
-            "const renderedFlatRing = system.children.some((o) => o.geometry?.type === 'RingGeometry');"
-            "const matrices = rocks?.instanceMatrix?.array || [];"
-            "let minRadius = Infinity; let maxRadius = 0; let minThickness = Infinity; let maxThickness = 0;"
-            "let minScale = Infinity; let maxScale = 0;"
-            "for (let i = 0; i < matrices.length; i += 16) {"
-            "const x = matrices[i + 12]; const y = matrices[i + 13]; const z = matrices[i + 14];"
-            "const radius = Math.hypot(x, y);"
-            "const sx = Math.hypot(matrices[i], matrices[i + 1], matrices[i + 2]);"
-            "minRadius = Math.min(minRadius, radius); maxRadius = Math.max(maxRadius, radius);"
-            "minThickness = Math.min(minThickness, z); maxThickness = Math.max(maxThickness, z);"
-            "minScale = Math.min(minScale, sx); maxScale = Math.max(maxScale, sx);"
+            "const ring = e.decorations[0]; const geometry = ring.geometry;"
+            "const positions = geometry.getAttribute('position');"
+            "const colors = geometry.getAttribute('color');"
+            "let minZ = Infinity; let maxZ = -Infinity; let minL = 1; let maxL = 0;"
+            "for (let i = 0; i < positions.count; i += 1) {"
+            "minZ = Math.min(minZ, positions.getZ(i)); maxZ = Math.max(maxZ, positions.getZ(i));"
+            "if (colors) { const l = (colors.getX(i) + colors.getY(i) + colors.getZ(i)) / 3;"
+            "minL = Math.min(minL, l); maxL = Math.max(maxL, l); }"
             "}"
+            "let particulate = false; ring.traverse((o) => {"
+            "if (o.userData?.kidsGalaxyRockRing || o.userData?.kidsGalaxyRingDust) particulate = true;"
+            "});"
             "const orbit = e.ring; const orbitPositions = orbit.geometry.getAttribute('position');"
             "let orbitMin = Infinity; let orbitMax = 0;"
             "for (let i = 0; i < orbitPositions.count; i += 1) {"
@@ -286,27 +281,26 @@ def main() -> int:
             "orbitMin = Math.min(orbitMin, radius); orbitMax = Math.max(orbitMax, radius);"
             "}"
             "return {"
-            "system: Boolean(system.userData.kidsGalaxyRockRingSystem),"
-            "rocksType: rocks?.type, rockCount: rocks?.count || 0,"
-            "dustType: dust?.type, dustCount: dust?.userData?.dustCount || 0,"
-            "renderedFlatRing, hasInstanceColours: Boolean(rocks?.instanceColor),"
-            "radiusSpread: maxRadius - minRadius, thickness: maxThickness - minThickness,"
-            "scaleSpread: maxScale - minScale,"
+            "type: geometry.type, sculpted: Boolean(geometry.userData.kidsGalaxySculptedRing),"
+            "beveled: Boolean(geometry.userData.kidsGalaxyRingBeveled),"
+            "inner: geometry.userData.innerRadius, outer: geometry.userData.outerRadius,"
+            "declaredThickness: geometry.userData.thickness, measuredThickness: maxZ - minZ,"
+            "wobble: geometry.userData.wobbleAmplitude, gradient: Boolean(colors),"
+            "lightnessSpread: maxL - minL, particulate, vertexColors: ring.material.vertexColors,"
             "orbitGuide: Boolean(orbit.geometry.userData.kidsGalaxyCircularGuide),"
             "orbitRadiusSpread: orbitMax - orbitMin, orbitEccentricity: e.e"
-            "};"
-            "})()"
+            "}; })()"
         )
-        check(ring_details["system"], "ringed planet owns a dedicated rocky ring system")
-        check(ring_details["rocksType"] == "Mesh", "rock field renders through one instanced mesh")
-        check(ring_details["rockCount"] >= 180, "ring contains a dense field of individual rocks")
-        check(ring_details["dustType"] == "Points", "ring includes a fine dust population")
-        check(ring_details["dustCount"] >= 300, "ring dust is dense enough to texture the gaps")
-        check(not ring_details["renderedFlatRing"], "ringed planet renders no flat RingGeometry band")
-        check(ring_details["hasInstanceColours"], "ring rocks have per-rock tonal variation")
-        check(ring_details["radiusSpread"] >= 0.8, "rocks occupy several separated radial bands")
-        check(ring_details["thickness"] >= 0.04, "ring has real vertical thickness")
-        check(ring_details["scaleSpread"] >= 0.03, "ring rocks vary visibly in size")
+        check(ring_details["type"] == "ExtrudeGeometry", "planet ring is a continuous solid extrusion")
+        check(ring_details["sculpted"], "ring carries the sculpted-toy renderer contract")
+        check(ring_details["beveled"], "ring edges are rounded instead of paper-thin")
+        check(not ring_details["particulate"], "planet ring contains no rock or dust field")
+        check(ring_details["outer"] - ring_details["inner"] >= 0.85, "ring remains broad around the planet")
+        check(ring_details["declaredThickness"] >= 0.1, "ring has deliberate molded thickness")
+        check(ring_details["measuredThickness"] >= 0.1, "rendered geometry has visible edge depth")
+        check(ring_details["wobble"] <= 0.04, "ring silhouette stays smooth with only subtle organic variation")
+        check(ring_details["gradient"] and ring_details["vertexColors"], "ring keeps soft tonal modeling")
+        check(ring_details["lightnessSpread"] > 0.05, "white rings still reveal their rounded form")
         check(ring_details["orbitGuide"], "sun orbit remains an independent circular guide")
         check(ring_details["orbitRadiusSpread"] < 0.001, "sun orbit has constant radius")
         check(ring_details["orbitEccentricity"] == 0, "kid planet follows the circular guide")
@@ -353,31 +347,24 @@ def main() -> int:
             "(() => {"
             "const env = window.kidsGalaxy.engine.environment;"
             "const beltRocks = env.asteroidBelt?.children.find((o) => o.userData?.kidsGalaxyAsteroidBeltRocks);"
-            "const comet = env.comets[0]; const flyby = env.flybys[0];"
-            "let sunAlignment = 0;"
-            "if (comet) {"
-            "const tailAxis = comet.tail.up.clone().applyQuaternion(comet.tail.quaternion).normalize();"
+            "const comet = env.comets[0]; const flyby = env.flybys[0]; let sunAlignment = 0;"
+            "if (comet) { const tailAxis = comet.tail.up.clone().applyQuaternion(comet.tail.quaternion).normalize();"
             "const sunward = comet.head.position.clone().normalize().multiplyScalar(-1);"
-            "sunAlignment = tailAxis.dot(sunward);"
-            "}"
-            "return {"
-            "belt: Boolean(env.asteroidBelt?.userData?.kidsGalaxyAsteroidBelt),"
-            "beltRocks: beltRocks?.count || 0,"
-            "comets: env.comets.length, flybys: env.flybys.length,"
+            "sunAlignment = tailAxis.dot(sunward); }"
+            "return { belt: Boolean(env.asteroidBelt?.userData?.kidsGalaxyAsteroidBelt),"
+            "beltRocks: beltRocks?.count || 0, comets: env.comets.length, flybys: env.flybys.length,"
             "tailAntiSolar: Boolean(comet?.tail?.userData?.kidsGalaxyCometTailAntiSolar),"
-            "tipFacesSun: Boolean(comet?.tail?.userData?.tipFacesSun),"
-            "sunAlignment, flybyTagged: Boolean(flyby?.group?.userData?.kidsGalaxyAsteroidFlyby)"
-            "};"
-            "})()"
+            "tipFacesSun: Boolean(comet?.tail?.userData?.tipFacesSun), sunAlignment,"
+            "flybyTagged: Boolean(flyby?.group?.userData?.kidsGalaxyAsteroidFlyby) }; })()"
         )
         check(environment["belt"], "admin can enable a persistent asteroid belt")
-        check(environment["beltRocks"] >= 200, "asteroid belt is a dense instanced rock field")
+        check(environment["beltRocks"] >= 200, "asteroid belt keeps its dense rock field")
         check(environment["comets"] >= 1, "enabled comets can spawn intermittently")
         check(environment["flybys"] >= 1, "enabled asteroid fly-bys can spawn intermittently")
         check(environment["tailAntiSolar"], "comet tail is explicitly anti-solar")
         check(environment["tipFacesSun"], "comet narrow tip/head remains sunward")
         check(environment["sunAlignment"] > 0.995, "comet orientation follows the sun, not velocity")
-        check(environment["flybyTagged"], "fly-through asteroid group is identifiable and managed")
+        check(environment["flybyTagged"], "fly-through asteroid group is managed")
 
         server.update_behavior(
             asteroid_belt_enabled=False,
