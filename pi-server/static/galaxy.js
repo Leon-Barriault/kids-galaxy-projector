@@ -10,12 +10,16 @@ import * as THREE from 'three';
 
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
+import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
+import { installRockyPlanetRings } from './projector/RockyPlanetRings.js';
 
 const GALLERY_SIZE = 12;
+
+installRockyPlanetRings();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
@@ -29,10 +33,12 @@ const celebration = new CelebrationEffect({
 
 const animator = new PlanetAnimator();
 const galaxyScene = new GalaxyScene(container, animator);
+const environment = new GalaxyEnvironment(galaxyScene.scene);
 const cameraController = new CameraController(galaxyScene.renderer);
 const behaviorController = new ProjectorBehaviorController({
   scene: galaxyScene,
   celebration,
+  environment,
 });
 const planetLoader = new PlanetLoader({
   scene: galaxyScene,
@@ -48,6 +54,7 @@ function animate() {
   requestAnimationFrame(animate);
   const t = clock.getElapsedTime();
   galaxyScene.update(t);
+  environment.update(t);
   planetLoader.update(t);
   cameraController.update();
   galaxyScene.render(cameraController.camera);
@@ -64,6 +71,7 @@ window.kidsGalaxy = {
   GALLERY_SIZE,
   engine: {
     galaxyScene,
+    environment,
     planetLoader,
     animator,
     cameraController,
