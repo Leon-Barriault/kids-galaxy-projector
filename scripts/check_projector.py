@@ -11,6 +11,7 @@ polished renderer contract:
     primes every new subscriber with the current planet, so the newest one
     arrives twice and must be deduplicated
   * kid planets use the polished physical material and a derived relief map
+  * relief provides both bump shading and shallow molded displacement
   * the actual galaxy sun is the dominant directional lighting reference
   * cratered planets own recessed bowl/rim geometry
   * mountain planets own rounded lathed peak geometry
@@ -167,6 +168,13 @@ def main() -> int:
         print("\nload")
         page.goto(f"{server.base}/", wait_until="load")
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3")
+        initialized = page.evaluate("Boolean(window.kidsGalaxy)")
+        check(initialized, f"projector initializes without a fatal browser error ({errors[:3]})")
+        if not initialized:
+            print(f"  Browser errors: {errors}")
+            browser.close()
+            return 1
+
         wait_for(
             page,
             "Array.from(window.kidsGalaxy.kidPlanets.values())"
@@ -185,7 +193,9 @@ def main() -> int:
             "return {"
             "material: p.mesh.material.type,"
             "hasRelief: Boolean(p.mesh.material.bumpMap),"
+            "hasDisplacement: Boolean(p.mesh.material.displacementMap),"
             "bumpScale: p.mesh.material.bumpScale,"
+            "displacementScale: p.mesh.material.displacementScale,"
             "emissive: p.mesh.material.emissiveIntensity,"
             "sunType: g.sunLight.type,"
             "sunIntensity: g.sunLight.intensity,"
@@ -201,6 +211,8 @@ def main() -> int:
         check(polished["material"] == "MeshPhysicalMaterial", "kid planet uses physical material")
         check(polished["hasRelief"], "child colours produce a molded relief map")
         check(polished["bumpScale"] > 0, "relief changes surface normals")
+        check(polished["hasDisplacement"], "relief also drives shallow physical displacement")
+        check(polished["displacementScale"] > 0, "molded colour regions stand proud of the sphere")
         check(polished["emissive"] == 0, "texture is no longer flattened by self-emission")
         check(polished["sunType"] == "PointLight", "galaxy sun owns the physical key light")
         check(
