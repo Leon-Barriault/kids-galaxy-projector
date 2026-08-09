@@ -27,7 +27,18 @@ class TestPlanet:
             "url": "/uploads/abc123_My Planet.png",
             "name": "My Planet",
             "timestamp": 1234.5,
+            "style": "classic",
+            "companions": [],
         }
+
+    def test_payload_carries_design_metadata(self):
+        payload = make_planet(
+            style="spiky",
+            companions=("moon", "satellite"),
+        ).to_payload()
+
+        assert payload["style"] == "spiky"
+        assert payload["companions"] == ["moon", "satellite"]
 
     def test_payload_carries_the_id_so_the_projector_can_deduplicate(self):
         """
