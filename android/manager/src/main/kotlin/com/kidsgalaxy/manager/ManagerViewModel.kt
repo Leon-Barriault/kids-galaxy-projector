@@ -14,19 +14,31 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface ManagerStatus {
-    data class Stored(val count: Int) : ManagerStatus
+    data class Stored(
+        val count: Int,
+    ) : ManagerStatus
 
-    data class Removed(val name: String?) : ManagerStatus
+    data class Removed(
+        val name: String?,
+    ) : ManagerStatus
 
-    data class Cleared(val count: Int) : ManagerStatus
+    data class Cleared(
+        val count: Int,
+    ) : ManagerStatus
 }
 
 sealed interface ManagerError {
-    data class LoadFailed(val code: Int) : ManagerError
+    data class LoadFailed(
+        val code: Int,
+    ) : ManagerError
 
-    data class DeleteFailed(val code: Int) : ManagerError
+    data class DeleteFailed(
+        val code: Int,
+    ) : ManagerError
 
-    data class ClearFailed(val code: Int) : ManagerError
+    data class ClearFailed(
+        val code: Int,
+    ) : ManagerError
 
     data object Network : ManagerError
 }
