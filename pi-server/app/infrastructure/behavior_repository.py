@@ -3,7 +3,12 @@
 import json
 from pathlib import Path
 
-from app.domain.behavior import BehaviorMode, GalaxyBehaviorSettings, GalaxyTheme
+from app.domain.behavior import (
+    BehaviorMode,
+    GalaxyBehaviorSettings,
+    GalaxyTheme,
+    ProjectorLanguage,
+)
 from app.ports import BehaviorRepository
 
 
@@ -25,6 +30,9 @@ class JsonBehaviorRepository(BehaviorRepository):
                 ),
                 planet_speed=float(raw.get("planet_speed", 1.0)),
                 ambient_effects=bool(raw.get("ambient_effects", True)),
+                projector_language=ProjectorLanguage(
+                    raw.get("projector_language", ProjectorLanguage.ENGLISH.value)
+                ),
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             # A power loss during a hand-edited file or old incompatible state
@@ -37,6 +45,7 @@ class JsonBehaviorRepository(BehaviorRepository):
             "manual_theme": settings.manual_theme.value,
             "planet_speed": settings.planet_speed,
             "ambient_effects": settings.ambient_effects,
+            "projector_language": settings.projector_language.value,
         }
         temporary = self._path.with_suffix(".tmp")
         temporary.write_text(
