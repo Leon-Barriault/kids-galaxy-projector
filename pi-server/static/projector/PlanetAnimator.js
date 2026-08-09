@@ -26,9 +26,12 @@ export class PlanetAnimator {
     const E = this.solveKepler(M, params.e);
     const cosE = Math.cos(E);
     const sinE = Math.sin(E);
-    const r = params.a * (1 - params.e * cosE);
-    const xOrb = r * (cosE - params.e);
-    const yOrb = r * Math.sqrt(1 - params.e * params.e) * sinE;
+
+    // Standard eccentric-anomaly parameterisation. The previous implementation
+    // multiplied these coordinates by the instantaneous orbital radius again,
+    // which distorted both the path and its guide into an uneven/egg-like loop.
+    const xOrb = params.a * (cosE - params.e);
+    const yOrb = params.a * Math.sqrt(1 - params.e * params.e) * sinE;
     return this.scratch.set(
       xOrb,
       yOrb * Math.sin(params.i),
