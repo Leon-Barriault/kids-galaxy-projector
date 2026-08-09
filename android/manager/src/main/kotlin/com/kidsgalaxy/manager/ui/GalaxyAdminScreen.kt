@@ -167,13 +167,24 @@ private fun EnvironmentCard(
     onFlybyAsteroidsChange: (Boolean) -> Unit,
     onFlybyFrequencyChange: (String) -> Unit,
 ) {
+    val easterPreview = settings.mode == "manual" && settings.manualTheme == "easter"
     SettingsCard(
         title = stringResource(R.string.space_activity),
         subtitle = stringResource(R.string.space_activity_hint),
     ) {
         ToggleSetting(
-            title = stringResource(R.string.asteroid_belt),
-            subtitle = stringResource(R.string.asteroid_belt_hint),
+            title =
+                stringResource(
+                    if (easterPreview) R.string.easter_egg_belt else R.string.asteroid_belt,
+                ),
+            subtitle =
+                stringResource(
+                    if (easterPreview) {
+                        R.string.easter_egg_belt_hint
+                    } else {
+                        R.string.asteroid_belt_hint
+                    },
+                ),
             checked = settings.asteroidBeltEnabled,
             enabled = enabled,
             onCheckedChange = onAsteroidBeltChange,
@@ -193,8 +204,18 @@ private fun EnvironmentCard(
             )
         }
         ToggleSetting(
-            title = stringResource(R.string.flyby_asteroids),
-            subtitle = stringResource(R.string.flyby_asteroids_hint),
+            title =
+                stringResource(
+                    if (easterPreview) R.string.easter_egg_flybys else R.string.flyby_asteroids,
+                ),
+            subtitle =
+                stringResource(
+                    if (easterPreview) {
+                        R.string.easter_egg_flybys_hint
+                    } else {
+                        R.string.flyby_asteroids_hint
+                    },
+                ),
             checked = settings.flybyAsteroidsEnabled,
             enabled = enabled,
             onCheckedChange = onFlybyAsteroidsChange,
@@ -273,6 +294,14 @@ private fun ThemeCard(
                     settings,
                     enabled,
                     onManualThemeChange,
+                )
+            }
+            if (settings.manualTheme == "easter") {
+                Text(
+                    text = stringResource(R.string.theme_easter_effects),
+                    color = AdminAccent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }
