@@ -11,10 +11,10 @@ polished renderer contract:
     primes every new subscriber with the current planet, so the newest one
     arrives twice and must be deduplicated
   * kid planets use the polished physical material and a derived relief map
-  * relief provides both bump shading and shallow molded displacement
   * the actual galaxy sun is the dominant directional lighting reference
+  * ringed planets own a wide flat ring with radial colour gradation
   * cratered planets own recessed bowl/rim geometry
-  * mountain planets own rounded lathed peak geometry
+  * mountain planets own varied terrain-range geometry, not identical spikes
   * the polished path does not enable expensive real-time shadow maps
   * a larger-than-1080p display still renders internally at at most 1080p
   * a live upload appears without a reload
@@ -145,7 +145,12 @@ def planet_ids(page) -> list[str]:
 
 def main() -> int:
     with Server() as server, sync_playwright() as pw:
-        first = server.upload("Alpha", (220, 40, 40))
+        first = server.upload(
+            "Alpha",
+            (220, 40, 40),
+            style="ringed",
+            ring_color="#ffffff",
+        )
         second = server.upload(
             "Beta",
             (40, 220, 40),
@@ -201,6 +206,7 @@ def main() -> int:
             "sunIntensity: g.sunLight.intensity,"
             "ambientIntensity: g.ambientLight.intensity,"
             "fillIntensity: g.fillLight.intensity,"
+            "exposure: g.renderer.toneMappingExposure,"
             "shadows: g.renderer.shadowMap.enabled,"
             "renderScale: g.renderer.userData.kidsGalaxyRenderScale,"
             "internalWidth: g.renderer.userData.kidsGalaxyInternalWidth,"
@@ -219,10 +225,37 @@ def main() -> int:
             polished["sunIntensity"] > polished["ambientIntensity"] + polished["fillIntensity"],
             "sun is stronger than the non-directional readability fill",
         )
+        check(polished["exposure"] >= 1.2, "projector exposure keeps kid colours easy to see")
         check(not polished["shadows"], "renderer avoids expensive real-time shadow maps")
         check(polished["renderScale"] < 1, "large viewport is rendered below native resolution")
         check(polished["internalWidth"] <= 1920, "internal render width is capped at 1920")
         check(polished["internalHeight"] <= 1080, "internal render height is capped at 1080")
+
+        ring_details = page.evaluate(
+            f"(() => {{"
+            f"const e = window.kidsGalaxy.kidPlanets.get('{first}');"
+            "const ring = e.decorations[0];"
+            "const colors = ring.geometry.getAttribute('color');"
+            "let min = 1; let max = 0;"
+            "for (let i = 0; i < colors.count; i += 1) {"
+            "const lightness = (colors.getX(i) + colors.getY(i) + colors.getZ(i)) / 3;"
+            "min = Math.min(min, lightness); max = Math.max(max, lightness);"
+            "}"
+            "return {"
+            "type: ring.geometry.type,"
+            "inner: ring.geometry.userData.innerRadius,"
+            "outer: ring.geometry.userData.outerRadius,"
+            "hasGradient: Boolean(colors),"
+            "vertexColors: ring.material.vertexColors,"
+            "spread: max - min"
+            "};"
+            "})()"
+        )
+        check(ring_details["type"] == "RingGeometry", "planet ring is a flat annular band")
+        check(ring_details["outer"] - ring_details["inner"] >= 0.8, "planet ring is visibly wide")
+        check(ring_details["hasGradient"], "ring carries per-vertex radial colour bands")
+        check(ring_details["vertexColors"], "ring material displays the colour gradation")
+        check(ring_details["spread"] > 0.12, "white rings still have visible dark-to-light contrast")
 
         crater_geometry = page.evaluate(
             f"(() => {{"
@@ -238,15 +271,33 @@ def main() -> int:
             "craters have independent recessed bowl surfaces",
         )
 
-        mountain_geometry = page.evaluate(
+        mountain_ranges = page.evaluate(
             f"(() => {{"
             f"const e = window.kidsGalaxy.kidPlanets.get('{third}');"
-            "const types = [];"
-            "e.mesh.traverse((o) => { if (o.geometry) types.push(o.geometry.type); });"
-            "return types;"
+            "const ranges = [];"
+            "e.mesh.traverse((o) => {"
+            "if (o.geometry?.userData?.kidsGalaxyMountainRange) {"
+            "ranges.push({"
+            "width: o.geometry.userData.width,"
+            "depth: o.geometry.userData.depth,"
+            "height: o.geometry.userData.height,"
+            "hasColors: Boolean(o.geometry.getAttribute('color'))"
+            "});"
+            "}"
+            "});"
+            "return ranges;"
             "})()"
         )
-        check("LatheGeometry" in mountain_geometry, "mountains use rounded tapered peak geometry")
+        check(len(mountain_ranges) >= 5, "mountain planet owns several separate terrain ranges")
+        check(
+            len({round(item["width"], 2) for item in mountain_ranges}) >= 4,
+            "mountain ranges have varied footprints",
+        )
+        check(
+            len({round(item["height"], 2) for item in mountain_ranges}) >= 4,
+            "mountain ranges have varied heights",
+        )
+        check(all(item["hasColors"] for item in mountain_ranges), "mountain crests have tonal accents")
 
         print("\nlive arrival over SSE")
         fourth = server.upload("Delta", (220, 220, 40))
