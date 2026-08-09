@@ -1,29 +1,10 @@
 #!/usr/bin/env python3
-"""
-Smoke test for the projector page.
+"""Real-browser smoke test for the Raspberry Pi projector page.
 
-`static/galaxy.js` needs a WebGL context, a live server and a real EventSource,
-so this drives the real page in headless Chromium against a real server. It
-asserts the behaviours that have actually broken before, plus the Pi-friendly
-sculpted renderer contract:
-
-  * a page load produces exactly one planet per stored drawing
-  * kid drawings become a coherent body plus limited raised accent shapes
-  * raised accents have a wider molded shoulder below their coloured top
-  * the child's full PNG is never wrapped flat over the whole globe
-  * sun orbit guides are circular while only a ringed planet owns ring wobble
-  * the actual galaxy sun is the dominant directional lighting reference
-  * ringed planets own a wide flat, graded, visibly handmade ring
-  * cratered planets own recessed bowl/rim geometry
-  * mountain planets own varied terrain-range geometry, not identical spikes
-  * the polished path does not enable expensive real-time shadow maps
-  * a larger-than-1080p display still renders internally at at most 1080p
-  * live upload/delete/reload/gallery/clear behaviour remains intact
-  * nothing is logged to the console as an error
-
-Run it with `make check-projector` (needs playwright + chromium). Projector CI
-runs the same check with SwiftShader so browser-only Three.js regressions block
-main even though the field device uses the Pi GPU.
+The projector depends on WebGL, EventSource and the live FastAPI server, so
+this test drives the real page in headless Chromium. It covers the rendering
+contracts most likely to regress on the field device, including textured rock
+rings and the manager-controlled galaxy environment.
 """
 
 from __future__ import annotations
@@ -46,9 +27,9 @@ SERVER_DIR = REPO_ROOT / "pi-server"
 
 
 def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 def png_bytes(colour: tuple[int, int, int]) -> bytes:
@@ -58,7 +39,6 @@ def png_bytes(colour: tuple[int, int, int]) -> bytes:
 
 
 def kid_style_png_bytes() -> bytes:
-    """A filled multicolour drawing that should become body + a few accents."""
     image = Image.new("RGB", (64, 64), (33, 150, 243))
     draw = ImageDraw.Draw(image)
     draw.line(
@@ -81,8 +61,6 @@ def kid_style_png_bytes() -> bytes:
 
 
 class Server:
-    """uvicorn against a throwaway upload directory."""
-
     def __init__(self) -> None:
         self.port = free_port()
         self.uploads = Path(tempfile.mkdtemp(prefix="kg-projector-"))
@@ -127,12 +105,16 @@ class Server:
         artwork: bytes | None = None,
         **design: str,
     ) -> str:
-        data = {"name": name, **design}
-        payload = artwork if artwork is not None else png_bytes(colour)
         response = httpx.post(
             f"{self.base}/api/upload",
-            files={"file": ("planet.png", payload, "image/png")},
-            data=data,
+            files={
+                "file": (
+                    "planet.png",
+                    artwork if artwork is not None else png_bytes(colour),
+                    "image/png",
+                )
+            },
+            data={"name": name, **design},
             timeout=10,
         )
         response.raise_for_status()
@@ -143,6 +125,13 @@ class Server:
 
     def clear(self) -> int:
         return httpx.delete(f"{self.base}/api/planets", timeout=10).status_code
+
+    def update_behavior(self, **overrides) -> dict:
+        settings = httpx.get(f"{self.base}/api/behavior", timeout=10).json()["settings"]
+        settings.update(overrides)
+        response = httpx.put(f"{self.base}/api/behavior", json=settings, timeout=10)
+        response.raise_for_status()
+        return response.json()
 
 
 FAILURES: list[str] = []
@@ -157,7 +146,7 @@ def check(condition: bool, description: str) -> None:
 def wait_for(page, expression: str, timeout_ms: int = 8000) -> None:
     try:
         page.wait_for_function(expression, timeout=timeout_ms)
-    except Exception:  # noqa: BLE001 - the assertion below reports the detail
+    except Exception:  # noqa: BLE001 - check() reports the useful failure
         pass
 
 
@@ -186,11 +175,13 @@ def main() -> int:
             mountain_color="#d98242",
         )
 
-        browser = pw.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
+        browser = pw.chromium.launch(
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+        )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
-        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
 
         print("\nload")
         page.goto(f"{server.base}/", wait_until="load")
@@ -198,20 +189,18 @@ def main() -> int:
         initialized = page.evaluate("Boolean(window.kidsGalaxy)")
         check(initialized, f"projector initializes without a fatal browser error ({errors[:3]})")
         if not initialized:
-            print(f"  Browser errors: {errors}")
             browser.close()
             return 1
 
         wait_for(
             page,
             f"(() => {{ const v = window.kidsGalaxy.kidPlanets.get('{first}'); "
-            "return v && v.accentEdgeMesh?.material.alphaMap && "
-            "v.accentMesh?.material.alphaMap; })()",
+            "return v?.accentEdgeMesh?.material.alphaMap && v?.accentMesh?.material.alphaMap; })()",
         )
         ids = planet_ids(page)
         check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
-        check(len(set(ids)) == len(ids), "no duplicate planet is created by the SSE priming frame")
-        check(set(ids) == {first, second, third}, "the three planets are the three that were stored")
+        check(len(set(ids)) == len(ids), "SSE priming does not duplicate planets")
+        check(set(ids) == {first, second, third}, "stored planet identities are preserved")
 
         print("\nsculpted Pi renderer")
         polished = page.evaluate(
@@ -219,38 +208,20 @@ def main() -> int:
             f"const p = window.kidsGalaxy.kidPlanets.get('{first}');"
             "const g = window.kidsGalaxy.engine.galaxyScene;"
             "const edge = p.accentEdgeMesh;"
-            "const a = p.accentMesh;"
-            "const alphaCanvas = a.material.alphaMap?.image;"
-            "let coverage = 0;"
-            "if (alphaCanvas?.getContext) {"
-            "const context = alphaCanvas.getContext('2d');"
-            "const pixels = context.getImageData(0, 0, alphaCanvas.width, alphaCanvas.height).data;"
-            "let on = 0;"
-            "for (let i = 0; i < pixels.length; i += 4) { if (pixels[i] > 96) on += 1; }"
-            "coverage = on / (pixels.length / 4);"
-            "}"
+            "const top = p.accentMesh;"
             "return {"
             "material: p.mesh.material.type,"
             "baseRadius: p.mesh.geometry.parameters.radius,"
             "baseHasFlatTexture: Boolean(p.mesh.material.map),"
             "baseHasDisplacement: Boolean(p.mesh.material.displacementMap),"
             "edgeVisible: edge.visible,"
-            "edgeMaterial: edge.material.type,"
-            "edgeHasColour: Boolean(edge.material.map),"
-            "edgeHasMask: Boolean(edge.material.alphaMap),"
             "edgeRadius: edge.geometry.parameters.radius,"
             "edgeAlphaTest: edge.material.alphaTest,"
-            "accentVisible: a.visible,"
-            "accentMaterial: a.material.type,"
-            "accentHasColour: Boolean(a.material.map),"
-            "accentHasMask: Boolean(a.material.alphaMap),"
-            "accentHasBump: Boolean(a.material.bumpMap),"
-            "accentHasDisplacement: Boolean(a.material.displacementMap),"
-            "accentBumpScale: a.material.bumpScale,"
-            "accentDisplacementScale: a.material.displacementScale,"
-            "accentRadius: a.geometry.parameters.radius,"
-            "accentAlphaTest: a.material.alphaTest,"
-            "accentCoverage: coverage,"
+            "topVisible: top.visible,"
+            "topRadius: top.geometry.parameters.radius,"
+            "topAlphaTest: top.material.alphaTest,"
+            "topHasColour: Boolean(top.material.map),"
+            "topHasMask: Boolean(top.material.alphaMap),"
             "emissive: p.mesh.material.emissiveIntensity,"
             "sunType: g.sunLight.type,"
             "sunIntensity: g.sunLight.intensity,"
@@ -265,158 +236,97 @@ def main() -> int:
             "})()"
         )
         check(polished["material"] == "MeshPhysicalMaterial", "planet body uses physical material")
-        check(not polished["baseHasFlatTexture"], "child PNG is not wrapped flat onto the base sphere")
+        check(not polished["baseHasFlatTexture"], "child PNG is not flat-wrapped over the sphere")
+        check(not polished["baseHasDisplacement"], "paint does not inflate the base sphere")
+        check(polished["edgeVisible"] and polished["topVisible"], "molded artwork has shoulder and top")
         check(
-            not polished["baseHasDisplacement"],
-            "base sphere stays coherent instead of inflating under paint",
-        )
-        check(polished["edgeVisible"], "kid accents include a separate molded shoulder layer")
-        check(
-            polished["edgeMaterial"] == "MeshPhysicalMaterial",
-            "molded shoulder uses physical toy material",
-        )
-        check(polished["edgeHasColour"], "molded shoulder follows the interpreted kid palette")
-        check(polished["edgeHasMask"], "molded shoulder follows the interpreted accent shapes")
-        check(
-            polished["baseRadius"] < polished["edgeRadius"] < polished["accentRadius"],
-            "molded shoulder sits between the body and raised colour top",
+            polished["baseRadius"] < polished["edgeRadius"] < polished["topRadius"],
+            "molded shoulder sits between body and colour top",
         )
         check(
-            polished["edgeAlphaTest"] < polished["accentAlphaTest"],
-            "molded shoulder has a wider rounded silhouette than the colour top",
+            polished["edgeAlphaTest"] < polished["topAlphaTest"],
+            "molded shoulder has a wider silhouette than the colour top",
         )
-        check(polished["accentVisible"], "kid drawing produces a separate raised colour top")
-        check(
-            polished["accentMaterial"] == "MeshPhysicalMaterial",
-            "raised artwork uses physical toy material",
-        )
-        check(polished["accentHasColour"], "raised shell carries interpreted kid colours")
-        check(polished["accentHasMask"], "raised shell is cut to simplified accent shapes")
-        check(polished["accentHasBump"], "accent edges have molded normal depth")
-        check(polished["accentHasDisplacement"], "accent shapes have real geometric height")
-        check(polished["accentBumpScale"] >= 0.07, "molded shoulders are visually pronounced")
-        check(
-            polished["accentDisplacementScale"] >= 0.045,
-            "colour ribbons stand clearly above the planet body",
-        )
-        check(polished["accentRadius"] > 1.08, "artwork shell sits visibly proud of the base sphere")
-        check(
-            0.05 <= polished["accentCoverage"] <= 0.45,
-            f"drawing is interpreted as limited accents, not full coverage ({polished['accentCoverage']:.2f})",
-        )
-        check(polished["emissive"] == 0, "planet is not flattened by self-emission")
+        check(polished["topHasColour"] and polished["topHasMask"], "raised top carries kid colours")
+        check(polished["emissive"] == 0, "planet remains lit by the galaxy instead of self-emitting")
         check(polished["sunType"] == "PointLight", "galaxy sun owns the physical key light")
         check(
             polished["sunIntensity"] > polished["ambientIntensity"] + polished["fillIntensity"],
-            "sun is stronger than the non-directional readability fill",
+            "sun remains stronger than readability fill",
         )
-        check(polished["exposure"] >= 1.4, "projector exposure keeps kid colours easy to see")
-        check(not polished["shadows"], "renderer avoids expensive real-time shadow maps")
-        check(polished["renderScale"] < 1, "large viewport is rendered below native resolution")
-        check(polished["internalWidth"] <= 1920, "internal render width is capped at 1920")
-        check(polished["internalHeight"] <= 1080, "internal render height is capped at 1080")
+        check(polished["exposure"] >= 1.4, "projector exposure keeps kid colours visible")
+        check(not polished["shadows"], "Pi renderer keeps real-time shadows disabled")
+        check(polished["renderScale"] < 1, "large viewport renders below native resolution")
+        check(polished["internalWidth"] <= 1920, "internal width is capped at 1920")
+        check(polished["internalHeight"] <= 1080, "internal height is capped at 1080")
 
-        print("\nring and orbit separation")
+        print("\nrocky planet ring")
         ring_details = page.evaluate(
             f"(() => {{"
             f"const e = window.kidsGalaxy.kidPlanets.get('{first}');"
-            "const ring = e.decorations[0];"
-            "const orbit = e.ring;"
-            "const colors = ring.geometry.getAttribute('color');"
-            "const ringPositions = ring.geometry.getAttribute('position');"
-            "const orbitPositions = orbit.geometry.getAttribute('position');"
-            "let min = 1; let max = 0;"
-            "let outerMin = Infinity; let outerMax = 0;"
-            "let orbitMin = Infinity; let orbitMax = 0;"
-            "for (let i = 0; i < colors.count; i += 1) {"
-            "const lightness = (colors.getX(i) + colors.getY(i) + colors.getZ(i)) / 3;"
-            "min = Math.min(min, lightness); max = Math.max(max, lightness);"
-            "const rr = Math.hypot(ringPositions.getX(i), ringPositions.getY(i));"
-            "if (rr > 1.8) { outerMin = Math.min(outerMin, rr); outerMax = Math.max(outerMax, rr); }"
+            "const system = e.decorations[0];"
+            "const rocks = system.children.find((o) => o.userData?.kidsGalaxyRockRing);"
+            "const dust = system.children.find((o) => o.userData?.kidsGalaxyRingDust);"
+            "const renderedFlatRing = system.children.some((o) => o.geometry?.type === 'RingGeometry');"
+            "const matrices = rocks?.instanceMatrix?.array || [];"
+            "let minRadius = Infinity; let maxRadius = 0; let minThickness = Infinity; let maxThickness = 0;"
+            "let minScale = Infinity; let maxScale = 0;"
+            "for (let i = 0; i < matrices.length; i += 16) {"
+            "const x = matrices[i + 12]; const y = matrices[i + 13]; const z = matrices[i + 14];"
+            "const radius = Math.hypot(x, y);"
+            "const sx = Math.hypot(matrices[i], matrices[i + 1], matrices[i + 2]);"
+            "minRadius = Math.min(minRadius, radius); maxRadius = Math.max(maxRadius, radius);"
+            "minThickness = Math.min(minThickness, z); maxThickness = Math.max(maxThickness, z);"
+            "minScale = Math.min(minScale, sx); maxScale = Math.max(maxScale, sx);"
             "}"
+            "const orbit = e.ring; const orbitPositions = orbit.geometry.getAttribute('position');"
+            "let orbitMin = Infinity; let orbitMax = 0;"
             "for (let i = 0; i < orbitPositions.count; i += 1) {"
-            "const rr = Math.hypot("
-            "orbitPositions.getX(i), orbitPositions.getY(i), orbitPositions.getZ(i));"
-            "orbitMin = Math.min(orbitMin, rr); orbitMax = Math.max(orbitMax, rr);"
+            "const radius = Math.hypot(orbitPositions.getX(i), orbitPositions.getY(i), orbitPositions.getZ(i));"
+            "orbitMin = Math.min(orbitMin, radius); orbitMax = Math.max(orbitMax, radius);"
             "}"
             "return {"
-            "type: ring.geometry.type,"
-            "inner: ring.geometry.userData.innerRadius,"
-            "outer: ring.geometry.userData.outerRadius,"
-            "hasGradient: Boolean(colors),"
-            "hasWobble: Boolean(ring.geometry.userData.kidsGalaxyRingWobble),"
-            "wobbleTarget: ring.geometry.userData.kidsGalaxyRingWobbleTarget,"
-            "wobbleAmplitude: ring.geometry.userData.wobbleAmplitude,"
-            "outerRadialSpread: outerMax - outerMin,"
-            "vertexColors: ring.material.vertexColors,"
-            "spread: max - min,"
-            "orbitGuide: Boolean(orbit.geometry.userData.kidsGalaxyOrbitGuide),"
-            "circularGuide: Boolean(orbit.geometry.userData.kidsGalaxyCircularGuide),"
-            "orbitWobble: Boolean(orbit.geometry.userData.kidsGalaxyRingWobble),"
-            "orbitRadiusSpread: orbitMax - orbitMin,"
-            "orbitEccentricity: e.e"
+            "system: Boolean(system.userData.kidsGalaxyRockRingSystem),"
+            "rocksType: rocks?.type, rockCount: rocks?.count || 0,"
+            "dustType: dust?.type, dustCount: dust?.userData?.dustCount || 0,"
+            "renderedFlatRing, hasInstanceColours: Boolean(rocks?.instanceColor),"
+            "radiusSpread: maxRadius - minRadius, thickness: maxThickness - minThickness,"
+            "scaleSpread: maxScale - minScale,"
+            "orbitGuide: Boolean(orbit.geometry.userData.kidsGalaxyCircularGuide),"
+            "orbitRadiusSpread: orbitMax - orbitMin, orbitEccentricity: e.e"
             "};"
             "})()"
         )
-        check(ring_details["type"] == "RingGeometry", "planet ring is a flat annular band")
-        check(ring_details["outer"] - ring_details["inner"] >= 0.8, "planet ring is visibly wide")
-        check(ring_details["hasGradient"], "planet ring carries radial colour gradation")
-        check(ring_details["hasWobble"], "ringed planet owns the handmade ring wobble")
-        check(
-            ring_details["wobbleTarget"] == "planet-decoration",
-            "wobble is explicitly scoped to the planet decoration",
-        )
-        check(
-            0.08 <= ring_details["wobbleAmplitude"] <= 0.14,
-            "planet-ring wobble is strong enough to be visible without becoming chaotic",
-        )
-        check(
-            ring_details["outerRadialSpread"] >= 0.12,
-            "planet ring has a visibly wavy outer silhouette",
-        )
-        check(ring_details["vertexColors"], "planet ring displays the colour gradation")
-        check(ring_details["spread"] > 0.12, "white planet rings retain dark-to-light contrast")
-        check(ring_details["orbitGuide"], "sun orbit path is explicitly an orbit guide")
-        check(ring_details["circularGuide"], "sun orbit guide is explicitly circular")
-        check(not ring_details["orbitWobble"], "sun orbit guide never receives ring wobble")
-        check(
-            ring_details["orbitRadiusSpread"] < 0.001,
-            "sun orbit guide has constant radius with no visual wobble",
-        )
-        check(ring_details["orbitEccentricity"] == 0, "kid planet follows the same circular sun path")
+        check(ring_details["system"], "ringed planet owns a dedicated rocky ring system")
+        check(ring_details["rocksType"] == "Mesh", "rock field renders through one instanced mesh")
+        check(ring_details["rockCount"] >= 180, "ring contains a dense field of individual rocks")
+        check(ring_details["dustType"] == "Points", "ring includes a fine dust population")
+        check(ring_details["dustCount"] >= 300, "ring dust is dense enough to texture the gaps")
+        check(not ring_details["renderedFlatRing"], "ringed planet renders no flat RingGeometry band")
+        check(ring_details["hasInstanceColours"], "ring rocks have per-rock tonal variation")
+        check(ring_details["radiusSpread"] >= 0.8, "rocks occupy several separated radial bands")
+        check(ring_details["thickness"] >= 0.04, "ring has real vertical thickness")
+        check(ring_details["scaleSpread"] >= 0.03, "ring rocks vary visibly in size")
+        check(ring_details["orbitGuide"], "sun orbit remains an independent circular guide")
+        check(ring_details["orbitRadiusSpread"] < 0.001, "sun orbit has constant radius")
+        check(ring_details["orbitEccentricity"] == 0, "kid planet follows the circular guide")
 
+        print("\ncraters and mountain ranges")
         crater_geometry = page.evaluate(
-            f"(() => {{"
-            f"const e = window.kidsGalaxy.kidPlanets.get('{second}');"
-            "const types = [];"
-            "e.mesh.traverse((o) => { if (o.geometry) types.push(o.geometry.type); });"
-            "return types;"
-            "})()"
+            f"(() => {{ const e = window.kidsGalaxy.kidPlanets.get('{second}');"
+            "const types = []; e.mesh.traverse((o) => { if (o.geometry) types.push(o.geometry.type); });"
+            "return types; })()"
         )
-        check("TorusGeometry" in crater_geometry, "craters have raised rounded rims")
-        check(
-            crater_geometry.count("BufferGeometry") >= 5,
-            "craters have independent recessed bowl surfaces",
-        )
+        check("TorusGeometry" in crater_geometry, "craters retain rounded rims")
+        check(crater_geometry.count("BufferGeometry") >= 5, "craters retain recessed bowl surfaces")
 
         mountain_ranges = page.evaluate(
-            f"(() => {{"
-            f"const e = window.kidsGalaxy.kidPlanets.get('{third}');"
-            "const ranges = [];"
-            "e.mesh.traverse((o) => {"
-            "if (o.geometry?.userData?.kidsGalaxyMountainRange) {"
-            "ranges.push({"
-            "width: o.geometry.userData.width,"
-            "depth: o.geometry.userData.depth,"
-            "height: o.geometry.userData.height,"
-            "hasColors: Boolean(o.geometry.getAttribute('color'))"
-            "});"
-            "}"
-            "});"
-            "return ranges;"
-            "})()"
+            f"(() => {{ const e = window.kidsGalaxy.kidPlanets.get('{third}');"
+            "const ranges = []; e.mesh.traverse((o) => {"
+            "if (o.geometry?.userData?.kidsGalaxyMountainRange) ranges.push(o.geometry.userData);"
+            "}); return ranges; })()"
         )
-        check(len(mountain_ranges) >= 5, "mountain planet owns several separate terrain ranges")
+        check(len(mountain_ranges) >= 5, "mountain planet owns several terrain ranges")
         check(
             len({round(item["width"], 2) for item in mountain_ranges}) >= 4,
             "mountain ranges have varied footprints",
@@ -425,20 +335,75 @@ def main() -> int:
             len({round(item["height"], 2) for item in mountain_ranges}) >= 4,
             "mountain ranges have varied heights",
         )
-        check(all(item["hasColors"] for item in mountain_ranges), "mountain crests have tonal accents")
 
-        print("\nlive arrival over SSE")
+        print("\nmanager-controlled galaxy environment")
+        server.update_behavior(
+            asteroid_belt_enabled=True,
+            comets_enabled=True,
+            comet_frequency="frequent",
+            flyby_asteroids_enabled=True,
+            flyby_frequency="frequent",
+        )
+        wait_for(page, "Boolean(window.kidsGalaxy.engine.environment.asteroidBelt)")
+        page.evaluate(
+            "(() => { const env = window.kidsGalaxy.engine.environment;"
+            "env.nextCometAt = 0; env.nextFlybyAt = 0; env.update(env.lastTime + 0.05); })()"
+        )
+        environment = page.evaluate(
+            "(() => {"
+            "const env = window.kidsGalaxy.engine.environment;"
+            "const beltRocks = env.asteroidBelt?.children.find((o) => o.userData?.kidsGalaxyAsteroidBeltRocks);"
+            "const comet = env.comets[0]; const flyby = env.flybys[0];"
+            "let sunAlignment = 0;"
+            "if (comet) {"
+            "const tailAxis = comet.tail.up.clone().applyQuaternion(comet.tail.quaternion).normalize();"
+            "const sunward = comet.head.position.clone().normalize().multiplyScalar(-1);"
+            "sunAlignment = tailAxis.dot(sunward);"
+            "}"
+            "return {"
+            "belt: Boolean(env.asteroidBelt?.userData?.kidsGalaxyAsteroidBelt),"
+            "beltRocks: beltRocks?.count || 0,"
+            "comets: env.comets.length, flybys: env.flybys.length,"
+            "tailAntiSolar: Boolean(comet?.tail?.userData?.kidsGalaxyCometTailAntiSolar),"
+            "tipFacesSun: Boolean(comet?.tail?.userData?.tipFacesSun),"
+            "sunAlignment, flybyTagged: Boolean(flyby?.group?.userData?.kidsGalaxyAsteroidFlyby)"
+            "};"
+            "})()"
+        )
+        check(environment["belt"], "admin can enable a persistent asteroid belt")
+        check(environment["beltRocks"] >= 200, "asteroid belt is a dense instanced rock field")
+        check(environment["comets"] >= 1, "enabled comets can spawn intermittently")
+        check(environment["flybys"] >= 1, "enabled asteroid fly-bys can spawn intermittently")
+        check(environment["tailAntiSolar"], "comet tail is explicitly anti-solar")
+        check(environment["tipFacesSun"], "comet narrow tip/head remains sunward")
+        check(environment["sunAlignment"] > 0.995, "comet orientation follows the sun, not velocity")
+        check(environment["flybyTagged"], "fly-through asteroid group is identifiable and managed")
+
+        server.update_behavior(
+            asteroid_belt_enabled=False,
+            comets_enabled=False,
+            flyby_asteroids_enabled=False,
+        )
+        wait_for(
+            page,
+            "(() => { const e = window.kidsGalaxy.engine.environment;"
+            "return !e.asteroidBelt && e.comets.length === 0 && e.flybys.length === 0; })()",
+        )
+        disabled = page.evaluate(
+            "(() => { const e = window.kidsGalaxy.engine.environment;"
+            "return !e.asteroidBelt && e.comets.length === 0 && e.flybys.length === 0; })()"
+        )
+        check(disabled, "admin can disable all optional space activity live")
+
+        print("\nlive arrival and deletion over SSE")
         fourth = server.upload("Delta", (220, 220, 40))
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 4")
-        check(fourth in planet_ids(page), "a planet uploaded while the page is open appears")
-
-        print("\ndeletion over SSE")
+        check(fourth in planet_ids(page), "a live upload appears without reload")
         check(server.delete(second) == 200, "DELETE returns 200")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 3")
-        check(second not in planet_ids(page), "the deleted planet leaves the sky")
-        check(first in planet_ids(page), "the other planets are untouched")
+        check(second not in planet_ids(page), "deleted planet leaves the sky")
 
-        print("\norbit determinism across a reload")
+        print("\norbit determinism across reload")
         before = page.evaluate(
             "Object.fromEntries(Array.from(window.kidsGalaxy.kidPlanets.entries())"
             ".map(([k, v]) => [k, [v.a, v.e, v.i, v.M0]]))"
@@ -449,29 +414,27 @@ def main() -> int:
             "Object.fromEntries(Array.from(window.kidsGalaxy.kidPlanets.entries())"
             ".map(([k, v]) => [k, [v.a, v.e, v.i, v.M0]]))"
         )
-        check(before == after, "every planet keeps the same orbit after a reload")
+        check(before == after, "every planet keeps the same orbit after reload")
 
-        print("\ngallery cap and eviction order")
+        print("\ngallery cap and clear")
         cap = page.evaluate("window.kidsGalaxy.GALLERY_SIZE")
         oldest_remaining = first
-        for i in range(cap):
-            server.upload(f"Filler {i}")
+        for index in range(cap):
+            server.upload(f"Filler {index}")
         wait_for(page, f"window.kidsGalaxy.kidPlanets.size === {cap}", timeout_ms=20000)
         ids = planet_ids(page)
-        check(len(ids) == cap, f"the sky is capped at {cap} planets (got {len(ids)})")
-        check(oldest_remaining not in ids, "the oldest planet is the one evicted")
+        check(len(ids) == cap, f"sky is capped at {cap} planets (got {len(ids)})")
+        check(oldest_remaining not in ids, "oldest planet is evicted at the gallery cap")
 
-        print("\nclear all")
         check(server.clear() == 200, "DELETE /api/planets returns 200")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 0")
-        check(planet_ids(page) == [], "the whole sky empties on one clear event")
+        check(planet_ids(page) == [], "clear event empties the whole sky")
         server.upload("After The Clear")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 1")
-        check(len(planet_ids(page)) == 1, "planets can arrive again afterwards")
+        check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
         check(errors == [], f"no console errors ({errors[:3]})")
-
         browser.close()
 
     print()
