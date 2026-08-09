@@ -22,16 +22,12 @@ export class PlanetAnimator {
   }
 
   positionOnOrbit(params, t) {
-    const M = params.M0 + params.n * t;
-    const E = this.solveKepler(M, params.e);
-    const cosE = Math.cos(E);
-    const sinE = Math.sin(E);
-
-    // Standard eccentric-anomaly parameterisation. The previous implementation
-    // multiplied these coordinates by the instantaneous orbital radius again,
-    // which distorted both the path and its guide into an uneven/egg-like loop.
-    const xOrb = params.a * (cosE - params.e);
-    const yOrb = params.a * Math.sqrt(1 - params.e * params.e) * sinE;
+    // The gallery is decorative rather than an astronomy simulation. Keep the
+    // visible paths around the sun geometrically clean and reserve organic
+    // wobble for the physical ring attached to a ringed kid planet.
+    const angle = params.M0 + params.n * t;
+    const xOrb = params.a * Math.cos(angle);
+    const yOrb = params.a * Math.sin(angle);
     return this.scratch.set(
       xOrb,
       yOrb * Math.sin(params.i),
@@ -54,11 +50,10 @@ export class PlanetAnimator {
     const h = this.hashId(id);
     const slot = h % gallerySize;
     const a = 6.5 + slot * 0.75;
-    const e = 0.04 + ((h >>> 4) % 3) * 0.03;
     const i = (((h >>> 8) % 5) - 2) * 0.08;
     return {
       a,
-      e,
+      e: 0,
       i,
       n: this.meanMotion(a),
       M0: ((h >>> 12) % 628) / 100,
