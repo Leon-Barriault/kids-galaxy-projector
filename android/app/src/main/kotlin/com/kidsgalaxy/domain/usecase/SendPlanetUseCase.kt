@@ -8,8 +8,12 @@ const val DEFAULT_PLANET_NAME = "My Planet"
 
 sealed interface SendPlanetResult {
     data object Success : SendPlanetResult
+
     data object NothingDrawn : SendPlanetResult
-    data class Failed(val cause: Throwable?) : SendPlanetResult
+
+    data class Failed(
+        val cause: Throwable?,
+    ) : SendPlanetResult
 }
 
 /** Sends the current drawing and the child's preselected planet design. */
