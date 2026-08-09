@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 import {
-  applyMoldedAccentTexture,
-  applyPolishedTexture,
+  applySculptedArtwork,
+  createMoldedAccentEdgeMaterial,
   createMoldedAccentMaterial,
   createPolishedFeatureMaterial,
   createPolishedPlanetMaterial,
@@ -84,13 +84,19 @@ export class PlanetEntity {
     Object.assign(this, animator.orbitParamsFor(payload.id, gallerySize));
 
     this.mesh = new THREE.Mesh(this.createPlanetGeometry(), createPolishedPlanetMaterial());
+    this.accentEdgeMesh = new THREE.Mesh(
+      this.createPlanetGeometry(POLISHED_SURFACE_PROFILE.accentEdgeRadius),
+      createMoldedAccentEdgeMaterial(),
+    );
+    this.accentEdgeMesh.visible = false;
+    this.accentEdgeMesh.renderOrder = 1;
     this.accentMesh = new THREE.Mesh(
       this.createPlanetGeometry(POLISHED_SURFACE_PROFILE.accentRadius),
       createMoldedAccentMaterial(),
     );
     this.accentMesh.visible = false;
-    this.accentMesh.renderOrder = 1;
-    this.mesh.add(this.accentMesh);
+    this.accentMesh.renderOrder = 2;
+    this.mesh.add(this.accentEdgeMesh, this.accentMesh);
     this.mesh.scale.setScalar(celebrate ? 0.01 : 1);
     scene.add(this.mesh);
 
@@ -359,13 +365,21 @@ export class PlanetEntity {
         1,
       );
 
-      // Two low-amplitude harmonics give the band the gently handmade edge
-      // seen in the reference without turning it into a visibly distorted ring.
-      const radialWobble =
-        Math.sin(angle * 3 + phaseA) * 0.018 + Math.sin(angle * 7 + phaseB) * 0.009;
+      // The reference ring has an unmistakably handmade silhouette. Vary the
+      // inner and outer edges independently, then interpolate through the band
+      // so the wobble belongs to the ring itself rather than the planet orbit.
+      const innerWave =
+        Math.sin(angle * 3 + phaseA) * 0.038 + Math.sin(angle * 6 + phaseB) * 0.014;
+      const outerWave =
+        Math.sin(angle * 3 + phaseA + 0.72) * 0.084 +
+        Math.sin(angle * 7 + phaseB) * 0.03;
+      const radialWobble = THREE.MathUtils.lerp(innerWave, outerWave, t);
       const warpedRadius = radius + radialWobble;
       const radialScale = warpedRadius / Math.max(radius, 0.001);
-      const verticalWobble = Math.sin(angle * 2 + phaseB) * 0.006;
+      const verticalEnvelope = Math.sin(Math.PI * t);
+      const verticalWobble =
+        (Math.sin(angle * 2 + phaseB) * 0.012 + Math.sin(angle * 5 + phaseA) * 0.005) *
+        verticalEnvelope;
       position.setXYZ(index, x * radialScale, y * radialScale, verticalWobble);
 
       const color = shiftedColor(base, ringLightnessAt(t), -0.035);
@@ -379,9 +393,10 @@ export class PlanetEntity {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.userData.kidsGalaxyRingGradient = true;
     geometry.userData.kidsGalaxyRingWobble = true;
+    geometry.userData.kidsGalaxyRingWobbleTarget = 'planet-decoration';
     geometry.userData.innerRadius = innerRadius;
     geometry.userData.outerRadius = outerRadius;
-    geometry.userData.wobbleAmplitude = 0.027;
+    geometry.userData.wobbleAmplitude = 0.114;
     return geometry;
   }
 
@@ -579,13 +594,18 @@ export class PlanetEntity {
       return;
     }
 
-    this.reliefMap = applyPolishedTexture(this.mesh.material, texture, this.scene.renderer);
-    this.accentMask = applyMoldedAccentTexture(
+    const artwork = applySculptedArtwork(
+      this.mesh.material,
+      this.accentEdgeMesh.material,
       this.accentMesh.material,
       texture,
       this.scene.renderer,
     );
-    this.accentMesh.visible = Boolean(this.accentMask);
+    this.reliefMap = artwork?.mask || null;
+    this.accentMask = artwork?.mask || null;
+    const hasAccents = Boolean(artwork && artwork.componentCells > 0);
+    this.accentEdgeMesh.visible = hasAccents;
+    this.accentMesh.visible = hasAccents;
   }
 
   disposeObject(object) {
