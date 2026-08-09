@@ -15,11 +15,11 @@ import { GalaxyScene } from './projector/GalaxyScene.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
-import { installRockyPlanetRings } from './projector/RockyPlanetRings.js';
+import { installSculptedPlanetRings } from './projector/SculptedPlanetRings.js';
 
 const GALLERY_SIZE = 12;
 
-installRockyPlanetRings();
+installSculptedPlanetRings();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
