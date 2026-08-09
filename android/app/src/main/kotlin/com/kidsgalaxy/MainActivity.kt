@@ -12,7 +12,6 @@ import androidx.compose.runtime.setValue
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
 import com.kidsgalaxy.connection.SharedPreferencesUiLanguageStore
-import com.kidsgalaxy.connection.UiLanguage
 import com.kidsgalaxy.connection.withUiLanguage
 import com.kidsgalaxy.ui.GalaxyPickerDialog
 import com.kidsgalaxy.ui.PlanetDrawerScreen
