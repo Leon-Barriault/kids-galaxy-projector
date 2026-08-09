@@ -4,36 +4,37 @@ import * as THREE from 'three';
  * Pi-friendly molded-toy surface treatment.
  *
  * The colour texture remains the child's artwork. A tiny relief texture is
- * derived once from the tablet palette so neighbouring colour regions catch
- * light at slightly different heights, like molded clay/plastic. The same
- * small map drives both bump lighting and a very shallow vertex displacement;
- * there is no per-frame CPU image work and no generated high-poly mesh.
+ * derived once from the tablet palette so painted regions sit gently above a
+ * neutral base, like molded clay/plastic. The same small map drives both bump
+ * lighting and a very shallow vertex displacement; there is no per-frame CPU
+ * image work and no generated high-poly mesh.
  */
 
 export const POLISHED_SURFACE_PROFILE = Object.freeze({
   reliefWidth: 256,
   reliefHeight: 128,
-  bumpScale: 0.055,
-  displacementScale: 0.065,
-  displacementBias: -0.0325,
+  bumpScale: 0.065,
+  displacementScale: 0.045,
+  displacementBias: -0.019,
   maxAnisotropy: 4,
-  clearcoat: 0.32,
+  clearcoat: 0.16,
 });
 
 const TABLET_PALETTE = [
-  { rgb: [0xe5, 0x39, 0x35], height: 0.68 }, // red
-  { rgb: [0xff, 0x98, 0x00], height: 0.76 }, // orange
-  { rgb: [0xff, 0xeb, 0x3b], height: 0.84 }, // yellow
-  { rgb: [0x4c, 0xaf, 0x50], height: 0.64 }, // green
-  { rgb: [0x21, 0x96, 0xf3], height: 0.54 }, // blue
-  { rgb: [0x9c, 0x27, 0xb0], height: 0.72 }, // purple
-  { rgb: [0xe9, 0x1e, 0x63], height: 0.70 }, // pink
-  { rgb: [0x00, 0x00, 0x00], height: 0.38 }, // black
+  { rgb: [0xff, 0xff, 0xff], height: 0.42 }, // unpainted/base white
+  { rgb: [0xe5, 0x39, 0x35], height: 0.70 }, // red
+  { rgb: [0xff, 0x98, 0x00], height: 0.77 }, // orange
+  { rgb: [0xff, 0xeb, 0x3b], height: 0.82 }, // yellow
+  { rgb: [0x4c, 0xaf, 0x50], height: 0.68 }, // green
+  { rgb: [0x21, 0x96, 0xf3], height: 0.64 }, // blue
+  { rgb: [0x9c, 0x27, 0xb0], height: 0.73 }, // purple
+  { rgb: [0xe9, 0x1e, 0x63], height: 0.72 }, // pink
+  { rgb: [0x00, 0x00, 0x00], height: 0.62 }, // black paint stays raised too
 ];
 
 function nearestPaletteHeight(r, g, b) {
   let bestDistance = Number.POSITIVE_INFINITY;
-  let height = 0.58;
+  let height = 0.42;
   for (const swatch of TABLET_PALETTE) {
     const dr = r - swatch.rgb[0];
     const dg = g - swatch.rgb[1];
@@ -56,7 +57,7 @@ function softenedCanvas(source) {
 
   context.imageSmoothingEnabled = true;
   if ('filter' in context) {
-    context.filter = 'blur(1.4px)';
+    context.filter = 'blur(1.8px)';
     context.drawImage(source, 0, 0);
     context.filter = 'none';
     return output;
@@ -116,18 +117,18 @@ export function createPaletteReliefMap(texture) {
 export function createPolishedPlanetMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: 0.4,
-    metalness: 0.015,
+    roughness: 0.52,
+    metalness: 0.01,
     clearcoat: POLISHED_SURFACE_PROFILE.clearcoat,
-    clearcoatRoughness: 0.3,
+    clearcoatRoughness: 0.48,
   });
 }
 
 export function createPolishedFeatureMaterial(
   color,
   {
-    roughness = 0.38,
-    clearcoat = 0.36,
+    roughness = 0.52,
+    clearcoat = 0.18,
     metalness = 0.01,
     side = THREE.FrontSide,
   } = {},
@@ -138,7 +139,7 @@ export function createPolishedFeatureMaterial(
     roughness,
     metalness,
     clearcoat,
-    clearcoatRoughness: Math.min(0.6, roughness + 0.04),
+    clearcoatRoughness: Math.min(0.72, roughness + 0.08),
     side,
   });
 }
