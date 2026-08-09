@@ -3,6 +3,11 @@ The Planet entity.
 
 Immutable and framework-free. Owns the payload shape that both the REST
 endpoint and the SSE stream emit, so the two can never drift apart.
+
+A Planet represents one child's drawing after it has been accepted, sanitized,
+optionally styled, and persisted. It carries both the technical identity
+(id, filename) and the presentation choices the child made (name, style,
+companions, ring colour).
 """
 
 from dataclasses import dataclass
@@ -11,12 +16,24 @@ from pathlib import PurePosixPath
 from app.domain.planet_customization import DEFAULT_RING_COLOR
 
 #: Response when no child has drawn anything yet.
+#: Shared constant so REST and SSE never diverge on the empty case.
 NO_PLANET_PAYLOAD: dict = {"has_planet": False}
 
 
 @dataclass(frozen=True)
 class Planet:
-    """A stored planet drawing plus the child's presentation choices."""
+    """A stored planet drawing plus the child's presentation choices.
+
+    Attributes:
+        id: Short unique identifier (hex) used in URLs and events.
+        filename: On-disk name of the PNG texture (includes the id).
+        display_name: Human-readable name shown on the projector and in the
+            manager UI. Preserves the child's original punctuation and accents.
+        created_at: Unix timestamp of creation (float seconds).
+        style: One of the allowed planet styles ("classic", "ringed", …).
+        companions: Ordered tuple of companion identifiers the child selected.
+        ring_color: CSS hex colour used when style == "ringed".
+    """
 
     id: str
     filename: str
@@ -28,16 +45,29 @@ class Planet:
 
     @property
     def url(self) -> str:
-        """Public URL the projector loads the texture from."""
+        """Public URL the projector loads the texture from.
+
+        Always relative to the server root so the same payload works behind
+        reverse proxies and on the local hotspot.
+        """
         return f"/uploads/{self.filename}"
 
     @property
     def metadata_filename(self) -> str:
-        """Sidecar JSON that preserves display and design metadata."""
+        """Sidecar JSON that preserves display and design metadata.
+
+        The image itself is stored as a PNG; the sidecar keeps the display
+        name, style, companions and ring colour so they survive restarts.
+        """
         return PurePosixPath(self.filename).with_suffix(".json").name
 
     def to_payload(self) -> dict:
-        """Wire format shared by REST scene endpoints and the SSE stream."""
+        """Wire format shared by REST scene endpoints and the SSE stream.
+
+        This is the single source of truth for the JSON shape that the
+        projector and the manager app consume. Changing a key here is the
+        only place that needs to change for both channels.
+        """
         payload = {
             "has_planet": True,
             "id": self.id,
