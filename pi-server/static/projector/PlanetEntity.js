@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const VALID_STYLES = new Set(['classic', 'ringed', 'cratered', 'spiky']);
 const VALID_COMPANIONS = new Set(['moon', 'stars', 'satellite', 'astronaut']);
+const DEFAULT_RING_COLOR = '#d8a6ff';
 
 /** A single kid-created planet and the Three.js resources it owns. */
 export class PlanetEntity {
@@ -13,6 +14,7 @@ export class PlanetEntity {
     this.animator = animator;
     this.disposed = false;
     this.style = VALID_STYLES.has(payload.style) ? payload.style : 'classic';
+    this.ringColor = this.normalizeRingColor(payload.ring_color);
     this.companionTypes = Array.isArray(payload.companions)
       ? payload.companions.filter((value) => VALID_COMPANIONS.has(value))
       : [];
@@ -41,6 +43,12 @@ export class PlanetEntity {
     scene.add(this.ring);
 
     if (celebrate) animator.scaleIn(this.mesh);
+  }
+
+  normalizeRingColor(value) {
+    return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
+      ? value
+      : DEFAULT_RING_COLOR;
   }
 
   createPlanetGeometry() {
@@ -122,7 +130,7 @@ export class PlanetEntity {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.3, 1.7, 80),
       new THREE.MeshBasicMaterial({
-        color: 0xd8a6ff,
+        color: new THREE.Color(this.ringColor),
         transparent: true,
         opacity: 0.82,
         side: THREE.DoubleSide,
