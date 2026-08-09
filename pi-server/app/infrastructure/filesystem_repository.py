@@ -12,7 +12,11 @@ from pathlib import Path
 
 from app.domain.naming import build_stored_filename
 from app.domain.planet import Planet
-from app.domain.planet_customization import DEFAULT_RING_COLOR
+from app.domain.planet_customization import (
+    DEFAULT_CRATER_COLOR,
+    DEFAULT_MOUNTAIN_COLOR,
+    DEFAULT_RING_COLOR,
+)
 from app.ports import PlanetRepository
 
 logger = logging.getLogger(__name__)
@@ -35,6 +39,8 @@ class FileSystemPlanetRepository(PlanetRepository):
             style="classic",
             companions=(),
             ring_color=DEFAULT_RING_COLOR,
+            crater_color=DEFAULT_CRATER_COLOR,
+            mountain_color=DEFAULT_MOUNTAIN_COLOR,
         )
 
     def save_designed(
@@ -44,7 +50,9 @@ class FileSystemPlanetRepository(PlanetRepository):
         image_bytes: bytes,
         style: str,
         companions: tuple[str, ...],
-        ring_color: str,
+        ring_color: str = DEFAULT_RING_COLOR,
+        crater_color: str = DEFAULT_CRATER_COLOR,
+        mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
     ) -> Planet:
         filename = build_stored_filename(planet_id, display_name)
         image_path = self._directory / filename
@@ -58,6 +66,8 @@ class FileSystemPlanetRepository(PlanetRepository):
             style=style,
             companions=companions,
             ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
         )
         self._write_metadata(planet)
         return planet
@@ -69,6 +79,8 @@ class FileSystemPlanetRepository(PlanetRepository):
             "style": planet.style,
             "companions": list(planet.companions),
             "ring_color": planet.ring_color,
+            "crater_color": planet.crater_color,
+            "mountain_color": planet.mountain_color,
         }
         try:
             with path.open("w", encoding="utf-8") as fh:
@@ -121,11 +133,16 @@ class FileSystemPlanetRepository(PlanetRepository):
             else ()
         )
 
-        raw_ring_color = metadata.get("ring_color")
-        ring_color = (
-            raw_ring_color.strip().lower()
-            if isinstance(raw_ring_color, str) and raw_ring_color.strip()
-            else DEFAULT_RING_COLOR
+        ring_color = self._metadata_color(metadata, "ring_color", DEFAULT_RING_COLOR)
+        crater_color = self._metadata_color(
+            metadata,
+            "crater_color",
+            DEFAULT_CRATER_COLOR,
+        )
+        mountain_color = self._metadata_color(
+            metadata,
+            "mountain_color",
+            DEFAULT_MOUNTAIN_COLOR,
         )
 
         return Planet(
@@ -136,7 +153,14 @@ class FileSystemPlanetRepository(PlanetRepository):
             style=style,
             companions=companions,
             ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
         )
+
+    @staticmethod
+    def _metadata_color(metadata: dict, key: str, default: str) -> str:
+        raw = metadata.get(key)
+        return raw.strip().lower() if isinstance(raw, str) and raw.strip() else default
 
     def _read_metadata(self, image_path: Path) -> dict:
         meta_path = self._directory / Path(image_path.name).with_suffix(".json").name
