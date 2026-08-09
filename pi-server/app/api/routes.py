@@ -33,6 +33,7 @@ from app.application.use_cases import (
 from app.domain.errors import DomainError, NotFoundError, RateLimitedError, ValidationError
 from app.domain.galaxy import Galaxy
 from app.domain.image_rules import ensure_size_within
+from app.domain.planet_customization import DEFAULT_RING_COLOR
 from app.ports import EventPublisher, PlanetRepository
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,7 @@ def build_router(
         name: str = Form("My Planet"),
         style: str = Form("classic"),
         companions: str = Form(""),
+        ring_color: str = Form(DEFAULT_RING_COLOR),
     ):
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
@@ -165,6 +167,7 @@ def build_router(
                 raw_name=name,
                 raw_style=style,
                 raw_companions=companions,
+                raw_ring_color=ring_color,
                 client_key=client_key(request),
                 max_size=settings.max_file_size,
                 max_dimension=settings.max_dimension,
@@ -189,6 +192,7 @@ def build_router(
             "url": planet.url,
             "style": planet.style,
             "companions": list(planet.companions),
+            "ring_color": planet.ring_color,
         }
 
     @router.delete(
