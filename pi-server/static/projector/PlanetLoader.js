@@ -16,12 +16,14 @@ export class PlanetLoader {
     animator,
     celebration,
     gallerySize,
+    behaviorController = null,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   }) {
     this.scene = scene;
     this.animator = animator;
     this.celebration = celebration;
     this.gallerySize = gallerySize;
+    this.behaviorController = behaviorController;
     this.pollIntervalMs = pollIntervalMs;
     this.kidPlanets = new Map();
     this.textureLoader = new THREE.TextureLoader();
@@ -95,7 +97,8 @@ export class PlanetLoader {
   }
 
   update(t) {
-    for (const entry of this.kidPlanets.values()) entry.update(t);
+    const behavior = this.behaviorController?.current || {};
+    for (const entry of this.kidPlanets.values()) entry.update(t, behavior);
   }
 
   async syncGallery(celebrateNew) {
@@ -125,6 +128,7 @@ export class PlanetLoader {
     if (this.pollTimer !== null) return;
     this.pollTimer = setInterval(() => {
       this.syncGallery(true).catch(() => {});
+      this.behaviorController?.refresh().catch(() => {});
     }, this.pollIntervalMs);
   }
 
@@ -181,6 +185,9 @@ export class PlanetLoader {
       source.addEventListener('planet-removed', (event) => {
         this.handlePlanetEvent(event.data);
       });
+      source.addEventListener('behavior', (event) => {
+        this.behaviorController?.handleEvent(event.data);
+      });
       source.addEventListener('error', () => {
         this.startPolling();
         failures += 1;
@@ -200,11 +207,12 @@ export class PlanetLoader {
   }
 
   bootstrap() {
-    return this.syncGallery(false)
-      .catch(() => {})
-      .finally(() => {
-        this.galleryReady = true;
-        this.connectLiveUpdates();
-      });
+    return Promise.allSettled([
+      this.syncGallery(false),
+      this.behaviorController?.refresh(),
+    ]).finally(() => {
+      this.galleryReady = true;
+      this.connectLiveUpdates();
+    });
   }
 }
