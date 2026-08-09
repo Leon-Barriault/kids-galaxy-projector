@@ -81,7 +81,7 @@ export class PlanetEntity {
   }
 
   applyMountainSpikes(geometry) {
-    const phase = (this.animator.seedFromId(this.id) % 628) / 100;
+    const phase = (this.animator.hashId(this.id) % 628) / 100;
     const baseDirections = [
       [0.8, 0.2, 0.55, 0.34],
       [-0.7, 0.45, 0.5, 0.24],
@@ -139,7 +139,7 @@ export class PlanetEntity {
     this.companionTypes.forEach((type, index) => {
       const object = this.createCompanion(type);
       if (!object) return;
-      const seed = this.animator.seedFromId(`${this.id}-${type}`);
+      const seed = this.animator.hashId(`${this.id}-${type}`);
       const record = {
         type,
         object,
