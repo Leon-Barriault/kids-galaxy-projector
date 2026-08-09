@@ -6,9 +6,9 @@ import * as THREE from 'three';
  * The child's colour texture remains untouched. A tiny grayscale relief map is
  * derived once when the texture loads. Unpainted white stays at the sphere's
  * original radius while painted regions rise by a uniform amount with softly
- * rounded edges, like the molded ribbons and blobs on a toy planet. This avoids
- * the balloon-like look that came from giving different paint colours different
- * geometric heights.
+ * rounded edges. A second tiny paint mask drives a very thin accent shell so
+ * the child's strokes read like molded ribbons/blobs sitting on the planet,
+ * closer to a sculpted toy than an inflated balloon.
  */
 
 export const POLISHED_SURFACE_PROFILE = Object.freeze({
@@ -16,11 +16,13 @@ export const POLISHED_SURFACE_PROFILE = Object.freeze({
   reliefHeight: 128,
   baseRelief: 0.5,
   accentRelief: 0.94,
-  bumpScale: 0.082,
-  displacementScale: 0.07,
-  displacementBias: -0.035,
+  bumpScale: 0.055,
+  displacementScale: 0.025,
+  displacementBias: -0.0125,
+  accentRadius: 1.078,
+  accentBumpScale: 0.045,
   maxAnisotropy: 4,
-  clearcoat: 0.08,
+  clearcoat: 0.05,
 });
 
 function paintPresence(r, g, b) {
@@ -43,7 +45,7 @@ function moldedHeight(r, g, b) {
   );
 }
 
-function softenedCanvas(source) {
+function softenedCanvas(source, blur = 2.6) {
   const output = document.createElement('canvas');
   output.width = source.width;
   output.height = source.height;
@@ -52,9 +54,7 @@ function softenedCanvas(source) {
 
   context.imageSmoothingEnabled = true;
   if ('filter' in context) {
-    // A slightly wider blur turns the raised paint boundary into a soft molded
-    // shoulder instead of a sharp inflated ridge.
-    context.filter = 'blur(2.6px)';
+    context.filter = `blur(${blur}px)`;
     context.drawImage(source, 0, 0);
     context.filter = 'none';
     return output;
@@ -70,6 +70,18 @@ function softenedCanvas(source) {
   halfContext.drawImage(source, 0, 0, half.width, half.height);
   context.drawImage(half, 0, 0, output.width, output.height);
   return output;
+}
+
+function textureFromCanvas(canvas) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 export function createPaletteReliefMap(texture) {
@@ -95,18 +107,37 @@ export function createPaletteReliefMap(texture) {
       pixels[index + 3] = 255;
     }
     context.putImageData(image, 0, 0);
-
-    const relief = new THREE.CanvasTexture(softenedCanvas(canvas));
-    relief.colorSpace = THREE.NoColorSpace;
-    relief.generateMipmaps = false;
-    relief.minFilter = THREE.LinearFilter;
-    relief.magFilter = THREE.LinearFilter;
-    relief.wrapS = THREE.RepeatWrapping;
-    relief.wrapT = THREE.ClampToEdgeWrapping;
-    relief.needsUpdate = true;
-    return relief;
+    return textureFromCanvas(softenedCanvas(canvas, 2.6));
   } catch (_error) {
-    // Visual enhancement only. The original texture must always remain usable.
+    return null;
+  }
+}
+
+export function createPaintMask(texture) {
+  if (typeof document === 'undefined' || !texture?.image) return null;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = POLISHED_SURFACE_PROFILE.reliefWidth;
+    canvas.height = POLISHED_SURFACE_PROFILE.reliefHeight;
+    const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    if (!context) return null;
+
+    context.drawImage(texture.image, 0, 0, canvas.width, canvas.height);
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = image.data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const value = Math.round(
+        paintPresence(pixels[index], pixels[index + 1], pixels[index + 2]) * 255,
+      );
+      pixels[index] = value;
+      pixels[index + 1] = value;
+      pixels[index + 2] = value;
+      pixels[index + 3] = 255;
+    }
+    context.putImageData(image, 0, 0);
+    return textureFromCanvas(softenedCanvas(canvas, 2.2));
+  } catch (_error) {
     return null;
   }
 }
@@ -114,10 +145,23 @@ export function createPaletteReliefMap(texture) {
 export function createPolishedPlanetMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: 0.58,
-    metalness: 0.006,
+    roughness: 0.63,
+    metalness: 0.004,
     clearcoat: POLISHED_SURFACE_PROFILE.clearcoat,
-    clearcoatRoughness: 0.62,
+    clearcoatRoughness: 0.68,
+  });
+}
+
+export function createMoldedAccentMaterial() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    roughness: 0.52,
+    metalness: 0.004,
+    clearcoat: 0.09,
+    clearcoatRoughness: 0.58,
+    alphaTest: 0.06,
+    transparent: false,
+    depthWrite: true,
   });
 }
 
@@ -141,7 +185,7 @@ export function createPolishedFeatureMaterial(
   });
 }
 
-export function applyPolishedTexture(material, texture, renderer) {
+function configureTexture(texture, renderer) {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -149,6 +193,10 @@ export function applyPolishedTexture(material, texture, renderer) {
     POLISHED_SURFACE_PROFILE.maxAnisotropy,
     renderer.capabilities.getMaxAnisotropy(),
   );
+}
+
+export function applyPolishedTexture(material, texture, renderer) {
+  configureTexture(texture, renderer);
 
   const relief = createPaletteReliefMap(texture);
   material.map = texture;
@@ -163,4 +211,18 @@ export function applyPolishedTexture(material, texture, renderer) {
   material.emissiveIntensity = 0;
   material.needsUpdate = true;
   return relief;
+}
+
+export function applyMoldedAccentTexture(material, texture, renderer) {
+  configureTexture(texture, renderer);
+  const mask = createPaintMask(texture);
+  if (!mask) return null;
+
+  material.map = texture;
+  material.alphaMap = mask;
+  material.bumpMap = mask;
+  material.bumpScale = POLISHED_SURFACE_PROFILE.accentBumpScale;
+  material.color.setHex(0xffffff);
+  material.needsUpdate = true;
+  return mask;
 }
