@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.behavior import (
     BehaviorMode,
+    EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
     ProjectorLanguage,
@@ -53,11 +54,44 @@ def test_manual_mode_overrides_the_calendar(resolver):
     assert behavior.ambient_effects is False
 
 
-def test_auto_mode_keeps_operator_motion_and_language_settings(resolver):
+def test_disabled_seasonal_theme_falls_back_to_default(resolver):
+    settings = GalaxyBehaviorSettings(
+        enabled_themes=(GalaxyTheme.DEFAULT, GalaxyTheme.HALLOWEEN),
+    )
+
+    behavior = resolver.effective(settings, date(2026, 12, 25))
+
+    assert behavior.theme == GalaxyTheme.DEFAULT
+
+
+def test_disabled_manual_theme_falls_back_to_default(resolver):
+    settings = GalaxyBehaviorSettings(
+        mode=BehaviorMode.MANUAL,
+        manual_theme=GalaxyTheme.CHRISTMAS,
+        enabled_themes=(GalaxyTheme.DEFAULT, GalaxyTheme.EASTER),
+    )
+
+    behavior = resolver.effective(settings, date(2026, 7, 1))
+
+    assert behavior.theme == GalaxyTheme.DEFAULT
+
+
+def test_default_theme_cannot_be_disabled():
+    settings = GalaxyBehaviorSettings(enabled_themes=(GalaxyTheme.EASTER,))
+
+    assert settings.enabled_themes == (GalaxyTheme.DEFAULT, GalaxyTheme.EASTER)
+
+
+def test_auto_mode_keeps_operator_motion_language_and_environment_settings(resolver):
     settings = GalaxyBehaviorSettings(
         planet_speed=0.75,
         ambient_effects=False,
         projector_language=ProjectorLanguage.FRENCH,
+        asteroid_belt_enabled=True,
+        comets_enabled=True,
+        comet_frequency=EventFrequency.FREQUENT,
+        flyby_asteroids_enabled=True,
+        flyby_frequency=EventFrequency.RARE,
     )
 
     behavior = resolver.effective(settings, date(2026, 12, 25))
@@ -66,6 +100,11 @@ def test_auto_mode_keeps_operator_motion_and_language_settings(resolver):
     assert behavior.planet_speed == 0.75
     assert behavior.ambient_effects is False
     assert behavior.projector_language == ProjectorLanguage.FRENCH
+    assert behavior.asteroid_belt_enabled is True
+    assert behavior.comets_enabled is True
+    assert behavior.comet_frequency == EventFrequency.FREQUENT
+    assert behavior.flyby_asteroids_enabled is True
+    assert behavior.flyby_frequency == EventFrequency.RARE
 
 
 @pytest.mark.parametrize("speed", [0.24, 2.01, -1.0, 5.0])
