@@ -8,56 +8,46 @@ import android.graphics.Path
 import com.kidsgalaxy.domain.model.Drawing
 import com.kidsgalaxy.domain.model.PlanetGuide
 import com.kidsgalaxy.domain.render.PlanetTextureRenderer
-import com.kidsgalaxy.domain.render.SphericalProjection
 import com.kidsgalaxy.domain.render.TextureProjection
 import java.io.ByteArrayOutputStream
-import kotlin.math.roundToInt
 
 /**
  * Android implementation of [PlanetTextureRenderer].
  *
- * The only place in the app that touches `android.graphics`. Coordinate
- * mathematics live in [TextureProjection] and [SphericalProjection]; this
- * class is the thin adapter that draws and resamples.
+ * The tablet now uploads the child's actual circular drawing, not a spherical
+ * texture. That distinction is deliberate: the projector owns the artistic
+ * interpretation of the drawing and can use the same visible design as art
+ * direction for the whole 3D planet without requiring a child to paint hidden
+ * faces.
  *
- * Two stages:
- * 1. Render strokes into a square disc bitmap, clipped to the [PlanetGuide]
- *    so anything outside the circle is dropped. Background stays white.
- * 2. Resample that disc into an equirectangular bitmap through polar
- *    [SphericalProjection], then PNG-encode the result.
- *
- * Pixel access uses [IntArray] bulk reads/writes — 1024×512 is half a million
- * lookups and per-call `getPixel` overhead would dominate on a tablet.
+ * The previous implementation converted the disc with a polar mapping where
+ * the centre became the north pole and the rim became the south pole. That
+ * preserved every pixel mathematically but destroyed the recognizable layout
+ * the child had just drawn. Existing stored 2:1 PNGs are decoded back to their
+ * original disc by the projector for backwards compatibility.
  */
 class AndroidPlanetTextureRenderer(
     private val discSize: Int = DEFAULT_DISC_SIZE,
-    private val equirectWidth: Int = SphericalProjection.DEFAULT_WIDTH,
-    private val equirectHeight: Int = SphericalProjection.DEFAULT_HEIGHT,
 ) : PlanetTextureRenderer {
     override fun renderPng(drawing: Drawing): ByteArray {
         val disc = Bitmap.createBitmap(discSize, discSize, Bitmap.Config.ARGB_8888)
-        try {
-            val texGuide = drawDisc(disc, drawing)
-            val equirect = resampleToEquirectangular(disc, texGuide)
-            try {
-                return equirect.toPngBytes()
-            } finally {
-                equirect.recycle()
-            }
+        return try {
+            drawDisc(disc, drawing)
+            disc.toPngBytes()
         } finally {
             disc.recycle()
         }
     }
 
     /**
-     * Stage 1: square disc with white background, strokes clipped to the guide.
-     *
-     * @return the guide projected into disc-pixel coordinates, ready for stage 2
+     * Render a square white canvas containing only the child's strokes clipped
+     * to the circular planet guide. Ring/crater/mountain preview guides are UI
+     * affordances and are intentionally not baked into the uploaded artwork.
      */
     private fun drawDisc(
         bitmap: Bitmap,
         drawing: Drawing,
-    ): PlanetGuide {
+    ) {
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
 
@@ -104,40 +94,6 @@ class AndroidPlanetTextureRenderer(
         if (texGuide.isValid) {
             canvas.restore()
         }
-
-        return texGuide
-    }
-
-    /**
-     * Stage 2: polar resample of the disc into an equirectangular texture.
-     *
-     * Nearest-neighbour is intentional — the source is 1024² so detail is
-     * plentiful, and the polar pole region is oversampled by construction.
-     */
-    private fun resampleToEquirectangular(
-        disc: Bitmap,
-        texGuide: PlanetGuide,
-    ): Bitmap {
-        val srcPixels = IntArray(discSize * discSize)
-        disc.getPixels(srcPixels, 0, discSize, 0, 0, discSize, discSize)
-
-        val dstPixels = IntArray(equirectWidth * equirectHeight)
-        val spherical = SphericalProjection(equirectWidth, equirectHeight, texGuide)
-        val maxIndex = discSize - 1
-
-        for (y in 0 until equirectHeight) {
-            val rowOffset = y * equirectWidth
-            for (x in 0 until equirectWidth) {
-                val src = spherical.sourcePoint(x, y)
-                val sx = src.x.roundToInt().coerceIn(0, maxIndex)
-                val sy = src.y.roundToInt().coerceIn(0, maxIndex)
-                dstPixels[rowOffset + x] = srcPixels[sy * discSize + sx]
-            }
-        }
-
-        val equirect = Bitmap.createBitmap(equirectWidth, equirectHeight, Bitmap.Config.ARGB_8888)
-        equirect.setPixels(dstPixels, 0, equirectWidth, 0, 0, equirectWidth, equirectHeight)
-        return equirect
     }
 
     /** PNG is lossless, so the quality argument is a no-op (100 by convention). */
@@ -148,7 +104,7 @@ class AndroidPlanetTextureRenderer(
         }
 
     companion object {
-        /** Square disc edge length before polar expansion. */
+        /** Square drawing-disc edge length sent to the projector. */
         const val DEFAULT_DISC_SIZE = 1024
     }
 }
