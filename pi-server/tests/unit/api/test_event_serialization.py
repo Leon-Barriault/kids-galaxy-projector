@@ -33,12 +33,13 @@ def test_planet_created_serializes_to_existing_wire_contract():
     )
 
 
-def test_designed_planet_carries_style_and_companions():
+def test_designed_planet_carries_style_companions_and_feature_color():
     assert serialize_event(
         PlanetCreated(
             planet(
                 style="spiky",
                 companions=("moon", "astronaut"),
+                mountain_color="#66bb6a",
             )
         )
     ) == (
@@ -51,8 +52,18 @@ def test_designed_planet_carries_style_and_companions():
             "timestamp": 12.5,
             "style": "spiky",
             "companions": ["moon", "astronaut"],
+            "mountain_color": "#66bb6a",
         },
     )
+
+
+def test_crater_color_is_carried_by_live_event():
+    event_name, payload = serialize_event(
+        PlanetCreated(planet(style="cratered", crater_color="#ab47bc"))
+    )
+
+    assert event_name == "planet"
+    assert payload["crater_color"] == "#ab47bc"
 
 
 def test_planet_removed_serializes_to_existing_wire_contract():
