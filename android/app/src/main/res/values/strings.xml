@@ -65,12 +65,18 @@
     <string name="use_this_address">Use this address</string>
     <string name="cancel">Cancel</string>
 
-    <!-- Dialogs -->
+    <!-- Dialogs and launch failures -->
     <string name="oops">Oops!</string>
     <string name="ok">OK</string>
     <string name="launched_title">🚀 Planet Launched!</string>
     <string name="launched_body">Your planet is now flying through the galaxy!\nLook at the projector!</string>
     <string name="awesome">Awesome!</string>
+    <string name="error_draw_first">Draw something first!</string>
+    <string name="error_rate_limited">Slow down a moment — the galaxy is still catching your last planet!</string>
+    <string name="error_invalid_planet">That planet could not be sent. Check its style and try again!</string>
+    <string name="error_server_hiccup">The galaxy server is having a hiccup. Try again in a moment.</string>
+    <string name="error_send_code">Could not send planet (error %1$d).</string>
+    <string name="error_wifi">Could not reach the galaxy. Is the tablet connected to the KidsGalaxy Wi-Fi?</string>
 
     <!-- Default planet name when the child leaves the field blank -->
     <string name="default_planet_name">My Awesome Planet</string>
