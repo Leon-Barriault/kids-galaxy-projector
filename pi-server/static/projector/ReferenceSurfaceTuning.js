@@ -213,6 +213,17 @@ function tuneArtwork(entity) {
   edge.needsUpdate = true;
 }
 
+function disableSaturnSpeckleShadows(entity) {
+  const ring = entity.decorations?.[entity.decorations.length - 1];
+  if (!ring?.userData?.kidsGalaxySaturnParticleRing) return;
+  ring.traverse((child) => {
+    if (!child.isMesh && !child.isPoints) return;
+    child.castShadow = false;
+    child.receiveShadow = false;
+  });
+  ring.userData.kidsGalaxyParticleShadowsDisabled = true;
+}
+
 /**
  * Final visual-proportion pass. The kid drawing still supplies body colour,
  * colours and silhouettes; this pass only constrains relief to the rounded,
@@ -221,6 +232,7 @@ function tuneArtwork(entity) {
 export function installReferenceSurfaceTuning() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyReferenceSurfaceTuning) return;
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
+  const previousAddPlanetRing = PlanetEntity.prototype.addPlanetRing;
 
   function referenceSurfaceTexture(texture) {
     previousApplyTexture.call(this, texture);
@@ -228,6 +240,13 @@ export function installReferenceSurfaceTuning() {
     tuneArtwork(this);
   }
 
+  function referenceSaturnRing() {
+    previousAddPlanetRing.call(this);
+    disableSaturnSpeckleShadows(this);
+  }
+
   referenceSurfaceTexture.kidsGalaxyReferenceSurfaceTuning = true;
+  referenceSaturnRing.kidsGalaxyReferenceSaturnShadowTuning = true;
   PlanetEntity.prototype.applyTexture = referenceSurfaceTexture;
+  PlanetEntity.prototype.addPlanetRing = referenceSaturnRing;
 }
