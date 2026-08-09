@@ -1,5 +1,7 @@
 package com.kidsgalaxy.presentation
 
+import com.kidsgalaxy.domain.model.DEFAULT_CRATER_COLOR_ARGB
+import com.kidsgalaxy.domain.model.DEFAULT_MOUNTAIN_COLOR_ARGB
 import com.kidsgalaxy.domain.model.DEFAULT_RING_COLOR_ARGB
 import com.kidsgalaxy.domain.model.Drawing
 import com.kidsgalaxy.domain.model.PlanetCompanion
@@ -14,7 +16,7 @@ import com.kidsgalaxy.domain.model.PlanetStyle
  * [StateFlow] exposed by [DrawingViewModel].
  *
  * Design choices are kept here (rather than only inside [Drawing]) so the
- * child can change style / companions / ring colour without losing the
+ * child can change style, companions and feature colours without losing the
  * strokes they have already drawn.
  */
 data class DrawingUiState(
@@ -26,7 +28,11 @@ data class DrawingUiState(
     val companions: Set<PlanetCompanion> = emptySet(),
     /** ARGB colour of the ring when style is RINGED. */
     val ringColorArgb: Int = DEFAULT_RING_COLOR_ARGB,
-    /** Colour currently selected in the palette. */
+    /** ARGB colour of crater interiors when style is CRATERED. */
+    val craterColorArgb: Int = DEFAULT_CRATER_COLOR_ARGB,
+    /** ARGB colour of mountain peaks when style is SPIKY. */
+    val mountainColorArgb: Int = DEFAULT_MOUNTAIN_COLOR_ARGB,
+    /** Colour currently selected in the drawing palette. */
     val currentColorArgb: Int = DEFAULT_COLOR_ARGB,
     /** Brush width currently selected. */
     val currentStrokeWidth: Float = DEFAULT_STROKE_WIDTH,
@@ -44,7 +50,15 @@ data class DrawingUiState(
     val canLaunch: Boolean get() = !drawing.isEmpty && !isSending
 
     /** Convenience projection of the design fields into a domain object. */
-    val design: PlanetDesign get() = PlanetDesign(planetStyle, companions, ringColorArgb)
+    val design: PlanetDesign
+        get() =
+            PlanetDesign(
+                style = planetStyle,
+                companions = companions,
+                ringColorArgb = ringColorArgb,
+                craterColorArgb = craterColorArgb,
+                mountainColorArgb = mountainColorArgb,
+            )
 
     companion object {
         /** Default brush colour (a friendly red). */
