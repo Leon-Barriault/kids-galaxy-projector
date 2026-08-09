@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.domain.naming import build_stored_filename
 from app.domain.planet import Planet
+from app.domain.planet_customization import DEFAULT_RING_COLOR
 from app.ports import PlanetRepository
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             image_bytes=image_bytes,
             style="classic",
             companions=(),
+            ring_color=DEFAULT_RING_COLOR,
         )
 
     def save_designed(
@@ -42,6 +44,7 @@ class FileSystemPlanetRepository(PlanetRepository):
         image_bytes: bytes,
         style: str,
         companions: tuple[str, ...],
+        ring_color: str,
     ) -> Planet:
         filename = build_stored_filename(planet_id, display_name)
         image_path = self._directory / filename
@@ -54,6 +57,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             created_at=image_path.stat().st_mtime,
             style=style,
             companions=companions,
+            ring_color=ring_color,
         )
         self._write_metadata(planet)
         return planet
@@ -64,6 +68,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             "name": planet.display_name,
             "style": planet.style,
             "companions": list(planet.companions),
+            "ring_color": planet.ring_color,
         }
         try:
             with path.open("w", encoding="utf-8") as fh:
@@ -116,6 +121,13 @@ class FileSystemPlanetRepository(PlanetRepository):
             else ()
         )
 
+        raw_ring_color = metadata.get("ring_color")
+        ring_color = (
+            raw_ring_color.strip().lower()
+            if isinstance(raw_ring_color, str) and raw_ring_color.strip()
+            else DEFAULT_RING_COLOR
+        )
+
         return Planet(
             id=planet_id,
             filename=image_path.name,
@@ -123,6 +135,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             created_at=image_path.stat().st_mtime,
             style=style,
             companions=companions,
+            ring_color=ring_color,
         )
 
     def _read_metadata(self, image_path: Path) -> dict:
