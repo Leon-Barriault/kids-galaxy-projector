@@ -14,8 +14,7 @@ enum class UiLanguage(
     fun toggled(): UiLanguage = if (this == ENGLISH) FRENCH else ENGLISH
 
     companion object {
-        fun fromTag(tag: String?): UiLanguage =
-            entries.firstOrNull { it.tag == tag } ?: ENGLISH
+        fun fromTag(tag: String?): UiLanguage = entries.firstOrNull { it.tag == tag } ?: ENGLISH
     }
 }
 
