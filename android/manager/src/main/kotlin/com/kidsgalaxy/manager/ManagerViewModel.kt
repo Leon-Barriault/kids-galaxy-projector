@@ -61,13 +61,16 @@ data class ManagerUiState(
     val isLoading: Boolean = false,
     val deletingIds: Set<String> = emptySet(),
     val isClearing: Boolean = false,
-    val projectorLanguage: String = "en",
-    val isProjectorLanguageLoading: Boolean = true,
-    val isUpdatingProjectorLanguage: Boolean = false,
+    val behaviorSettings: BehaviorSettingsDto = BehaviorSettingsDto(),
+    val isBehaviorLoading: Boolean = true,
+    val isUpdatingBehavior: Boolean = false,
     val error: ManagerError? = null,
     val status: ManagerStatus? = null,
 ) {
     val canClearAll: Boolean get() = planets.isNotEmpty() && !isClearing && !isLoading
+    val projectorLanguage: String get() = behaviorSettings.projectorLanguage
+    val isProjectorLanguageLoading: Boolean get() = isBehaviorLoading
+    val isUpdatingProjectorLanguage: Boolean get() = isUpdatingBehavior
 }
 
 class ManagerViewModel(
@@ -75,7 +78,6 @@ class ManagerViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ManagerUiState())
     val uiState: StateFlow<ManagerUiState> = _uiState.asStateFlow()
-    private var behaviorSettings: BehaviorSettingsDto? = null
 
     init {
         refresh()
@@ -117,26 +119,21 @@ class ManagerViewModel(
 
     fun refreshBehavior() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isProjectorLanguageLoading = true) }
+            _uiState.update { it.copy(isBehaviorLoading = true) }
             try {
                 val response = api.getBehavior()
                 if (response.isSuccessful) {
                     val settings = response.body()?.settings
-                    if (settings != null) {
-                        behaviorSettings = settings
-                        _uiState.update {
-                            it.copy(
-                                projectorLanguage = settings.projectorLanguage,
-                                isProjectorLanguageLoading = false,
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(isProjectorLanguageLoading = false) }
+                    _uiState.update {
+                        it.copy(
+                            behaviorSettings = settings ?: it.behaviorSettings,
+                            isBehaviorLoading = false,
+                        )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
-                            isProjectorLanguageLoading = false,
+                            isBehaviorLoading = false,
                             error = ManagerError.BehaviorLoadFailed(response.code()),
                         )
                     }
@@ -144,7 +141,7 @@ class ManagerViewModel(
             } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
-                        isProjectorLanguageLoading = false,
+                        isBehaviorLoading = false,
                         error = ManagerError.Network,
                     )
                 }
@@ -155,31 +152,96 @@ class ManagerViewModel(
     fun setProjectorLanguage(language: String) {
         val normalized = language.lowercase()
         if (normalized !in setOf("en", "fr")) return
-        if (_uiState.value.isUpdatingProjectorLanguage) return
-        val current = behaviorSettings ?: return
-        if (current.projectorLanguage == normalized) return
+        updateBehavior(
+            transform = { it.copy(projectorLanguage = normalized) },
+            status = { ManagerStatus.ProjectorLanguageChanged(it.projectorLanguage) },
+        )
+    }
+
+    fun setAsteroidBeltEnabled(enabled: Boolean) {
+        updateBehavior { it.copy(asteroidBeltEnabled = enabled) }
+    }
+
+    fun setCometsEnabled(enabled: Boolean) {
+        updateBehavior { it.copy(cometsEnabled = enabled) }
+    }
+
+    fun setCometFrequency(frequency: String) {
+        val normalized = frequency.lowercase()
+        if (normalized !in EVENT_FREQUENCIES) return
+        updateBehavior { it.copy(cometFrequency = normalized) }
+    }
+
+    fun setFlybyAsteroidsEnabled(enabled: Boolean) {
+        updateBehavior { it.copy(flybyAsteroidsEnabled = enabled) }
+    }
+
+    fun setFlybyFrequency(frequency: String) {
+        val normalized = frequency.lowercase()
+        if (normalized !in EVENT_FREQUENCIES) return
+        updateBehavior { it.copy(flybyFrequency = normalized) }
+    }
+
+    fun setBehaviorMode(mode: String) {
+        val normalized = mode.lowercase()
+        if (normalized !in setOf("auto", "manual")) return
+        updateBehavior { it.copy(mode = normalized) }
+    }
+
+    fun setManualTheme(theme: String) {
+        val normalized = theme.lowercase()
+        if (normalized !in GALAXY_THEMES) return
+        updateBehavior { it.copy(manualTheme = normalized) }
+    }
+
+    fun setThemeEnabled(
+        theme: String,
+        enabled: Boolean,
+    ) {
+        val normalized = theme.lowercase()
+        if (normalized !in GALAXY_THEMES || normalized == "default") return
+        updateBehavior { current ->
+            val themes = current.enabledThemes.toMutableSet()
+            themes += "default"
+            if (enabled) {
+                themes += normalized
+            } else {
+                themes -= normalized
+            }
+            current.copy(enabledThemes = GALAXY_THEMES.filter { it in themes })
+        }
+    }
+
+    fun setAmbientEffects(enabled: Boolean) {
+        updateBehavior { it.copy(ambientEffects = enabled) }
+    }
+
+    private fun updateBehavior(
+        transform: (BehaviorSettingsDto) -> BehaviorSettingsDto,
+        status: ((BehaviorSettingsDto) -> ManagerStatus?)? = null,
+    ) {
+        val currentState = _uiState.value
+        if (currentState.isBehaviorLoading || currentState.isUpdatingBehavior) return
+        val updated = transform(currentState.behaviorSettings)
+        if (updated == currentState.behaviorSettings) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isUpdatingProjectorLanguage = true, error = null) }
+            _uiState.update { it.copy(isUpdatingBehavior = true, error = null) }
             try {
-                val response =
-                    api.updateBehavior(
-                        current.copy(projectorLanguage = normalized),
-                    )
+                val response = api.updateBehavior(updated)
                 if (response.isSuccessful) {
-                    val settings = response.body()?.settings ?: current.copy(projectorLanguage = normalized)
-                    behaviorSettings = settings
+                    val settings = response.body()?.settings ?: updated
                     _uiState.update {
                         it.copy(
-                            projectorLanguage = settings.projectorLanguage,
-                            isUpdatingProjectorLanguage = false,
-                            status = ManagerStatus.ProjectorLanguageChanged(settings.projectorLanguage),
+                            behaviorSettings = settings,
+                            isUpdatingBehavior = false,
+                            status = status?.invoke(settings) ?: it.status,
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
-                            isUpdatingProjectorLanguage = false,
+                            isUpdatingBehavior = false,
                             error = ManagerError.BehaviorUpdateFailed(response.code()),
                         )
                     }
@@ -187,7 +249,7 @@ class ManagerViewModel(
             } catch (_: Exception) {
                 _uiState.update {
                     it.copy(
-                        isUpdatingProjectorLanguage = false,
+                        isUpdatingBehavior = false,
                         error = ManagerError.Network,
                     )
                 }
@@ -269,6 +331,9 @@ class ManagerViewModel(
     }
 
     companion object {
+        private val EVENT_FREQUENCIES = setOf("rare", "normal", "frequent")
+        private val GALAXY_THEMES = listOf("default", "halloween", "easter", "christmas")
+
         fun factory(
             context: Context,
             baseUrl: String = BuildConfig.SERVER_BASE_URL,
