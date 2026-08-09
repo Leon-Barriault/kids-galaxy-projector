@@ -12,7 +12,7 @@
     <string name="style_ringed">Ringed</string>
     <string name="style_cratered">Craters</string>
     <string name="style_spiky">Spiky mountains</string>
-    <string name="style_spiky_help">Spiky mountains means one whole planet with different-height peaks all around it.</string>
+    <string name="style_spiky_help"></string>
     <string name="picked">✓ Picked</string>
     <string name="tap_to_pick">Tap to pick</string>
     <string name="next_paint">Next: Paint it!  🎨</string>
