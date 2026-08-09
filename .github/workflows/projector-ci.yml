@@ -53,4 +53,6 @@ jobs:
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
       - name: Exercise the real projector page
-        run: python scripts/check_projector.py
+        run: |
+          python scripts/check_projector.py
+          python scripts/check_reference_renderer.py
