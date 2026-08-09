@@ -234,7 +234,7 @@ export class PlanetEntity {
 
   addPlanetRing() {
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.3, 1.7, 80),
+      new THREE.TorusGeometry(1.5, 0.12, 12, 80),
       createPolishedFeatureMaterial(this.ringColor, {
         roughness: 0.32,
         clearcoat: 0.5,
