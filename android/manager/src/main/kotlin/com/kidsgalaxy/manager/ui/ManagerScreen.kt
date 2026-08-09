@@ -292,6 +292,7 @@ private fun ProjectorLanguageControl(
     updating: Boolean,
     onSelect: (String) -> Unit,
 ) {
+    val projectorLanguageDescription = stringResource(R.string.projector_language)
     Column(
         modifier =
             Modifier
@@ -323,53 +324,26 @@ private fun ProjectorLanguageControl(
                     color = Accent,
                     strokeWidth = 2.dp,
                 )
+            } else {
+                TextButton(
+                    onClick = {
+                        onSelect(if (selectedLanguage == "fr") "en" else "fr")
+                    },
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = projectorLanguageDescription
+                        },
+                ) {
+                    Text(
+                        if (selectedLanguage == "fr") {
+                            "EN  ● FR"
+                        } else {
+                            "EN ●  FR"
+                        },
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            LanguageChoiceButton(
-                label = stringResource(R.string.projector_english),
-                selected = selectedLanguage == "en",
-                enabled = !loading && !updating,
-                onClick = { onSelect("en") },
-                modifier = Modifier.weight(1f),
-            )
-            LanguageChoiceButton(
-                label = stringResource(R.string.projector_french),
-                selected = selectedLanguage == "fr",
-                enabled = !loading && !updating,
-                onClick = { onSelect("fr") },
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun LanguageChoiceButton(
-    label: String,
-    selected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    if (selected) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier,
-        ) {
-            Text("✓ $label")
-        }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier,
-        ) {
-            Text(label)
         }
     }
 }
