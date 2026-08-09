@@ -14,7 +14,7 @@ import org.junit.Test
 
 class PlanetDesignSendTest {
     @Test
-    fun `selected style and companions reach repository`() =
+    fun `selected style companions and ring color reach repository`() =
         runTest {
             var received: PlanetDesign? = null
             val repository =
@@ -43,11 +43,12 @@ class PlanetDesignSendTest {
                 )
             val design =
                 PlanetDesign(
-                    style = PlanetStyle.SPIKY,
+                    style = PlanetStyle.RINGED,
                     companions = setOf(PlanetCompanion.MOON, PlanetCompanion.ASTRONAUT),
+                    ringColorArgb = 0xFF4FC3F7.toInt(),
                 )
 
-            SendPlanetUseCase(repository)(drawing, "Peaks", design)
+            SendPlanetUseCase(repository)(drawing, "Blue Rings", design)
 
             assertEquals(design, received)
         }
