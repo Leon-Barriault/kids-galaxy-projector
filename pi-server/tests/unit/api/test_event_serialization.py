@@ -5,7 +5,12 @@ from app.application.events import (
     PlanetCreated,
     PlanetRemoved,
 )
-from app.domain.behavior import BehaviorMode, GalaxyBehavior, GalaxyTheme
+from app.domain.behavior import (
+    BehaviorMode,
+    GalaxyBehavior,
+    GalaxyTheme,
+    ProjectorLanguage,
+)
 from app.domain.planet import Planet
 
 
@@ -86,6 +91,7 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
         planet_speed=1.25,
         ambient_effects=True,
         mode=BehaviorMode.MANUAL,
+        projector_language=ProjectorLanguage.FRENCH,
     )
 
     assert serialize_event(GalaxyBehaviorChanged(behavior)) == (
@@ -95,5 +101,6 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
             "planet_speed": 1.25,
             "ambient_effects": True,
             "mode": "manual",
+            "projector_language": "fr",
         },
     )
