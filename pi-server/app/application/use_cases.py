@@ -67,13 +67,24 @@ class SubmitPlanetUseCase:
         clean_png = self._surface_styler.style(clean_png)
 
         display_name = normalize_display_name(raw_name)
-        planet = self._repository.save_designed(
-            planet_id=uuid.uuid4().hex[:10],
-            display_name=display_name,
-            image_bytes=clean_png,
-            style=style,
-            companions=companions,
-        )
+        planet_id = uuid.uuid4().hex[:10]
+        if style == "classic" and not companions:
+            # Keep simple/legacy repository adapters valid for the original
+            # planet contract. Rich designs intentionally require the newer
+            # save_designed capability so their metadata cannot be discarded.
+            planet = self._repository.save(
+                planet_id=planet_id,
+                display_name=display_name,
+                image_bytes=clean_png,
+            )
+        else:
+            planet = self._repository.save_designed(
+                planet_id=planet_id,
+                display_name=display_name,
+                image_bytes=clean_png,
+                style=style,
+                companions=companions,
+            )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
         self._publisher.publish(PlanetCreated(planet))
