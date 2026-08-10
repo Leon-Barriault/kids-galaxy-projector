@@ -55,6 +55,25 @@
     <string name="sending_to_galaxy">Sending to the Galaxy…</string>
     <string name="drawing_canvas_description">Drawing area. Drag to paint your planet.</string>
 
+    <!-- Accessible color names -->
+    <string name="color_red">Red</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_purple">Purple</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_black">Black</string>
+    <string name="color_white">White</string>
+    <string name="color_lavender">Lavender</string>
+    <string name="color_gray">Gray</string>
+    <string name="color_brown">Brown</string>
+    <string name="color_gold">Gold</string>
+    <string name="color_sky_blue">Sky blue</string>
+    <string name="color_coral">Coral</string>
+    <string name="color_light_green">Light green</string>
+    <string name="color_custom">Custom color</string>
+
     <!-- Galaxy picker -->
     <string name="choose_galaxy">Choose a galaxy</string>
     <string name="current_galaxy">Current: %1$s</string>
