@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -74,6 +76,8 @@ fun ManagerScreen(
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
+    onPrintPlanet: (PlanetDto) -> Unit,
+    onExportPlanetStl: (PlanetDto) -> Unit,
     onClearAll: () -> Unit,
     onClearError: () -> Unit,
 ) {
@@ -102,22 +106,14 @@ fun ManagerScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    text = subtitle,
-                    color = TextMuted,
-                    fontSize = 14.sp,
-                )
+                Text(text = subtitle, color = TextMuted, fontSize = 14.sp)
             }
             TextButton(
                 onClick = onToggleLanguage,
                 modifier = Modifier.semantics { contentDescription = languageDescription },
             ) {
                 Text(
-                    if (language == UiLanguage.ENGLISH) {
-                        "EN ●  FR"
-                    } else {
-                        "EN  ● FR"
-                    },
+                    if (language == UiLanguage.ENGLISH) "EN ●  FR" else "EN  ● FR",
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -174,24 +170,17 @@ fun ManagerScreen(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-
         when {
             state.isLoading && state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Accent)
                 }
             }
-
             state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        stringResource(R.string.no_planets),
-                        color = TextMuted,
-                        fontSize = 16.sp,
-                    )
+                    Text(stringResource(R.string.no_planets), color = TextMuted, fontSize = 16.sp)
                 }
             }
-
             else -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -202,6 +191,8 @@ fun ManagerScreen(
                             planet = planet,
                             baseUrl = galaxy.baseUrl,
                             isDeleting = planet.id in state.deletingIds,
+                            onPrint = { onPrintPlanet(planet) },
+                            onExportStl = { onExportPlanetStl(planet) },
                             onDeleteClick = { pendingDelete = planet },
                         )
                     }
@@ -229,9 +220,7 @@ fun ManagerScreen(
                         confirmClearAll = false
                         onClearAll()
                     },
-                ) {
-                    Text(stringResource(R.string.clear_all), color = Danger)
-                }
+                ) { Text(stringResource(R.string.clear_all), color = Danger) }
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearAll = false }) {
@@ -246,13 +235,7 @@ fun ManagerScreen(
             onDismissRequest = { pendingDelete = null },
             title = { Text(stringResource(R.string.remove_planet)) },
             text = {
-                Text(
-                    stringResource(
-                        R.string.remove_planet_body,
-                        planet.name,
-                        galaxy.name,
-                    ),
-                )
+                Text(stringResource(R.string.remove_planet_body, planet.name, galaxy.name))
             },
             confirmButton = {
                 Button(
@@ -261,9 +244,7 @@ fun ManagerScreen(
                         pendingDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger),
-                ) {
-                    Text(stringResource(R.string.remove))
-                }
+                ) { Text(stringResource(R.string.remove)) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
@@ -278,9 +259,7 @@ fun ManagerScreen(
             onDismissRequest = onClearError,
             title = { Text(stringResource(R.string.something_went_wrong)) },
             text = { Text(managerErrorText(error)) },
-            confirmButton = {
-                TextButton(onClick = onClearError) { Text("OK") }
-            },
+            confirmButton = { TextButton(onClick = onClearError) { Text("OK") } },
         )
     }
 }
@@ -326,20 +305,14 @@ private fun ProjectorLanguageControl(
                 )
             } else {
                 TextButton(
-                    onClick = {
-                        onSelect(if (selectedLanguage == "fr") "en" else "fr")
-                    },
+                    onClick = { onSelect(if (selectedLanguage == "fr") "en" else "fr") },
                     modifier =
                         Modifier.semantics {
                             contentDescription = projectorLanguageDescription
                         },
                 ) {
                     Text(
-                        if (selectedLanguage == "fr") {
-                            "EN  ● FR"
-                        } else {
-                            "EN ●  FR"
-                        },
+                        if (selectedLanguage == "fr") "EN  ● FR" else "EN ●  FR",
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -351,16 +324,11 @@ private fun ProjectorLanguageControl(
 @Composable
 private fun managerStatusText(status: ManagerStatus): String =
     when (status) {
-        is ManagerStatus.Stored ->
-            stringResource(R.string.status_planets_stored, status.count)
-
+        is ManagerStatus.Stored -> stringResource(R.string.status_planets_stored, status.count)
         is ManagerStatus.Removed ->
             status.name?.let { stringResource(R.string.status_removed_named, it) }
                 ?: stringResource(R.string.status_planet_removed)
-
-        is ManagerStatus.Cleared ->
-            stringResource(R.string.status_cleared, status.count)
-
+        is ManagerStatus.Cleared -> stringResource(R.string.status_cleared, status.count)
         is ManagerStatus.ProjectorLanguageChanged ->
             stringResource(
                 R.string.status_projector_language_changed,
@@ -390,14 +358,12 @@ private fun PlanetRow(
     planet: PlanetDto,
     baseUrl: String,
     isDeleting: Boolean,
+    onPrint: () -> Unit,
+    onExportStl: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
     val imageUrl =
-        if (planet.url.startsWith("http")) {
-            planet.url
-        } else {
-            baseUrl.trimEnd('/') + planet.url
-        }
+        if (planet.url.startsWith("http")) planet.url else baseUrl.trimEnd('/') + planet.url
     val shape = stringResource(shapeLabelResource(planet.style))
 
     Row(
@@ -442,19 +408,37 @@ private fun PlanetRow(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        if (isDeleting) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(28.dp),
-                color = Accent,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            IconButton(onClick = onDeleteClick) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.remove_named, planet.name),
-                    tint = Danger,
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row {
+                IconButton(onClick = onPrint) {
+                    Icon(
+                        Icons.Default.Print,
+                        contentDescription = stringResource(R.string.print_named, planet.name),
+                        tint = Accent,
+                    )
+                }
+                IconButton(onClick = onExportStl) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = stringResource(R.string.export_stl_named, planet.name),
+                        tint = Accent,
+                    )
+                }
+            }
+            if (isDeleting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    color = Accent,
+                    strokeWidth = 2.dp,
                 )
+            } else {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.remove_named, planet.name),
+                        tint = Danger,
+                    )
+                }
             }
         }
     }
