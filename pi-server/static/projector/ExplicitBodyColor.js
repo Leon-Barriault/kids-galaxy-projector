@@ -33,6 +33,19 @@ export function installExplicitBodyColor() {
     material.userData.kidsGalaxyBodyColorSource = 'tablet-background';
     material.userData.kidsGalaxyBodyColorInferenceDisabled = true;
     material.needsUpdate = true;
+
+    // A very broad authored component can curve far enough around the globe
+    // that some otherwise-valid cap triangles reverse their screen-facing
+    // winding. Render those molded pieces from either side so the child never
+    // sees body-colour holes inside a solid stroke. Keep shadow casting
+    // front-sided to avoid the dark-outline artefact seen on older experiments.
+    this.sculptedArtworkGroup?.children.forEach((child) => {
+      if (!child.isMesh || !child.userData?.kidsGalaxyExplicitBodyPatch) return;
+      child.material.side = THREE.DoubleSide;
+      child.material.shadowSide = THREE.FrontSide;
+      child.material.needsUpdate = true;
+      child.geometry.userData.kidsGalaxyClosedBroadTrait = true;
+    });
   }
 
   explicitBodyColorTexture.kidsGalaxyExplicitBodyColor = true;
