@@ -127,48 +127,82 @@ def main() -> int:
               const patches = group?.children.filter((child) => child.userData?.kidsGalaxySculptedKidPatch) || [];
               const front = patches.filter((child) => !child.userData?.kidsGalaxyBackDesignEcho);
               const back = patches.filter((child) => child.userData?.kidsGalaxyBackDesignEcho);
-              const c = p.mesh.material.color;
+              const dominant = front.filter((child) =>
+                child.userData?.kidsGalaxyDominantGesturePatch ||
+                child.geometry?.userData?.kidsGalaxyDominantGesturePatch
+              );
+              const secondary = front.filter((child) => !dominant.includes(child));
               const data = p.mesh.material.userData || {{}};
+              const body = p.mesh.material;
+              const reliefs = (items) => items.map(
+                (mesh) => mesh.geometry?.userData?.kidsGalaxyPatchRelief || 0
+              );
+              const dominantReliefs = reliefs(dominant);
+              const secondaryReliefs = reliefs(secondary);
               return {{
                 trueSculpted: Boolean(data.kidsGalaxyTrueSculptedArtwork),
                 projection: data.designProjection,
                 patchCount: front.length,
+                secondaryCount: secondary.length,
+                dominantCount: dominant.length,
                 backCount: back.length,
                 shellsHidden: !p.accentEdgeMesh.visible && !p.accentMesh.visible,
-                bodyBlue: data.kidsGalaxyDominantGesturePalette === 4 || (c.b > c.g && c.g > c.r),
-                dominantGesture: Boolean(data.kidsGalaxyDominantGestureRelief),
+                bodyBlue: data.kidsGalaxyBodyPalette === 4 ||
+                  (body.color.b > body.color.g && body.color.g > body.color.r),
+                cleanBody: !body.map && !body.bumpMap && !body.displacementMap,
+                dominantStyle: data.kidsGalaxyDominantGestureStyle,
                 dominantCoverage: data.kidsGalaxyDominantGestureCoverage || 0,
                 allBeveled: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyBeveledKidPatch),
                 allRoundedSlabs: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyRoundedSlab),
                 hybridNormals: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyHybridSlabNormals),
                 broadPlateau: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyBroadPlateau),
-                minimumRelief: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchRelief || 0)),
+                dominantMinRelief: dominantReliefs.length ? Math.min(...dominantReliefs) : 0,
+                dominantMaxRelief: dominantReliefs.length ? Math.max(...dominantReliefs) : 0,
+                secondaryMinRelief: secondaryReliefs.length ? Math.min(...secondaryReliefs) : 0,
                 minimumVertices: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchVertexCount || 0)),
                 physical: front.every((mesh) => mesh.material?.isMeshPhysicalMaterial),
+                dominantNoBackEcho: dominant.every((mesh) => !mesh.userData?.kidsGalaxyBackDesignEcho),
               }};
             }})()
             """
         )
         check(sculpted["trueSculpted"], "valid kid artwork ends as real sculpted geometry")
         check(
-            sculpted["projection"] == "true-beveled-kid-components-with-back-echo",
-            "the child's visible component layout drives the front design",
+            sculpted["projection"]
+            == "true-beveled-kid-components-with-dominant-ribbons-and-back-echo",
+            "the child's visible layout drives secondary pieces and same-hue body ribbons",
         )
         check(sculpted["bodyBlue"], "dominant kid blue remains the coherent planet body")
-        check(3 <= sculpted["patchCount"] <= 7, "separate child gestures remain separate molded pieces")
-        check(sculpted["backCount"] <= 4, "only a smaller styled echo is added to the far hemisphere")
+        check(sculpted["cleanBody"], "dominant body stays clean instead of receiving a literal artwork texture")
+        check(3 <= sculpted["secondaryCount"] <= 7, "secondary child gestures remain separate molded pieces")
+        check(1 <= sculpted["dominantCount"] <= 2, "partial dominant strokes survive as a small set of molded ribbons")
+        check(4 <= sculpted["patchCount"] <= 9, "the final front design remains intentionally sparse")
+        check(sculpted["backCount"] <= 4, "only secondary pieces receive a smaller far-hemisphere echo")
+        check(sculpted["dominantNoBackEcho"], "dominant body ribbons are not redundantly copied to the back")
         check(sculpted["shellsHidden"], "flat alpha-shell artwork is removed from the final planet")
         check(sculpted["allBeveled"], "every visible kid patch has a physical beveled shoulder")
         check(sculpted["allRoundedSlabs"], "kid pieces use the broad rounded-slab reference profile")
         check(sculpted["hybridNormals"], "slab tops stay smooth while shoulders retain physical depth")
         check(sculpted["broadPlateau"], "raised pieces keep broad tops instead of pinched domes")
-        check(sculpted["minimumRelief"] >= 0.04, "kid patches stand visibly but softly proud of the body")
+        check(sculpted["secondaryMinRelief"] >= 0.04, "secondary accents stand visibly proud of the body")
+        check(
+            0.018 <= sculpted["dominantMinRelief"]
+            and sculpted["dominantMaxRelief"] <= 0.04,
+            "same-hue dominant ribbons stay lower-profile than secondary accents",
+        )
+        check(
+            sculpted["dominantMaxRelief"] < sculpted["secondaryMinRelief"],
+            "dominant ribbons integrate into the body instead of reading like extra buttons",
+        )
         check(sculpted["minimumVertices"] >= 30, "kid patch contours are smoothed into dense real geometry")
         check(sculpted["physical"], "sculpted kid patches use physically lit materials")
-        check(sculpted["dominantGesture"], "partial dominant kid strokes remain visible in the body design")
+        check(
+            sculpted["dominantStyle"] == "same-hue-sculpted-ribbons",
+            "partial dominant paint uses the same molded visual language as the reference",
+        )
         check(
             0.03 <= sculpted["dominantCoverage"] <= 0.48,
-            "dominant gesture preservation only applies to deliberate partial paint",
+            "dominant ribbons are only created for deliberate partial paint",
         )
 
         print("\nSaturn-like particle ring")
