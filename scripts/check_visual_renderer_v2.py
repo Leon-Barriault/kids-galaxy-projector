@@ -120,5 +120,4 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
         save_data_url(top_data, "active-accent-colour.png")
 
 
-visual.isolate_planet = isolate_planet
-raise SystemExit(visual.main())
+raise SystemExit(visual.main(isolate_planet_fn=isolate_planet))
