@@ -119,19 +119,28 @@ function appendOutwardTriangle(indices, positions, a, b, c) {
   else indices.push(a, c, b);
 }
 
-function applyRadialNormals(geometry) {
+function blendGeometryNormals(geometry, ringSize, ringCount) {
+  geometry.computeVertexNormals();
   const position = geometry.getAttribute('position');
-  if (!position) return;
-  const normals = new Float32Array(position.count * 3);
-  const normal = new THREE.Vector3();
+  const normals = geometry.getAttribute('normal');
+  if (!position || !normals) return;
+  const geometric = new THREE.Vector3();
+  const radial = new THREE.Vector3();
+  const blended = new THREE.Vector3();
+
   for (let index = 0; index < position.count; index += 1) {
-    normal.fromBufferAttribute(position, index).normalize();
-    normals[index * 3] = normal.x;
-    normals[index * 3 + 1] = normal.y;
-    normals[index * 3 + 2] = normal.z;
+    geometric.fromBufferAttribute(normals, index).normalize();
+    radial.fromBufferAttribute(position, index).normalize();
+    const ring = Math.min(ringCount - 1, Math.floor(index / ringSize));
+    const radialWeight = ring <= 1 ? 0.52 : ring === 2 ? 0.78 : 0.9;
+    blended
+      .copy(geometric)
+      .multiplyScalar(1 - radialWeight)
+      .add(radial.clone().multiplyScalar(radialWeight))
+      .normalize();
+    normals.setXYZ(index, blended.x, blended.y, blended.z);
   }
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.attributes.normal.needsUpdate = true;
+  normals.needsUpdate = true;
 }
 
 function rebuildRoundedSlab(sourceGeometry) {
@@ -220,7 +229,7 @@ function rebuildRoundedSlab(sourceGeometry) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColours, 3));
   geometry.setIndex(indices);
-  applyRadialNormals(geometry);
+  blendGeometryNormals(geometry, ringSize, ringDefinitions.length);
   geometry.computeBoundingSphere();
   geometry.userData = {
     ...sourceGeometry.userData,
@@ -229,7 +238,7 @@ function rebuildRoundedSlab(sourceGeometry) {
     kidsGalaxyRoundedSlab: true,
     kidsGalaxyBroadPlateau: true,
     kidsGalaxyContourSmoothed: true,
-    kidsGalaxyRadialSlabNormals: true,
+    kidsGalaxyHybridSlabNormals: true,
     kidsGalaxyRoundedSlabRingCount: ringDefinitions.length,
     kidsGalaxyPatchVertexCount: positions.length / 3,
     kidsGalaxyPatchRelief: topRadius + PLATEAU_RISE - outerRadius,
@@ -270,16 +279,16 @@ function roundSculptedPieces(entity) {
   if (!converted) return false;
   group.userData.kidsGalaxyRoundedSlabFinish = true;
   group.userData.kidsGalaxyRoundedSlabCount = converted;
-  group.userData.kidsGalaxyRadialSlabNormals = true;
+  group.userData.kidsGalaxyHybridSlabNormals = true;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabFinish = true;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabCount = converted;
   return true;
 }
 
 /**
- * Convert the broad three-ring kid patches into low-profile five-ring slabs.
- * The center stays broad and nearly flat while the perimeter rolls smoothly
- * into a same-hue shoulder, matching the molded clay/plastic reference language.
+ * Convert broad kid patches into low-profile five-ring slabs. Hybrid normals
+ * retain real shoulder lighting while keeping the broad top as smooth as molded
+ * clay/plastic instead of revealing polygon triangulation.
  */
 export function installSculptedArtworkRoundedSlab() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyRoundedSlab) return;
