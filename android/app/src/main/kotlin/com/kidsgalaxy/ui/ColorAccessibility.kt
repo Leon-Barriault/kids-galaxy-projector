@@ -9,8 +9,7 @@ import com.kidsgalaxy.domain.model.DEFAULT_MOUNTAIN_COLOR_ARGB
 import com.kidsgalaxy.domain.model.DEFAULT_RING_COLOR_ARGB
 
 @Composable
-internal fun colorContentDescription(colorArgb: Int): String =
-    stringResource(colorNameResource(colorArgb))
+internal fun colorContentDescription(colorArgb: Int): String = stringResource(colorNameResource(colorArgb))
 
 @StringRes
 internal fun colorNameResource(colorArgb: Int): Int =
