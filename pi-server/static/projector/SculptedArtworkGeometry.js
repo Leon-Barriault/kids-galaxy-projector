@@ -5,14 +5,16 @@ import { PlanetEntity } from './PlanetEntity.js';
 const DISC_SIZE = 256;
 const GRID = 128;
 const MAX_COLORS = 3;
-const MAX_SECONDARY_COMPONENTS = 7;
+const MAX_EXPLICIT_BODY_COLORS = 6;
+const MAX_SECONDARY_COMPONENTS = 9;
 const MAX_DOMINANT_COMPONENTS = 2;
-const MAX_BACK_ECHO_COMPONENTS = 7;
+const MAX_BACK_ECHO_COMPONENTS = 9;
 const MIN_COMPONENT_CELLS = 14;
 const MIN_DOMINANT_GESTURE_COVERAGE = 0.035;
 const MAX_DOMINANT_GESTURE_COVERAGE = 0.48;
 const ARTWORK_TARGET_FILL = 0.94;
-const ARTWORK_MAX_FIT_SCALE = 1.55;
+const ARTWORK_MAX_FIT_SCALE = 1.85;
+const BODY_MATCH_DISTANCE = 54;
 const BODY_RADIUS = 1.05;
 const BASE_RADIUS = 1.056;
 const SHOULDER_RADIUS = 1.079;
@@ -30,6 +32,7 @@ const PALETTE = [
   [0x9c, 0x27, 0xb0],
   [0xe9, 0x1e, 0x63],
   [0x00, 0x00, 0x00],
+  [0xff, 0xff, 0xff],
 ];
 
 function makeCanvas(width, height) {
@@ -46,11 +49,24 @@ function imageSize(image) {
   };
 }
 
+function parseHexColour(value) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(value || '')) return null;
+  return [
+    Number.parseInt(value.slice(1, 3), 16),
+    Number.parseInt(value.slice(3, 5), 16),
+    Number.parseInt(value.slice(5, 7), 16),
+  ];
+}
+
+function rgbDistance(a, b) {
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
 function whiteDistance(r, g, b) {
-  const dr = 255 - r;
-  const dg = 255 - g;
-  const db = 255 - b;
-  return Math.sqrt(dr * dr + dg * dg + db * db) / 441.673;
+  return rgbDistance([r, g, b], [255, 255, 255]) / 441.673;
 }
 
 function paletteIndex(r, g, b) {
@@ -107,7 +123,14 @@ function recoverLegacy(source) {
   return output;
 }
 
-function paintedBounds(disc) {
+function isAuthoredPixel(r, g, b, explicitBodyRgb) {
+  if (explicitBodyRgb) {
+    return rgbDistance([r, g, b], explicitBodyRgb) > BODY_MATCH_DISTANCE;
+  }
+  return whiteDistance(r, g, b) >= 0.08;
+}
+
+function paintedBounds(disc, explicitBodyRgb = null) {
   const context = disc.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) return null;
   const pixels = context.getImageData(0, 0, disc.width, disc.height).data;
@@ -117,8 +140,16 @@ function paintedBounds(disc) {
   let maxY = -1;
   for (let y = 0; y < disc.height; y += 1) {
     for (let x = 0; x < disc.width; x += 1) {
+      const nx = ((x + 0.5) / disc.width - 0.5) * 2;
+      const ny = ((y + 0.5) / disc.height - 0.5) * 2;
+      if (nx * nx + ny * ny > 0.965 * 0.965) continue;
       const pixel = (y * disc.width + x) * 4;
-      if (whiteDistance(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) < 0.08) {
+      if (!isAuthoredPixel(
+        pixels[pixel],
+        pixels[pixel + 1],
+        pixels[pixel + 2],
+        explicitBodyRgb,
+      )) {
         continue;
       }
       minX = Math.min(minX, x);
@@ -138,21 +169,32 @@ function paintedBounds(disc) {
   };
 }
 
-function fitArtworkToDisc(disc) {
-  const bounds = paintedBounds(disc);
+function fitArtworkToDisc(disc, explicitBodyRgb = null) {
+  const bounds = paintedBounds(disc, explicitBodyRgb);
   if (!bounds) {
     disc.kidsGalaxyArtworkFitScale = 1;
+    disc.kidsGalaxyArtworkFitScaleX = 1;
+    disc.kidsGalaxyArtworkFitScaleY = 1;
     return disc;
   }
 
   const targetPixels = DISC_SIZE * ARTWORK_TARGET_FILL;
-  const fitScale = THREE.MathUtils.clamp(
-    Math.min(targetPixels / bounds.width, targetPixels / bounds.height),
+  const fitScaleX = THREE.MathUtils.clamp(
+    targetPixels / bounds.width,
     1,
     ARTWORK_MAX_FIT_SCALE,
   );
-  if (fitScale <= 1.01) {
+  const fitScaleY = THREE.MathUtils.clamp(
+    targetPixels / bounds.height,
+    1,
+    ARTWORK_MAX_FIT_SCALE,
+  );
+  const fitScale = explicitBodyRgb ? Math.max(fitScaleX, fitScaleY) : Math.min(fitScaleX, fitScaleY);
+
+  if (!explicitBodyRgb && fitScale <= 1.01) {
     disc.kidsGalaxyArtworkFitScale = 1;
+    disc.kidsGalaxyArtworkFitScaleX = 1;
+    disc.kidsGalaxyArtworkFitScaleY = 1;
     disc.kidsGalaxyArtworkSourceBounds = bounds;
     return disc;
   }
@@ -160,15 +202,19 @@ function fitArtworkToDisc(disc) {
   const output = makeCanvas(DISC_SIZE, DISC_SIZE);
   const context = output.getContext('2d', { alpha: false });
   if (!context) return disc;
-  context.fillStyle = '#fff';
+  if (explicitBodyRgb) {
+    context.fillStyle = `rgb(${explicitBodyRgb[0]}, ${explicitBodyRgb[1]}, ${explicitBodyRgb[2]})`;
+  } else {
+    context.fillStyle = '#fff';
+  }
   context.fillRect(0, 0, DISC_SIZE, DISC_SIZE);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
 
   const sourceCentreX = (bounds.minX + bounds.maxX + 1) / 2;
   const sourceCentreY = (bounds.minY + bounds.maxY + 1) / 2;
-  const targetWidth = bounds.width * fitScale;
-  const targetHeight = bounds.height * fitScale;
+  const targetWidth = bounds.width * (explicitBodyRgb ? fitScaleX : fitScale);
+  const targetHeight = bounds.height * (explicitBodyRgb ? fitScaleY : fitScale);
   context.drawImage(
     disc,
     bounds.minX,
@@ -181,12 +227,14 @@ function fitArtworkToDisc(disc) {
     targetHeight,
   );
   output.kidsGalaxyArtworkFitScale = fitScale;
+  output.kidsGalaxyArtworkFitScaleX = explicitBodyRgb ? fitScaleX : fitScale;
+  output.kidsGalaxyArtworkFitScaleY = explicitBodyRgb ? fitScaleY : fitScale;
   output.kidsGalaxyArtworkSourceBounds = bounds;
   output.kidsGalaxyArtworkSourceCentre = [sourceCentreX, sourceCentreY];
   return output;
 }
 
-function recoverDisc(texture) {
+function recoverDisc(texture, explicitBodyRgb = null) {
   if (typeof document === 'undefined' || !texture?.image) return null;
   const size = imageSize(texture.image);
   if (!size.width || !size.height) return null;
@@ -200,17 +248,19 @@ function recoverDisc(texture) {
   context.drawImage(texture.image, 0, 0, source.width, source.height);
   if (legacy) {
     const recovered = recoverLegacy(source);
-    return recovered ? fitArtworkToDisc(recovered) : null;
+    return recovered ? fitArtworkToDisc(recovered, explicitBodyRgb) : null;
   }
 
   const disc = makeCanvas(DISC_SIZE, DISC_SIZE);
   const discContext = disc.getContext('2d', { alpha: false });
   if (!discContext) return null;
-  discContext.fillStyle = '#fff';
+  discContext.fillStyle = explicitBodyRgb
+    ? `rgb(${explicitBodyRgb[0]}, ${explicitBodyRgb[1]}, ${explicitBodyRgb[2]})`
+    : '#fff';
   discContext.fillRect(0, 0, DISC_SIZE, DISC_SIZE);
   discContext.imageSmoothingEnabled = true;
   discContext.drawImage(source, 0, 0, DISC_SIZE, DISC_SIZE);
-  return fitArtworkToDisc(disc);
+  return fitArtworkToDisc(disc, explicitBodyRgb);
 }
 
 function indexOf(x, y) {
@@ -227,13 +277,16 @@ function sampledColour(sums, counts, colour) {
   );
 }
 
-function analyse(texture) {
-  const disc = recoverDisc(texture);
+function analyse(texture, explicitBodyColor = null) {
+  const explicitBodyRgb = parseHexColour(explicitBodyColor);
+  const disc = recoverDisc(texture, explicitBodyRgb);
   if (!disc) return null;
   const sample = makeCanvas(GRID, GRID);
   const context = sample.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) return null;
-  context.fillStyle = '#fff';
+  context.fillStyle = explicitBodyRgb
+    ? `rgb(${explicitBodyRgb[0]}, ${explicitBodyRgb[1]}, ${explicitBodyRgb[2]})`
+    : '#fff';
   context.fillRect(0, 0, GRID, GRID);
   context.imageSmoothingEnabled = true;
   context.drawImage(disc, 0, 0, GRID, GRID);
@@ -254,14 +307,46 @@ function analyse(texture) {
       const r = pixels[pixel];
       const g = pixels[pixel + 1];
       const b = pixels[pixel + 2];
-      if (whiteDistance(r, g, b) < 0.08) continue;
+      if (!isAuthoredPixel(r, g, b, explicitBodyRgb)) continue;
       const colour = paletteIndex(r, g, b);
+      // Antialiased edges of a same-colour brush stroke should merge into the
+      // body just like the fully opaque centre of that stroke.
+      if (explicitBodyRgb && rgbDistance(PALETTE[colour], explicitBodyRgb) <= BODY_MATCH_DISTANCE) {
+        continue;
+      }
       labels[indexOf(x, y)] = colour;
       counts[colour] += 1;
       sums[colour][0] += r;
       sums[colour][1] += g;
       sums[colour][2] += b;
     }
+  }
+
+  if (explicitBodyRgb) {
+    const accentColours = counts
+      .map((count, index) => ({ count, index }))
+      .filter(({ count }) => count >= Math.max(10, inside * 0.002))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_EXPLICIT_BODY_COLORS)
+      .map(({ index }) => index);
+    const colours = new Map();
+    accentColours.forEach((colour) => {
+      colours.set(colour, sampledColour(sums, counts, colour));
+    });
+    return {
+      labels,
+      accentColours,
+      colours,
+      inside,
+      dominant: -1,
+      dominantCoverage: 0,
+      preserveDominantGesture: false,
+      explicitBodyColor: explicitBodyColor.toLowerCase(),
+      artworkFitScale: Number(disc.kidsGalaxyArtworkFitScale) || 1,
+      artworkFitScaleX: Number(disc.kidsGalaxyArtworkFitScaleX) || 1,
+      artworkFitScaleY: Number(disc.kidsGalaxyArtworkFitScaleY) || 1,
+      artworkSourceBounds: disc.kidsGalaxyArtworkSourceBounds || null,
+    };
   }
 
   let dominant = 0;
@@ -300,7 +385,10 @@ function analyse(texture) {
     dominant,
     dominantCoverage,
     preserveDominantGesture,
+    explicitBodyColor: null,
     artworkFitScale: Number(disc.kidsGalaxyArtworkFitScale) || 1,
+    artworkFitScaleX: Number(disc.kidsGalaxyArtworkFitScaleX) || 1,
+    artworkFitScaleY: Number(disc.kidsGalaxyArtworkFitScaleY) || 1,
     artworkSourceBounds: disc.kidsGalaxyArtworkSourceBounds || null,
   };
 }
@@ -585,16 +673,26 @@ function disposeGroup(group) {
 function markCleanBody(entity, analysis) {
   entity.accentEdgeMesh.visible = false;
   entity.accentMesh.visible = false;
-  entity.mesh.material.userData.kidsGalaxyTrueSculptedArtwork = true;
-  entity.mesh.material.userData.kidsGalaxySculptedPatchCount = 0;
-  entity.mesh.material.userData.kidsGalaxyDominantGesturePatchCount = 0;
-  entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
-  entity.mesh.material.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
-  entity.mesh.material.userData.designProjection = 'clean-dominant-body-no-redundant-patch';
+  const data = entity.mesh.material.userData;
+  data.kidsGalaxyTrueSculptedArtwork = true;
+  data.kidsGalaxySculptedPatchCount = 0;
+  data.kidsGalaxyDominantGesturePatchCount = 0;
+  data.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
+  data.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
+  data.kidsGalaxyArtworkFitScaleX = analysis.artworkFitScaleX;
+  data.kidsGalaxyArtworkFitScaleY = analysis.artworkFitScaleY;
+  if (analysis.explicitBodyColor) {
+    data.kidsGalaxyExplicitBodyArtwork = true;
+    data.kidsGalaxyExplicitBodyPatchCount = 0;
+    data.kidsGalaxyBodyColorInferenceDisabled = true;
+    data.designProjection = 'explicit-body-preserved-kid-traits-across-planet';
+  } else {
+    data.designProjection = 'clean-dominant-body-no-redundant-patch';
+  }
 }
 
 function buildSculptedArtwork(entity, texture) {
-  const analysis = analyse(texture);
+  const analysis = analyse(texture, entity.bodyColor);
   if (!analysis) return false;
   const components = componentsFor(analysis)
     .map((component) => ({ ...component, contour: componentContour(component) }))
@@ -606,11 +704,18 @@ function buildSculptedArtwork(entity, texture) {
     return true;
   }
 
+  const explicitBody = Boolean(analysis.explicitBodyColor);
   const group = new THREE.Group();
   group.userData.kidsGalaxySculptedArtworkGroup = true;
   group.userData.componentCount = components.length;
   group.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
+  group.userData.kidsGalaxyArtworkFitScaleX = analysis.artworkFitScaleX;
+  group.userData.kidsGalaxyArtworkFitScaleY = analysis.artworkFitScaleY;
   group.userData.kidsGalaxyArtworkTargetFill = ARTWORK_TARGET_FILL;
+  if (explicitBody) {
+    group.userData.kidsGalaxyExplicitBodyArtwork = true;
+    group.userData.kidsGalaxyBodyColor = analysis.explicitBodyColor;
+  }
 
   const seed = entity.animator.hashId(`${entity.id}-sculpted-back-echo`);
   const backRotation = 0.34 + entity.seededUnit(seed, 5) * 0.28;
@@ -629,6 +734,10 @@ function buildSculptedArtwork(entity, texture) {
     mesh.userData.kidsGalaxySculptedKidPatch = true;
     mesh.userData.kidsGalaxyKidPatchIndex = index;
     mesh.userData.kidsGalaxyDominantGesturePatch = component.isDominantGesture;
+    if (explicitBody) {
+      mesh.userData.kidsGalaxyExplicitBodyPatch = true;
+      mesh.geometry.userData.kidsGalaxyExplicitBodyPatch = true;
+    }
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
@@ -636,7 +745,6 @@ function buildSculptedArtwork(entity, texture) {
     if (component.isDominantGesture) dominantGestureCount += 1;
     else secondaryCount += 1;
 
-    // Stretching removes the tablet's unused white margin on the visible face.
     // A nearly full-size echo of the same authored trait continues that visual
     // language around the far hemisphere as the planet rotates; colours and
     // component relationships stay unchanged rather than being procedurally remixed.
@@ -653,6 +761,10 @@ function buildSculptedArtwork(entity, texture) {
       back.userData.kidsGalaxySculptedKidPatch = true;
       back.userData.kidsGalaxyBackDesignEcho = true;
       back.userData.kidsGalaxyDominantGesturePatch = component.isDominantGesture;
+      if (explicitBody) {
+        back.userData.kidsGalaxyExplicitBodyPatch = true;
+        back.geometry.userData.kidsGalaxyExplicitBodyPatch = true;
+      }
       back.castShadow = true;
       back.receiveShadow = true;
       group.add(back);
@@ -664,18 +776,29 @@ function buildSculptedArtwork(entity, texture) {
   entity.sculptedArtworkGroup = group;
   entity.accentEdgeMesh.visible = false;
   entity.accentMesh.visible = false;
-  entity.mesh.material.userData.kidsGalaxyTrueSculptedArtwork = true;
-  entity.mesh.material.userData.kidsGalaxySculptedPatchCount = components.length;
-  entity.mesh.material.userData.kidsGalaxySecondaryPatchCount = secondaryCount;
-  entity.mesh.material.userData.kidsGalaxyDominantGesturePatchCount = dominantGestureCount;
-  entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
-  entity.mesh.material.userData.kidsGalaxyDominantGestureStyle = 'same-hue-sculpted-ribbons';
-  entity.mesh.material.userData.kidsGalaxySculptedBackEchoCount = backEchoCount;
-  entity.mesh.material.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
-  entity.mesh.material.userData.kidsGalaxyArtworkTargetFill = ARTWORK_TARGET_FILL;
-  entity.mesh.material.userData.kidsGalaxyTraitsStretchedToPlanet = true;
-  entity.mesh.material.userData.designProjection =
-    'stretched-preserved-kid-components-with-full-size-back-echo';
+  const data = entity.mesh.material.userData;
+  data.kidsGalaxyTrueSculptedArtwork = true;
+  data.kidsGalaxySculptedPatchCount = components.length;
+  data.kidsGalaxySecondaryPatchCount = secondaryCount;
+  data.kidsGalaxyDominantGesturePatchCount = dominantGestureCount;
+  data.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
+  data.kidsGalaxyDominantGestureStyle = explicitBody
+    ? 'explicit-body-all-nonbody-colors-are-artwork'
+    : 'same-hue-sculpted-ribbons';
+  data.kidsGalaxySculptedBackEchoCount = backEchoCount;
+  data.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
+  data.kidsGalaxyArtworkFitScaleX = analysis.artworkFitScaleX;
+  data.kidsGalaxyArtworkFitScaleY = analysis.artworkFitScaleY;
+  data.kidsGalaxyArtworkTargetFill = ARTWORK_TARGET_FILL;
+  data.kidsGalaxyTraitsStretchedToPlanet = true;
+  if (explicitBody) {
+    data.kidsGalaxyExplicitBodyArtwork = true;
+    data.kidsGalaxyExplicitBodyPatchCount = components.length;
+    data.kidsGalaxyBodyColorInferenceDisabled = true;
+    data.designProjection = 'explicit-body-preserved-kid-traits-across-planet';
+  } else {
+    data.designProjection = 'stretched-preserved-kid-components-with-full-size-back-echo';
+  }
   return true;
 }
 
@@ -693,7 +816,7 @@ export function installSculptedArtworkGeometry() {
         const cloneCanvas = makeCanvas(size.width, size.height);
         const context = cloneCanvas.getContext('2d', { alpha: false });
         if (context) {
-          context.fillStyle = '#fff';
+          context.fillStyle = this.bodyColor || '#fff';
           context.fillRect(0, 0, size.width, size.height);
           context.drawImage(sourceImage, 0, 0, size.width, size.height);
           cloneTexture = new THREE.CanvasTexture(cloneCanvas);
