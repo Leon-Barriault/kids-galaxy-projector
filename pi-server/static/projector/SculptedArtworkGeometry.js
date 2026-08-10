@@ -7,9 +7,12 @@ const GRID = 128;
 const MAX_COLORS = 3;
 const MAX_SECONDARY_COMPONENTS = 7;
 const MAX_DOMINANT_COMPONENTS = 2;
+const MAX_BACK_ECHO_COMPONENTS = 7;
 const MIN_COMPONENT_CELLS = 14;
 const MIN_DOMINANT_GESTURE_COVERAGE = 0.035;
 const MAX_DOMINANT_GESTURE_COVERAGE = 0.48;
+const ARTWORK_TARGET_FILL = 0.94;
+const ARTWORK_MAX_FIT_SCALE = 1.55;
 const BODY_RADIUS = 1.05;
 const BASE_RADIUS = 1.056;
 const SHOULDER_RADIUS = 1.079;
@@ -104,6 +107,85 @@ function recoverLegacy(source) {
   return output;
 }
 
+function paintedBounds(disc) {
+  const context = disc.getContext('2d', { alpha: false, willReadFrequently: true });
+  if (!context) return null;
+  const pixels = context.getImageData(0, 0, disc.width, disc.height).data;
+  let minX = disc.width;
+  let minY = disc.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < disc.height; y += 1) {
+    for (let x = 0; x < disc.width; x += 1) {
+      const pixel = (y * disc.width + x) * 4;
+      if (whiteDistance(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) < 0.08) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+function fitArtworkToDisc(disc) {
+  const bounds = paintedBounds(disc);
+  if (!bounds) {
+    disc.kidsGalaxyArtworkFitScale = 1;
+    return disc;
+  }
+
+  const targetPixels = DISC_SIZE * ARTWORK_TARGET_FILL;
+  const fitScale = THREE.MathUtils.clamp(
+    Math.min(targetPixels / bounds.width, targetPixels / bounds.height),
+    1,
+    ARTWORK_MAX_FIT_SCALE,
+  );
+  if (fitScale <= 1.01) {
+    disc.kidsGalaxyArtworkFitScale = 1;
+    disc.kidsGalaxyArtworkSourceBounds = bounds;
+    return disc;
+  }
+
+  const output = makeCanvas(DISC_SIZE, DISC_SIZE);
+  const context = output.getContext('2d', { alpha: false });
+  if (!context) return disc;
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, DISC_SIZE, DISC_SIZE);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+
+  const sourceCentreX = (bounds.minX + bounds.maxX + 1) / 2;
+  const sourceCentreY = (bounds.minY + bounds.maxY + 1) / 2;
+  const targetWidth = bounds.width * fitScale;
+  const targetHeight = bounds.height * fitScale;
+  context.drawImage(
+    disc,
+    bounds.minX,
+    bounds.minY,
+    bounds.width,
+    bounds.height,
+    (DISC_SIZE - targetWidth) / 2,
+    (DISC_SIZE - targetHeight) / 2,
+    targetWidth,
+    targetHeight,
+  );
+  output.kidsGalaxyArtworkFitScale = fitScale;
+  output.kidsGalaxyArtworkSourceBounds = bounds;
+  output.kidsGalaxyArtworkSourceCentre = [sourceCentreX, sourceCentreY];
+  return output;
+}
+
 function recoverDisc(texture) {
   if (typeof document === 'undefined' || !texture?.image) return null;
   const size = imageSize(texture.image);
@@ -116,7 +198,10 @@ function recoverDisc(texture) {
   context.fillRect(0, 0, source.width, source.height);
   context.imageSmoothingEnabled = true;
   context.drawImage(texture.image, 0, 0, source.width, source.height);
-  if (legacy) return recoverLegacy(source);
+  if (legacy) {
+    const recovered = recoverLegacy(source);
+    return recovered ? fitArtworkToDisc(recovered) : null;
+  }
 
   const disc = makeCanvas(DISC_SIZE, DISC_SIZE);
   const discContext = disc.getContext('2d', { alpha: false });
@@ -125,7 +210,7 @@ function recoverDisc(texture) {
   discContext.fillRect(0, 0, DISC_SIZE, DISC_SIZE);
   discContext.imageSmoothingEnabled = true;
   discContext.drawImage(source, 0, 0, DISC_SIZE, DISC_SIZE);
-  return disc;
+  return fitArtworkToDisc(disc);
 }
 
 function indexOf(x, y) {
@@ -202,7 +287,6 @@ function analyse(texture) {
   accentColours.forEach((colour) => {
     const sampled = sampledColour(sums, counts, colour);
     if (colour === dominant && preserveDominantGesture) {
-      // Same hue as the body, just enough lift to read like a molded ribbon.
       sampled.offsetHSL(0, 0.012, 0.045);
     }
     colours.set(colour, sampled);
@@ -216,6 +300,8 @@ function analyse(texture) {
     dominant,
     dominantCoverage,
     preserveDominantGesture,
+    artworkFitScale: Number(disc.kidsGalaxyArtworkFitScale) || 1,
+    artworkSourceBounds: disc.kidsGalaxyArtworkSourceBounds || null,
   };
 }
 
@@ -503,6 +589,7 @@ function markCleanBody(entity, analysis) {
   entity.mesh.material.userData.kidsGalaxySculptedPatchCount = 0;
   entity.mesh.material.userData.kidsGalaxyDominantGesturePatchCount = 0;
   entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
+  entity.mesh.material.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
   entity.mesh.material.userData.designProjection = 'clean-dominant-body-no-redundant-patch';
 }
 
@@ -522,9 +609,11 @@ function buildSculptedArtwork(entity, texture) {
   const group = new THREE.Group();
   group.userData.kidsGalaxySculptedArtworkGroup = true;
   group.userData.componentCount = components.length;
+  group.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
+  group.userData.kidsGalaxyArtworkTargetFill = ARTWORK_TARGET_FILL;
 
   const seed = entity.animator.hashId(`${entity.id}-sculpted-back-echo`);
-  const backRotation = 0.18 + entity.seededUnit(seed, 5) * 0.28;
+  const backRotation = 0.34 + entity.seededUnit(seed, 5) * 0.28;
   let dominantGestureCount = 0;
   let secondaryCount = 0;
   let backEchoCount = 0;
@@ -544,28 +633,26 @@ function buildSculptedArtwork(entity, texture) {
     mesh.receiveShadow = true;
     group.add(mesh);
 
-    if (component.isDominantGesture) {
-      dominantGestureCount += 1;
-      return;
-    }
-    secondaryCount += 1;
+    if (component.isDominantGesture) dominantGestureCount += 1;
+    else secondaryCount += 1;
 
-    // A smaller opposite-side echo gives a complete designed planet without
-    // asking a child to paint invisible faces of the sphere. Dominant ribbons
-    // already belong to the body language, so they stay authored only on the
-    // visible hemisphere rather than being redundantly echoed.
-    if (backEchoCount < 4) {
+    // Stretching removes the tablet's unused white margin on the visible face.
+    // A nearly full-size echo of the same authored trait continues that visual
+    // language around the far hemisphere as the planet rotates; colours and
+    // component relationships stay unchanged rather than being procedurally remixed.
+    if (backEchoCount < MAX_BACK_ECHO_COMPONENTS) {
       const back = new THREE.Mesh(
         createPatchGeometry(component.contour, colour, {
           back: true,
           backRotation,
-          scale: 0.82,
+          scale: component.isDominantGesture ? 0.94 : 0.98,
+          dominantGesture: component.isDominantGesture,
         }),
         patchMaterial(),
       );
       back.userData.kidsGalaxySculptedKidPatch = true;
       back.userData.kidsGalaxyBackDesignEcho = true;
-      back.userData.kidsGalaxyDominantGesturePatch = false;
+      back.userData.kidsGalaxyDominantGesturePatch = component.isDominantGesture;
       back.castShadow = true;
       back.receiveShadow = true;
       group.add(back);
@@ -584,8 +671,11 @@ function buildSculptedArtwork(entity, texture) {
   entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
   entity.mesh.material.userData.kidsGalaxyDominantGestureStyle = 'same-hue-sculpted-ribbons';
   entity.mesh.material.userData.kidsGalaxySculptedBackEchoCount = backEchoCount;
+  entity.mesh.material.userData.kidsGalaxyArtworkFitScale = analysis.artworkFitScale;
+  entity.mesh.material.userData.kidsGalaxyArtworkTargetFill = ARTWORK_TARGET_FILL;
+  entity.mesh.material.userData.kidsGalaxyTraitsStretchedToPlanet = true;
   entity.mesh.material.userData.designProjection =
-    'true-beveled-kid-components-with-dominant-ribbons-and-back-echo';
+    'stretched-preserved-kid-components-with-full-size-back-echo';
   return true;
 }
 
@@ -595,7 +685,6 @@ export function installSculptedArtworkGeometry() {
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
 
   function sculptedGeometryTexture(texture) {
-    // Analyse before the previous renderer disposes its GPU source texture.
     const sourceImage = texture?.image;
     let cloneTexture = null;
     if (sourceImage && typeof document !== 'undefined') {
