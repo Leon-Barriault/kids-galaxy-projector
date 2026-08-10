@@ -1,5 +1,9 @@
 package com.kidsgalaxy.manager.ui
 
+import android.graphics.BitmapFactory
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,12 +41,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -50,14 +56,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.print.PrintHelper
 import coil.compose.AsyncImage
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
+import com.kidsgalaxy.manager.BuildConfig
 import com.kidsgalaxy.manager.ManagerError
 import com.kidsgalaxy.manager.ManagerStatus
 import com.kidsgalaxy.manager.ManagerUiState
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
+import com.kidsgalaxy.manager.data.PlanetExportClient
+import kotlinx.coroutines.launch
 
 private val Background = Color(0xFF0A0E2A)
 private val CardBg = Color(0xFF141A3A)
@@ -76,17 +86,69 @@ fun ManagerScreen(
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
-    onPrintPlanet: (PlanetDto) -> Unit,
-    onExportPlanetStl: (PlanetDto) -> Unit,
     onClearAll: () -> Unit,
     onClearError: () -> Unit,
 ) {
     var pendingDelete by remember { mutableStateOf<PlanetDto?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
+    var pendingStlBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportClient =
+        remember(galaxy.baseUrl) {
+            PlanetExportClient(context, galaxy.baseUrl)
+        }
+    val stlLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("model/stl"),
+        ) { uri ->
+            val content = pendingStlBytes
+            if (uri != null && content != null) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(content)
+                    } ?: error("Could not open the selected document")
+                }.onFailure {
+                    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
+                }
+            }
+            pendingStlBytes = null
+        }
     val languageDescription = stringResource(R.string.language_toggle_description)
     val subtitle =
         state.status?.let { managerStatusText(it) }
             ?: stringResource(R.string.planets_stored_on, galaxy.name)
+
+    fun printPlanet(planet: PlanetDto) {
+        scope.launch {
+            runCatching { exportClient.printSheet(planet.id) }
+                .onSuccess { bytes ->
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap == null) {
+                        Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
+                    } else {
+                        PrintHelper(context).apply {
+                            scaleMode = PrintHelper.SCALE_MODE_FIT
+                            colorMode = PrintHelper.COLOR_MODE_COLOR
+                        }.printBitmap("${planet.name} - Kids Galaxy", bitmap)
+                    }
+                }.onFailure {
+                    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
+                }
+        }
+    }
+
+    fun exportStl(planet: PlanetDto) {
+        scope.launch {
+            runCatching { exportClient.stl(planet.id) }
+                .onSuccess { bytes ->
+                    pendingStlBytes = bytes
+                    stlLauncher.launch(stlFilename(planet))
+                }.onFailure {
+                    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
+                }
+        }
+    }
 
     Column(
         modifier =
@@ -191,8 +253,8 @@ fun ManagerScreen(
                             planet = planet,
                             baseUrl = galaxy.baseUrl,
                             isDeleting = planet.id in state.deletingIds,
-                            onPrint = { onPrintPlanet(planet) },
-                            onExportStl = { onExportPlanetStl(planet) },
+                            onPrint = { printPlanet(planet) },
+                            onExportStl = { exportStl(planet) },
                             onDeleteClick = { pendingDelete = planet },
                         )
                     }
@@ -451,3 +513,13 @@ private fun shapeLabelResource(style: String): Int =
         "spiky" -> R.string.shape_spiky
         else -> R.string.shape_classic
     }
+
+private fun stlFilename(planet: PlanetDto): String {
+    val safeName =
+        planet.name
+            .trim()
+            .replace(Regex("[^A-Za-z0-9._-]+"), "_")
+            .trim('_')
+            .ifBlank { "planet" }
+    return "${safeName}_${planet.id}.stl"
+}
