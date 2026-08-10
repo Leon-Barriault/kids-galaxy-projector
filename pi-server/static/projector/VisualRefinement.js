@@ -2,14 +2,14 @@ import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
 
-const FRONT_TARGET_WIDTH = 1.92;
-const FRONT_TARGET_HEIGHT = 1.86;
-const BACK_TARGET_WIDTH = 1.84;
-const BACK_TARGET_HEIGHT = 1.76;
-const MAX_GLOBAL_AXIS_SCALE = 1.72;
-const MAX_LOCAL_WEIGHT_SCALE = 2.45;
-const SPHERE_DISC_LIMIT = 0.985;
-const MIN_STROKE_SPAN = 0.165;
+const FRONT_TARGET_WIDTH = 1.78;
+const FRONT_TARGET_HEIGHT = 1.72;
+const BACK_TARGET_WIDTH = 1.72;
+const BACK_TARGET_HEIGHT = 1.66;
+const MAX_GLOBAL_AXIS_SCALE = 1.48;
+const MAX_LOCAL_WEIGHT_SCALE = 2.05;
+const SPHERE_DISC_LIMIT = 0.97;
+const MIN_STROKE_SPAN = 0.15;
 
 function patchMeshes(group, back) {
   return (group?.children || []).filter((child) =>
@@ -204,25 +204,33 @@ function tuneCraterMaterials(entity) {
 function detailedAstronaut() {
   const group = new THREE.Group();
   group.userData.kidsGalaxyDetailedAstronaut = true;
+  group.userData.kidsGalaxyFullVisorAstronaut = true;
 
   const suit = new THREE.MeshPhysicalMaterial({
-    color: 0xf3f6fb,
-    roughness: 0.46,
-    metalness: 0.03,
-    clearcoat: 0.16,
-    clearcoatRoughness: 0.7,
+    color: 0xf6f8fc,
+    roughness: 0.5,
+    metalness: 0.02,
+    clearcoat: 0.13,
+    clearcoatRoughness: 0.72,
   });
-  const joint = new THREE.MeshStandardMaterial({ color: 0xc8d0db, roughness: 0.58, metalness: 0.08 });
+  const joint = new THREE.MeshStandardMaterial({ color: 0xd6dde7, roughness: 0.62, metalness: 0.05 });
   const visor = new THREE.MeshPhysicalMaterial({
-    color: 0x16314f,
-    roughness: 0.12,
-    metalness: 0.42,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.1,
+    color: 0x173c63,
+    roughness: 0.08,
+    metalness: 0.28,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
   });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x303a49, roughness: 0.5, metalness: 0.18 });
-  const accent = new THREE.MeshStandardMaterial({ color: 0xe85b47, roughness: 0.48, metalness: 0.03 });
-  const panel = new THREE.MeshStandardMaterial({ color: 0x6ba9d6, roughness: 0.38, metalness: 0.12 });
+  const visorHighlight = new THREE.MeshPhysicalMaterial({
+    color: 0x8edcff,
+    roughness: 0.1,
+    metalness: 0.08,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0.08,
+  });
+  const boot = new THREE.MeshStandardMaterial({ color: 0xaab7c8, roughness: 0.62, metalness: 0.08 });
+  const accent = new THREE.MeshStandardMaterial({ color: 0x62c7ff, roughness: 0.44, metalness: 0.03 });
+  const panel = new THREE.MeshStandardMaterial({ color: 0x5b86b5, roughness: 0.42, metalness: 0.08 });
 
   const add = (geometry, material, position, scale = null) => {
     const mesh = new THREE.Mesh(geometry, material);
@@ -234,26 +242,26 @@ function detailedAstronaut() {
     return mesh;
   };
 
-  add(new THREE.SphereGeometry(0.145, 28, 22), suit, [0, 0.245, 0]);
-  add(new THREE.SphereGeometry(0.108, 28, 20, 0, Math.PI * 2, 0.18, Math.PI * 0.72), visor, [0, 0.248, 0.076], [1, 0.92, 0.62]);
-  add(new THREE.TorusGeometry(0.112, 0.012, 8, 28), joint, [0, 0.245, 0.086], [1, 0.92, 1]).rotation.x = Math.PI / 2;
+  add(new THREE.SphereGeometry(0.16, 32, 24), suit, [0, 0.245, 0]);
+  add(new THREE.SphereGeometry(0.128, 32, 24), visor, [0, 0.248, 0.086], [1.04, 0.8, 0.58]);
+  add(new THREE.BoxGeometry(0.105, 0.013, 0.012), visorHighlight, [-0.012, 0.292, 0.155]).rotation.z = -0.08;
+  add(new THREE.TorusGeometry(0.13, 0.009, 10, 32), joint, [0, 0.242, 0.091], [1.04, 0.82, 1]).rotation.x = Math.PI / 2;
 
-  add(new THREE.BoxGeometry(0.21, 0.245, 0.13), suit, [0, 0.045, 0]);
-  add(new THREE.BoxGeometry(0.16, 0.11, 0.075), joint, [0, 0.055, -0.09]);
-  add(new THREE.BoxGeometry(0.125, 0.07, 0.018), dark, [0, 0.08, 0.076]);
-  add(new THREE.BoxGeometry(0.095, 0.043, 0.02), panel, [0, 0.09, 0.088]);
-  add(new THREE.BoxGeometry(0.026, 0.02, 0.022), accent, [-0.034, 0.09, 0.101]);
-  add(new THREE.BoxGeometry(0.026, 0.02, 0.022), panel, [0.034, 0.09, 0.101]);
-  add(new THREE.BoxGeometry(0.215, 0.027, 0.145), dark, [0, -0.065, 0]);
+  add(new THREE.CapsuleGeometry(0.092, 0.135, 7, 16), suit, [0, 0.035, 0]);
+  add(new THREE.BoxGeometry(0.145, 0.11, 0.07), joint, [0, 0.04, -0.09]);
+  add(new THREE.BoxGeometry(0.112, 0.055, 0.018), panel, [0, 0.075, 0.086]);
+  add(new THREE.BoxGeometry(0.032, 0.016, 0.019), accent, [-0.032, 0.075, 0.099]);
+  add(new THREE.BoxGeometry(0.032, 0.016, 0.019), visorHighlight, [0.032, 0.075, 0.099]);
+  add(new THREE.BoxGeometry(0.185, 0.023, 0.13), boot, [0, -0.055, 0]);
 
   const makeLimb = (side) => {
-    const shoulder = add(new THREE.SphereGeometry(0.045, 14, 10), joint, [side * 0.135, 0.115, 0]);
-    const upper = add(new THREE.CapsuleGeometry(0.036, 0.115, 5, 10), suit, [side * 0.17, 0.055, 0]);
-    upper.rotation.z = side * -0.52;
-    const elbow = add(new THREE.SphereGeometry(0.038, 14, 10), joint, [side * 0.205, -0.005, 0]);
-    const forearm = add(new THREE.CapsuleGeometry(0.031, 0.1, 5, 10), suit, [side * 0.218, -0.067, 0.01]);
-    forearm.rotation.z = side * 0.18;
-    add(new THREE.SphereGeometry(0.04, 14, 10), suit, [side * 0.225, -0.132, 0.018]);
+    const shoulder = add(new THREE.SphereGeometry(0.045, 16, 12), joint, [side * 0.122, 0.105, 0]);
+    const upper = add(new THREE.CapsuleGeometry(0.034, 0.105, 6, 12), suit, [side * 0.158, 0.052, 0.008]);
+    upper.rotation.z = side * -0.4;
+    const elbow = add(new THREE.SphereGeometry(0.036, 16, 12), joint, [side * 0.187, 0.002, 0.012]);
+    const forearm = add(new THREE.CapsuleGeometry(0.03, 0.09, 6, 12), suit, [side * 0.196, -0.052, 0.02]);
+    forearm.rotation.z = side * 0.1;
+    add(new THREE.SphereGeometry(0.038, 16, 12), suit, [side * 0.2, -0.112, 0.025]);
     shoulder.userData.kidsGalaxyAstronautJoint = true;
     elbow.userData.kidsGalaxyAstronautJoint = true;
   };
@@ -261,26 +269,25 @@ function detailedAstronaut() {
   makeLimb(1);
 
   const makeLeg = (side) => {
-    const hip = add(new THREE.SphereGeometry(0.043, 14, 10), joint, [side * 0.062, -0.095, 0]);
-    const thigh = add(new THREE.CapsuleGeometry(0.038, 0.105, 5, 10), suit, [side * 0.07, -0.165, 0]);
-    thigh.rotation.z = side * 0.09;
-    add(new THREE.SphereGeometry(0.038, 14, 10), joint, [side * 0.078, -0.235, 0]);
-    const shin = add(new THREE.CapsuleGeometry(0.034, 0.095, 5, 10), suit, [side * 0.083, -0.298, 0.008]);
-    shin.rotation.z = side * -0.06;
-    const boot = add(new THREE.BoxGeometry(0.075, 0.055, 0.105), dark, [side * 0.086, -0.37, 0.025]);
-    boot.rotation.x = -0.12;
+    const hip = add(new THREE.SphereGeometry(0.042, 16, 12), joint, [side * 0.056, -0.088, 0]);
+    const thigh = add(new THREE.CapsuleGeometry(0.037, 0.095, 6, 12), suit, [side * 0.062, -0.15, 0]);
+    thigh.rotation.z = side * 0.055;
+    add(new THREE.SphereGeometry(0.035, 16, 12), joint, [side * 0.068, -0.214, 0]);
+    const shin = add(new THREE.CapsuleGeometry(0.032, 0.085, 6, 12), suit, [side * 0.073, -0.27, 0.008]);
+    shin.rotation.z = side * -0.035;
+    const foot = add(new THREE.BoxGeometry(0.07, 0.052, 0.095), boot, [side * 0.075, -0.334, 0.022]);
+    foot.rotation.x = -0.08;
     hip.userData.kidsGalaxyAstronautJoint = true;
   };
   makeLeg(-1);
   makeLeg(1);
 
-  add(new THREE.CylinderGeometry(0.007, 0.007, 0.2, 8), accent, [0.115, 0.02, -0.08]).rotation.z = 0.2;
-  group.scale.setScalar(0.88);
-  group.rotation.z = -0.08;
+  group.scale.setScalar(0.86);
+  group.rotation.z = -0.045;
   return group;
 }
 
-/** Final projector polish: stronger kid-art coverage, deeper craters, richer astronaut. */
+/** Final projector polish: balanced kid-art coverage, deeper craters, friendly astronaut. */
 export function installVisualRefinement() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyVisualRefinement) return;
 
