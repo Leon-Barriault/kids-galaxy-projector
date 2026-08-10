@@ -22,6 +22,7 @@ import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
+import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
@@ -30,9 +31,9 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
-// images. The component surface is installed last and owns all valid kid drawings:
-// dominant paint becomes the body while each secondary gesture stays a separate
-// rounded molded component rather than being unioned into one inflated patch.
+// images. The component surface owns valid kid drawings; ReferenceFinish then
+// applies the final clay proportions/edge smoothing and unresolved Saturn-band
+// treatment used by the visual acceptance comparison.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -41,6 +42,7 @@ installSaturnPlanetRings();
 installHighFidelityPlanetFeatures();
 installReferenceSurfaceTuning();
 installKidArtworkComponentSurface();
+installReferenceFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
