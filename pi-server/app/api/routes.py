@@ -19,6 +19,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse
@@ -36,6 +37,7 @@ from app.application.use_cases import (
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     GetCurrentSceneUseCase,
+    GetPlanetByIdUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
@@ -47,7 +49,7 @@ from app.domain.planet_customization import (
     DEFAULT_MOUNTAIN_COLOR,
     DEFAULT_RING_COLOR,
 )
-from app.ports import EventPublisher, PlanetRepository
+from app.ports import EventPublisher, PlanetExportRenderer, PlanetRepository
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +80,14 @@ def build_router(
     submit_planet: SubmitPlanetUseCase,
     get_current_planet: GetCurrentPlanetUseCase,
     get_current_scene: GetCurrentSceneUseCase,
+    get_planet: GetPlanetByIdUseCase,
     list_recent_planets: ListRecentPlanetsUseCase,
     delete_planet: DeletePlanetUseCase,
     clear_planets: ClearPlanetsUseCase,
     get_behavior: GetGalaxyBehaviorUseCase,
     update_behavior: UpdateGalaxyBehaviorUseCase,
     repository: PlanetRepository,
+    export_renderer: PlanetExportRenderer,
     publisher: EventPublisher,
     settings_galaxy: Galaxy,
     authorizer: AuthorizationPolicy,
@@ -131,6 +135,51 @@ def build_router(
     @router.get("/api/planets", dependencies=[Depends(projector_or_manager)])
     async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
         return list_recent_planets.execute(limit=limit)
+
+    @router.get(
+        "/api/admin/planets/{planet_id}/print.png",
+        dependencies=[Depends(manager_only)],
+    )
+    async def print_planet(planet_id: str):
+        try:
+            planet = get_planet.execute(planet_id)
+        except DomainError as e:
+            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        image_path = repository.resolve_image(planet.filename)
+        if image_path is None:
+            raise HTTPException(status_code=404, detail="Planet drawing not found")
+        content = export_renderer.render_print_sheet(planet, image_path)
+        return Response(
+            content=content,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.png"'
+            },
+        )
+
+    @router.get(
+        "/api/admin/planets/{planet_id}/model.stl",
+        dependencies=[Depends(manager_only)],
+    )
+    async def export_planet_stl(
+        planet_id: str,
+        diameter_mm: float = Query(default=80.0, ge=40.0, le=200.0),
+    ):
+        try:
+            planet = get_planet.execute(planet_id)
+        except DomainError as e:
+            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        image_path = repository.resolve_image(planet.filename)
+        if image_path is None:
+            raise HTTPException(status_code=404, detail="Planet drawing not found")
+        content = export_renderer.export_stl(planet, image_path, diameter_mm)
+        return Response(
+            content=content,
+            media_type="application/sla",
+            headers={
+                "Content-Disposition": f'attachment; filename="{planet.id}_planet.stl"'
+            },
+        )
 
     @router.post("/api/upload", dependencies=[Depends(kid_only)])
     async def upload_planet(
