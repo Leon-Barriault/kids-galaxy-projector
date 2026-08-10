@@ -2,8 +2,10 @@ import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
 
-const INNER_TOP_RISE = 0.007;
-const PLATEAU_RISE = 0.010;
+const SHOULDER_RELIEF_SCALE = 0.78;
+const TOP_RELIEF_SCALE = 0.82;
+const INNER_TOP_RISE = 0.0035;
+const PLATEAU_RISE = 0.0055;
 
 function averageRadius(position, start, count) {
   let total = 0;
@@ -30,7 +32,7 @@ function averageColour(colours, start, count) {
   return result.multiplyScalar(1 / Math.max(1, samples));
 }
 
-function smoothDirections(directions, passes = 3) {
+function smoothDirections(directions, passes = 4) {
   let current = directions.map((direction) => direction.clone().normalize());
   for (let pass = 0; pass < passes; pass += 1) {
     const next = current.map((direction, index) => {
@@ -38,9 +40,9 @@ function smoothDirections(directions, passes = 3) {
       const following = current[(index + 1) % current.length];
       return previous
         .clone()
-        .multiplyScalar(0.22)
-        .add(direction.clone().multiplyScalar(0.56))
-        .add(following.clone().multiplyScalar(0.22))
+        .multiplyScalar(0.24)
+        .add(direction.clone().multiplyScalar(0.52))
+        .add(following.clone().multiplyScalar(0.24))
         .normalize();
     });
     current = next;
@@ -117,6 +119,21 @@ function appendOutwardTriangle(indices, positions, a, b, c) {
   else indices.push(a, c, b);
 }
 
+function applyRadialNormals(geometry) {
+  const position = geometry.getAttribute('position');
+  if (!position) return;
+  const normals = new Float32Array(position.count * 3);
+  const normal = new THREE.Vector3();
+  for (let index = 0; index < position.count; index += 1) {
+    normal.fromBufferAttribute(position, index).normalize();
+    normals[index * 3] = normal.x;
+    normals[index * 3 + 1] = normal.y;
+    normals[index * 3 + 2] = normal.z;
+  }
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.attributes.normal.needsUpdate = true;
+}
+
 function rebuildRoundedSlab(sourceGeometry) {
   const position = sourceGeometry.getAttribute('position');
   const colours = sourceGeometry.getAttribute('color');
@@ -127,42 +144,45 @@ function rebuildRoundedSlab(sourceGeometry) {
   const shoulderStart = ringSize;
   const topStart = ringSize * 2;
   const outerRadius = averageRadius(position, outerStart, ringSize);
-  const shoulderRadius = averageRadius(position, shoulderStart, ringSize);
-  const topRadius = averageRadius(position, topStart, ringSize);
+  const sourceShoulderRadius = averageRadius(position, shoulderStart, ringSize);
+  const sourceTopRadius = averageRadius(position, topStart, ringSize);
+  const shoulderRadius = outerRadius +
+    (sourceShoulderRadius - outerRadius) * SHOULDER_RELIEF_SCALE;
+  const topRadius = outerRadius + (sourceTopRadius - outerRadius) * TOP_RELIEF_SCALE;
   const topColour = averageColour(colours, topStart, ringSize);
 
   const outerDirections = sourceDirections(position, outerStart, ringSize);
   const shoulderDirections = sourceDirections(position, shoulderStart, ringSize);
   const topDirections = sourceDirections(position, topStart, ringSize);
   const centre = centreDirection(topDirections);
-  const innerDirections = blendRing(topDirections, centre, 0.18);
-  const plateauDirections = blendRing(topDirections, centre, 0.43);
+  const innerDirections = blendRing(topDirections, centre, 0.13);
+  const plateauDirections = blendRing(topDirections, centre, 0.3);
 
   const ringDefinitions = [
     {
       directions: outerDirections,
       radius: outerRadius,
-      colour: topColour.clone().offsetHSL(0, -0.003, -0.028),
+      colour: topColour.clone().offsetHSL(0, -0.002, -0.022),
     },
     {
       directions: shoulderDirections,
       radius: shoulderRadius,
-      colour: topColour.clone().offsetHSL(0, 0, -0.011),
+      colour: topColour.clone().offsetHSL(0, 0, -0.008),
     },
     {
       directions: topDirections,
       radius: topRadius,
-      colour: topColour.clone().offsetHSL(0, 0.006, 0.008),
+      colour: topColour.clone().offsetHSL(0, 0.005, 0.007),
     },
     {
       directions: innerDirections,
       radius: topRadius + INNER_TOP_RISE,
-      colour: topColour.clone().offsetHSL(0, 0.007, 0.014),
+      colour: topColour.clone().offsetHSL(0, 0.006, 0.011),
     },
     {
       directions: plateauDirections,
       radius: topRadius + PLATEAU_RISE,
-      colour: topColour.clone().offsetHSL(0, 0.006, 0.016),
+      colour: topColour.clone().offsetHSL(0, 0.005, 0.012),
     },
   ];
 
@@ -200,7 +220,7 @@ function rebuildRoundedSlab(sourceGeometry) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColours, 3));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
+  applyRadialNormals(geometry);
   geometry.computeBoundingSphere();
   geometry.userData = {
     ...sourceGeometry.userData,
@@ -209,6 +229,7 @@ function rebuildRoundedSlab(sourceGeometry) {
     kidsGalaxyRoundedSlab: true,
     kidsGalaxyBroadPlateau: true,
     kidsGalaxyContourSmoothed: true,
+    kidsGalaxyRadialSlabNormals: true,
     kidsGalaxyRoundedSlabRingCount: ringDefinitions.length,
     kidsGalaxyPatchVertexCount: positions.length / 3,
     kidsGalaxyPatchRelief: topRadius + PLATEAU_RISE - outerRadius,
@@ -220,10 +241,10 @@ function tuneMaterial(material) {
   if (!material?.isMeshPhysicalMaterial) return;
   material.side = THREE.FrontSide;
   material.shadowSide = THREE.FrontSide;
-  material.roughness = 0.44;
+  material.roughness = 0.41;
   material.metalness = 0.001;
-  material.clearcoat = 0.07;
-  material.clearcoatRoughness = 0.63;
+  material.clearcoat = 0.085;
+  material.clearcoatRoughness = 0.59;
   material.flatShading = false;
   material.dithering = true;
   material.polygonOffset = false;
@@ -249,15 +270,16 @@ function roundSculptedPieces(entity) {
   if (!converted) return false;
   group.userData.kidsGalaxyRoundedSlabFinish = true;
   group.userData.kidsGalaxyRoundedSlabCount = converted;
+  group.userData.kidsGalaxyRadialSlabNormals = true;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabFinish = true;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabCount = converted;
   return true;
 }
 
 /**
- * Convert the broad three-ring kid patches into five-ring rounded slabs. The
- * centre remains a large plateau; only the perimeter rolls upward gently, which
- * matches the molded clay/plastic references without producing bubble domes.
+ * Convert the broad three-ring kid patches into low-profile five-ring slabs.
+ * The center stays broad and nearly flat while the perimeter rolls smoothly
+ * into a same-hue shoulder, matching the molded clay/plastic reference language.
  */
 export function installSculptedArtworkRoundedSlab() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyRoundedSlab) return;
