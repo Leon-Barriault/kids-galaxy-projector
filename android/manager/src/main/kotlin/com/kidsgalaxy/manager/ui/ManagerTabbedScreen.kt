@@ -18,6 +18,7 @@ import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
 import com.kidsgalaxy.manager.ManagerUiState
 import com.kidsgalaxy.manager.R
+import com.kidsgalaxy.manager.data.PlanetDto
 
 private val TabsBackground = Color(0xFF0A0E2A)
 
@@ -31,6 +32,8 @@ fun ManagerTabbedScreen(
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
+    onPrintPlanet: (PlanetDto) -> Unit,
+    onExportPlanetStl: (PlanetDto) -> Unit,
     onClearAll: () -> Unit,
     onClearError: () -> Unit,
     onAsteroidBeltChange: (Boolean) -> Unit,
@@ -74,6 +77,8 @@ fun ManagerTabbedScreen(
                 onConfigureGalaxy = onConfigureGalaxy,
                 onRefresh = onRefresh,
                 onDelete = onDelete,
+                onPrintPlanet = onPrintPlanet,
+                onExportPlanetStl = onExportPlanetStl,
                 onClearAll = onClearAll,
                 onClearError = onClearError,
             )
