@@ -43,6 +43,8 @@
     <string name="name_your_planet">Name your planet</string>
     <string name="name_placeholder">e.g. Sparkle World</string>
     <string name="pick_a_color">Pick a color</string>
+    <string name="fill_background">🪣 Fill planet background</string>
+    <string name="fill_background_hint">Uses the selected color as the planet’s main color. Existing strokes stay on top.</string>
     <string name="brush_size">Brush size</string>
     <string name="brush_small">Small</string>
     <string name="brush_medium">Medium</string>
