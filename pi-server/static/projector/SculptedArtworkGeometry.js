@@ -37,6 +37,7 @@ const PALETTE = [
   [0x00, 0x00, 0x00],
   [0xff, 0xff, 0xff],
 ];
+const LEGACY_PALETTE_SIZE = 8;
 
 function makeCanvas(width, height) {
   const result = document.createElement('canvas');
@@ -72,18 +73,20 @@ function whiteDistance(r, g, b) {
   return rgbDistance([r, g, b], [255, 255, 255]) / 441.673;
 }
 
-function paletteIndex(r, g, b) {
+function paletteIndex(r, g, b, allowWhite = false) {
   let nearest = 0;
   let best = Number.POSITIVE_INFINITY;
-  PALETTE.forEach((rgb, index) => {
+  const size = allowWhite ? PALETTE.length : LEGACY_PALETTE_SIZE;
+  for (let index = 0; index < size; index += 1) {
+    const rgb = PALETTE[index];
     const dr = r - rgb[0];
     const dg = g - rgb[1];
     const db = b - rgb[2];
     const distance = dr * dr + dg * dg + db * db;
-    if (distance >= best) return;
+    if (distance >= best) continue;
     best = distance;
     nearest = index;
-  });
+  }
   return nearest;
 }
 
@@ -143,9 +146,11 @@ function paintedBounds(disc, explicitBodyRgb = null) {
   let maxY = -1;
   for (let y = 0; y < disc.height; y += 1) {
     for (let x = 0; x < disc.width; x += 1) {
-      const nx = ((x + 0.5) / disc.width - 0.5) * 2;
-      const ny = ((y + 0.5) / disc.height - 0.5) * 2;
-      if (nx * nx + ny * ny > 0.965 * 0.965) continue;
+      if (explicitBodyRgb) {
+        const nx = ((x + 0.5) / disc.width - 0.5) * 2;
+        const ny = ((y + 0.5) / disc.height - 0.5) * 2;
+        if (nx * nx + ny * ny > 0.965 * 0.965) continue;
+      }
       const pixel = (y * disc.width + x) * 4;
       if (!isAuthoredPixel(
         pixels[pixel],
@@ -316,7 +321,7 @@ function analyse(texture, explicitBodyColor = null) {
       const g = pixels[pixel + 1];
       const b = pixels[pixel + 2];
       if (!isAuthoredPixel(r, g, b, explicitBodyRgb)) continue;
-      const colour = paletteIndex(r, g, b);
+      const colour = paletteIndex(r, g, b, Boolean(explicitBodyRgb));
       if (
         explicitBodyRgb &&
         rgbDistance(PALETTE[colour], explicitBodyRgb) <= BODY_MATCH_DISTANCE
