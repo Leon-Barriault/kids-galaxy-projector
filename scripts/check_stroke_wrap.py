@@ -56,7 +56,7 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swshader"]
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
         )
         page = browser.new_page(viewport={"width": 1000, "height": 1000})
         errors: list[str] = []
