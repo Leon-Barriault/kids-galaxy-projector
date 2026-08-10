@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 
+import { installArtworkCoverageProjection } from './projector/ArtworkCoverageProjection.js';
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
@@ -39,9 +40,10 @@ const GALLERY_SIZE = 12;
 // Valid kid drawings preserve their authored colour/shape language. The dominant
 // paint owns the clean planet body; deliberate partial strokes in that same hue
 // become lower-profile molded ribbons instead of disappearing into the body.
-// Secondary colours remain broader raised pieces. Ringed planets keep the
-// accepted Saturn particle composition while the tablet-selected ring colour is
-// preserved as the dominant hue across ice, dust and rock variants.
+// The extracted traits are then stretched as one composition across the sphere
+// so the result reads as the child's planet-wide design rather than a small
+// central patch. Ringed planets keep the accepted Saturn particle composition
+// while the tablet-selected ring colour remains the dominant ring hue.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -54,6 +56,7 @@ installReferenceFinish();
 installRingColorFidelity();
 installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
+installArtworkCoverageProjection();
 installSculptedGeometryFinish();
 installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
