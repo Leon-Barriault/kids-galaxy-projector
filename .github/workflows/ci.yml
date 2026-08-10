@@ -107,7 +107,10 @@ jobs:
       - name: Projector must not depend on the public internet
         run: |
           # The field deployment is an offline Pi hotspot: no CDNs, no web fonts.
-          if grep -rnE "https?://" pi-server/static/index.html pi-server/static/galaxy.js; then
+          if grep -rnE "https?://" \
+              pi-server/static/index.html \
+              pi-server/static/galaxy.js \
+              pi-server/static/projector/; then
             echo "::error::static/ must not reference remote resources (offline deployment)."
             exit 1
           fi
@@ -196,15 +199,16 @@ jobs:
           chmod +x generate_certs.sh
           SERVER_IP=10.42.0.1 ./generate_certs.sh
 
-          # The chain must validate...
+          # The server and both role-specific client identities must validate.
           openssl verify -CAfile ca.crt server.crt
           openssl verify -CAfile ca.crt client.crt
+          openssl verify -CAfile ca.crt manager.crt
 
-          # ...and the server certificate must carry an IP SAN, because the
-          # tablet connects by address and Android ignores the Common Name.
+          # The server certificate must carry an IP SAN, because the tablet
+          # connects by address and Android ignores the Common Name.
           openssl x509 -in server.crt -noout -ext subjectAltName \
             | grep -q "IP Address:10.42.0.1"
-          echo "Certificate chain and SANs verified."
+          echo "Server, kid, and manager certificate chains and SANs verified."
 
   android:
     name: Android build + unit tests
