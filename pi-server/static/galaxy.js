@@ -14,6 +14,7 @@ import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
+import { installKidArtworkComponentSurface } from './projector/KidArtworkComponentSurface.js';
 import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMask.js';
 import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
 import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
@@ -28,10 +29,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Install artwork/ring implementations first so later high-fidelity/theme
-// wrappers retain them when adding shadows and seasonal behavior. The faithful
-// mask remains a fallback; the motif projection is the active interpretation
-// that keeps the child's visible composition recognizable on the planet front.
+// Older artwork interpreters remain installed as fallbacks for malformed legacy
+// images. The component surface is installed last and owns all valid kid drawings:
+// dominant paint becomes the body while each secondary gesture stays a separate
+// rounded molded component rather than being unioned into one inflated patch.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -39,6 +40,7 @@ installKidArtworkPresentationFix();
 installSaturnPlanetRings();
 installHighFidelityPlanetFeatures();
 installReferenceSurfaceTuning();
+installKidArtworkComponentSurface();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
