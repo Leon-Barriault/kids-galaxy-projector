@@ -13,10 +13,7 @@ import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
-import { installExplicitBodyArtwork } from './projector/ExplicitBodyArtwork.js';
 import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
-import { installExplicitBodyDominanceGuard } from './projector/ExplicitBodyDominanceGuard.js';
-import { installExplicitBodySentinelCleanup } from './projector/ExplicitBodySentinelCleanup.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -42,10 +39,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 const GALLERY_SIZE = 12;
 
 // Kid drawings keep their authored shapes/colours as molded planet-wide traits.
-// New tablets explicitly send the bucket/background colour as the planet body,
-// so their final artwork path extracts every trait relative to that colour
-// instead of guessing a dominant paint colour. Older stored planets without
-// body_color remain on the legacy inference path.
+// New tablets explicitly send the bucket/background colour as the planet body.
+// SculptedArtworkGeometry reads that colour directly: matching pixels are the
+// body and every other kid-selected colour is artwork, regardless of area.
+// Older stored planets without body_color remain on the legacy inference path.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -64,15 +61,8 @@ installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
-// The guard must sit immediately inside the explicit artwork wrapper: the
-// wrapper creates the temporary body-analysis texture, and the guard guarantees
-// its internal background wins the legacy dominant-colour vote before the
-// established rounded-slab sculptor receives it. Cleanup then removes any
-// analysis-only mesh, and the final wrapper locks the tablet bucket colour onto
-// the clean planet body.
-installExplicitBodyDominanceGuard();
-installExplicitBodyArtwork();
-installExplicitBodySentinelCleanup();
+// Outermost only for the final body material. No colour inference happens here:
+// the core sculptor has already separated body pixels from authored traits.
 installExplicitBodyColor();
 
 const container = document.getElementById('canvas-container');
