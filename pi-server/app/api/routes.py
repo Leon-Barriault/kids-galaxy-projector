@@ -136,10 +136,9 @@ def build_router(
     async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
         return list_recent_planets.execute(limit=limit)
 
-    @router.get(
-        "/api/admin/planets/{planet_id}/print.png",
-        dependencies=[Depends(manager_only)],
-    )
+    # These export routes are deliberately not role-gated. The kid and manager
+    # tablets are separate applications; only the manager APK exposes export UI.
+    @router.get("/api/admin/planets/{planet_id}/print.png")
     async def print_planet(planet_id: str):
         try:
             planet = get_planet.execute(planet_id)
@@ -157,10 +156,7 @@ def build_router(
             },
         )
 
-    @router.get(
-        "/api/admin/planets/{planet_id}/model.stl",
-        dependencies=[Depends(manager_only)],
-    )
+    @router.get("/api/admin/planets/{planet_id}/model.stl")
     async def export_planet_stl(
         planet_id: str,
         diameter_mm: float = Query(default=80.0, ge=40.0, le=200.0),
