@@ -1,6 +1,7 @@
 package com.kidsgalaxy.manager.data
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -57,6 +58,17 @@ interface ManagerApi {
     suspend fun listPlanets(
         @Query("limit") limit: Int = 30,
     ): Response<PlanetListResponse>
+
+    @GET("api/admin/planets/{id}/print.png")
+    suspend fun printSheet(
+        @Path("id") id: String,
+    ): Response<ResponseBody>
+
+    @GET("api/admin/planets/{id}/model.stl")
+    suspend fun exportStl(
+        @Path("id") id: String,
+        @Query("diameter_mm") diameterMm: Double = 80.0,
+    ): Response<ResponseBody>
 
     @DELETE("api/planets/{id}")
     suspend fun deletePlanet(
