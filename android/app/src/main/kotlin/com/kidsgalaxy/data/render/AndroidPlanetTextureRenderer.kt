@@ -40,16 +40,20 @@ class AndroidPlanetTextureRenderer(
     }
 
     /**
-     * Render a square white canvas containing only the child's strokes clipped
-     * to the circular planet guide. Ring/crater/mountain preview guides are UI
-     * affordances and are intentionally not baked into the uploaded artwork.
+     * Render a square canvas using the planet-body colour, then draw only the
+     * child's strokes clipped to the circular planet guide. Ring/crater/mountain
+     * preview guides are UI affordances and are intentionally not baked into
+     * the uploaded artwork.
      */
     private fun drawDisc(
         bitmap: Bitmap,
         drawing: Drawing,
     ) {
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.WHITE)
+        // Match the pixels outside the circular guide to the selected body colour.
+        // A white backing canvas can bleed through the anti-aliased clip edge and
+        // otherwise look like an authored white ring to the projector.
+        canvas.drawColor(drawing.backgroundColorArgb)
 
         val projection =
             TextureProjection(
