@@ -111,7 +111,8 @@ fun PlanetExportScreen(
                                                 colorMode = PrintHelper.COLOR_MODE_COLOR
                                             }.printBitmap("${planet.name} - Kids Galaxy", bitmap)
                                     }
-                                }.onFailure {
+                                }
+                                .onFailure {
                                     Toast.makeText(
                                         context,
                                         R.string.export_failed,
@@ -126,7 +127,8 @@ fun PlanetExportScreen(
                                 .onSuccess { bytes ->
                                     pendingStl = planet to bytes
                                     stlLauncher.launch(stlFilename(planet))
-                                }.onFailure {
+                                }
+                                .onFailure {
                                     Toast.makeText(
                                         context,
                                         R.string.export_failed,
