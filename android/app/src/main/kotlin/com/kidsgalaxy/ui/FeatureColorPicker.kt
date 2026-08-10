@@ -100,8 +100,7 @@ internal fun FeatureColorPicker(
                                         MaterialTheme.colorScheme.outline
                                     },
                                 shape = CircleShape,
-                            )
-                            .semantics {
+                            ).semantics {
                                 contentDescription = colorDescription
                             }.selectable(
                                 selected = selected,
