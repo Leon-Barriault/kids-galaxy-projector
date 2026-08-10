@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="tab_export">Export</string>
+    <string name="export_title">Print and 3D export</string>
+    <string name="export_hint">Print a kid planet or save an 80 mm STL for a 3D printer.</string>
+    <string name="print_planet">Print</string>
+    <string name="download_stl">STL</string>
     <string name="print_named">Print %1$s</string>
     <string name="export_stl_named">Export %1$s as an 80 mm STL</string>
     <string name="export_failed">Could not export this planet. Check the galaxy connection and try again.</string>
