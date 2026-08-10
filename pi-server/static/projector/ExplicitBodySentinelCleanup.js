@@ -13,6 +13,8 @@ const ANALYSIS_PALETTE = [
   '#000000',
 ].map((hex) => new THREE.Color(hex));
 
+const SENTINEL_DISTANCE_MARGIN = 0.018;
+
 function averageVertexColour(mesh) {
   const attribute = mesh.geometry?.getAttribute?.('color');
   if (!attribute?.count) return null;
@@ -28,29 +30,29 @@ function averageVertexColour(mesh) {
   return average.multiplyScalar(1 / Math.max(1, samples));
 }
 
-function nearestPaletteIndex(colour) {
-  let nearest = 0;
-  let best = Number.POSITIVE_INFINITY;
-  ANALYSIS_PALETTE.forEach((candidate, index) => {
-    const dr = colour.r - candidate.r;
-    const dg = colour.g - candidate.g;
-    const db = colour.b - candidate.b;
-    const distance = dr * dr + dg * dg + db * db;
-    if (distance < best) {
-      best = distance;
-      nearest = index;
-    }
-  });
-  return nearest;
+function colourDistanceSquared(a, b) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
 }
 
-function sentinelPaletteIndex(hex) {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex || '')) return -1;
-  const sentinel = new THREE.Color(hex);
-  return nearestPaletteIndex(sentinel);
+function isClearlySentinel(colour, sentinelIndex, usedIndexes) {
+  const sentinel = ANALYSIS_PALETTE[sentinelIndex];
+  if (!sentinel) return false;
+  const sentinelDistance = colourDistanceSquared(colour, sentinel);
+  const childIndexes = usedIndexes.filter(
+    (index) => index >= 0 && index < ANALYSIS_PALETTE.length && index !== sentinelIndex,
+  );
+  if (!childIndexes.length) return true;
+
+  const closestChildDistance = Math.min(
+    ...childIndexes.map((index) => colourDistanceSquared(colour, ANALYSIS_PALETTE[index])),
+  );
+  return sentinelDistance + SENTINEL_DISTANCE_MARGIN < closestChildDistance;
 }
 
-function disposeMesh(mesh) {
+function releaseMesh(mesh) {
   mesh.parent?.remove(mesh);
   mesh.geometry?.dispose?.();
   if (Array.isArray(mesh.material)) mesh.material.forEach((material) => material?.dispose?.());
@@ -62,15 +64,18 @@ function cleanSentinelGeometry(entity) {
   const data = entity.mesh?.material?.userData;
   if (!group?.userData?.kidsGalaxyExplicitBodyArtwork || !data) return;
 
-  const sentinelIndex = sentinelPaletteIndex(data.kidsGalaxyExplicitBodySentinel);
-  if (sentinelIndex < 0) return;
+  const sentinelIndex = Number(data.kidsGalaxyExplicitBodySentinelIndex);
+  if (!Number.isInteger(sentinelIndex) || !ANALYSIS_PALETTE[sentinelIndex]) return;
+  const usedIndexes = Array.isArray(data.kidsGalaxyExplicitBodyUsedPaletteIndexes)
+    ? data.kidsGalaxyExplicitBodyUsedPaletteIndexes.map(Number).filter(Number.isInteger)
+    : [];
 
   let removed = 0;
   [...group.children].forEach((child) => {
     if (!child.isMesh || !child.userData?.kidsGalaxyExplicitBodyPatch) return;
     const average = averageVertexColour(child);
-    if (!average || nearestPaletteIndex(average) !== sentinelIndex) return;
-    disposeMesh(child);
+    if (!average || !isClearlySentinel(average, sentinelIndex, usedIndexes)) return;
+    releaseMesh(child);
     removed += 1;
   });
 
