@@ -15,6 +15,7 @@ import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
 import { installExplicitBodyArtwork } from './projector/ExplicitBodyArtwork.js';
 import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
+import { installExplicitBodyDominanceGuard } from './projector/ExplicitBodyDominanceGuard.js';
 import { installExplicitBodySentinelCleanup } from './projector/ExplicitBodySentinelCleanup.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
@@ -63,10 +64,13 @@ installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
-// These wrappers are intentionally outermost. First preprocess new-tablet
-// artwork relative to the explicit bucket colour and let the established
-// sculptor build it. Then remove the internal analysis-only sentinel mesh and
-// finally lock the selected bucket colour onto the clean planet body.
+// The guard must sit immediately inside the explicit artwork wrapper: the
+// wrapper creates the temporary body-analysis texture, and the guard guarantees
+// its internal background wins the legacy dominant-colour vote before the
+// established rounded-slab sculptor receives it. Cleanup then removes any
+// analysis-only mesh, and the final wrapper locks the tablet bucket colour onto
+// the clean planet body.
+installExplicitBodyDominanceGuard();
 installExplicitBodyArtwork();
 installExplicitBodySentinelCleanup();
 installExplicitBodyColor();
