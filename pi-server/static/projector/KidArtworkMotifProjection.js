@@ -126,11 +126,9 @@ function analyse(disc) {
   const pixels = context.getImageData(0, 0, DISC_SIZE, DISC_SIZE).data;
   const counts = new Array(PALETTE.length).fill(0);
 
-  // The tablet has already clipped real drawings to its circular planet guide.
-  // Count every non-white pixel in the uploaded square instead of imposing a
-  // second radial crop here. A second crop under-counted broad strokes near the
-  // guide edge and could make this layer disagree with the base-body palette,
-  // causing the body colour itself to be raised as a giant accent belt.
+  // The tablet already clips real drawings to its circular planet guide. Count
+  // every non-white pixel here so the base body and motif layer make the same
+  // palette decision even for broad strokes close to the guide edge.
   for (let y = 0; y < DISC_SIZE; y += 1) {
     for (let x = 0; x < DISC_SIZE; x += 1) {
       const index = (y * DISC_SIZE + x) * 4;
@@ -183,7 +181,10 @@ function wrapSigned(value) {
 function sampleMotif(analysis, u, v, backAngle) {
   const frontU = wrapSigned(u - 0.5);
   const frontV = 0.5 - v;
-  if (Math.abs(frontU) <= FRONT_HALF_LONGITUDE && Math.abs(frontV) <= FRONT_HALF_LATITUDE) {
+  if (
+    Math.abs(frontU) <= FRONT_HALF_LONGITUDE &&
+    Math.abs(frontV) <= FRONT_HALF_LATITUDE
+  ) {
     return sample(
       analysis,
       frontU / FRONT_HALF_LONGITUDE,
@@ -193,7 +194,10 @@ function sampleMotif(analysis, u, v, backAngle) {
 
   const backU = wrapSigned(u);
   const backV = 0.5 - v;
-  if (Math.abs(backU) > BACK_HALF_LONGITUDE || Math.abs(backV) > BACK_HALF_LATITUDE) {
+  if (
+    Math.abs(backU) > BACK_HALF_LONGITUDE ||
+    Math.abs(backV) > BACK_HALF_LATITUDE
+  ) {
     return null;
   }
   const x = -backU / BACK_HALF_LONGITUDE;
@@ -239,6 +243,8 @@ function buildMotifMaps(entity, analysis) {
         mask.data[index + 1] = 0;
         mask.data[index + 2] = 0;
         mask.data[index + 3] = 255;
+        // A dark backing is never visible through the alpha silhouette but
+        // prevents texture filtering from introducing a pale fringe.
         top.data[index] = 12;
         top.data[index + 1] = 18;
         top.data[index + 2] = 24;
@@ -250,8 +256,15 @@ function buildMotifMaps(entity, analysis) {
         continue;
       }
       accentPixels += 1;
-      const topRgb = toned(sampled, analysis.selfAccent ? 1.08 : 1.02, analysis.selfAccent ? 10 : 3);
-      const edgeRgb = toned(sampled, analysis.selfAccent ? 0.72 : 0.68, 0);
+      const topRgb = toned(
+        sampled,
+        analysis.selfAccent ? 1.08 : 1.035,
+        analysis.selfAccent ? 10 : 4,
+      );
+      // Reference planets use a darker sidewall of the *same* feature hue,
+      // not a black outline. Keep the shoulder close enough to the top colour
+      // that lighting/geometry supplies the depth cue naturally.
+      const edgeRgb = toned(sampled, analysis.selfAccent ? 0.9 : 0.84, 0);
       mask.data[index] = 255;
       mask.data[index + 1] = 255;
       mask.data[index + 2] = 255;
@@ -315,52 +328,76 @@ function applyMotifProjection(entity, sourceTexture) {
   if (!maps?.accentPixels) return false;
 
   const renderer = entity.scene.renderer;
-  const mask = textureFrom(blurred(maps.maskCanvas, 1.15), THREE.NoColorSpace, renderer);
-  const relief = textureFrom(blurred(maps.maskCanvas, 3.2), THREE.NoColorSpace, renderer);
-  const topColour = textureFrom(maps.topCanvas, THREE.SRGBColorSpace, renderer);
-  const edgeColour = textureFrom(maps.edgeCanvas, THREE.SRGBColorSpace, renderer);
+  const mask = textureFrom(
+    blurred(maps.maskCanvas, 2.0),
+    THREE.NoColorSpace,
+    renderer,
+  );
+  const relief = textureFrom(
+    blurred(maps.maskCanvas, 4.6),
+    THREE.NoColorSpace,
+    renderer,
+  );
+  const topColour = textureFrom(
+    maps.topCanvas,
+    THREE.SRGBColorSpace,
+    renderer,
+  );
+  const edgeColour = textureFrom(
+    maps.edgeCanvas,
+    THREE.SRGBColorSpace,
+    renderer,
+  );
   disposeTextures([entity.accentEdgeMesh.material, entity.accentMesh.material]);
 
   const edge = entity.accentEdgeMesh.material;
   edge.map = edgeColour;
   edge.alphaMap = mask;
   edge.bumpMap = relief;
-  edge.bumpScale = 0.024;
-  edge.alphaTest = 0.18;
+  edge.bumpScale = 0.018;
+  edge.alphaTest = 0.055;
+  edge.alphaToCoverage = true;
   edge.color.setHex(0xffffff);
-  edge.roughness = 0.42;
-  edge.clearcoat = 0.08;
-  edge.clearcoatRoughness = 0.56;
+  edge.roughness = 0.38;
+  edge.clearcoat = 0.09;
+  edge.clearcoatRoughness = 0.52;
   edge.userData.kidsGalaxyFaithfulKidDrawing = true;
   edge.userData.kidsGalaxyKidMotifProjection = true;
+  edge.userData.kidsGalaxySoftMoldedShoulder = true;
   edge.needsUpdate = true;
 
   const top = entity.accentMesh.material;
   top.map = topColour;
   top.alphaMap = mask;
   top.bumpMap = relief;
-  top.bumpScale = 0.032;
+  top.bumpScale = 0.044;
   top.displacementMap = relief;
-  top.displacementScale = 0.014;
-  top.displacementBias = -0.001;
-  top.alphaTest = 0.18;
+  top.displacementScale = 0.023;
+  top.displacementBias = -0.002;
+  top.alphaTest = 0.055;
+  top.alphaToCoverage = true;
   top.color.setHex(0xffffff);
-  top.roughness = 0.31;
-  top.clearcoat = 0.13;
-  top.clearcoatRoughness = 0.4;
+  top.roughness = 0.29;
+  top.clearcoat = 0.16;
+  top.clearcoatRoughness = 0.36;
   top.userData.kidsGalaxyFaithfulKidDrawing = true;
   top.userData.kidsGalaxyPreservesKidGesture = true;
   top.userData.kidsGalaxyKidMotifProjection = true;
+  top.userData.kidsGalaxySoftRoundedTop = true;
   top.needsUpdate = true;
 
   entity.accentEdgeMesh.visible = true;
   entity.accentMesh.visible = true;
+  const finalCoverage = maps.accentPixels / (MAP_WIDTH * MAP_HEIGHT);
   entity.mesh.material.userData.kidsGalaxyFaithfulKidDrawing = true;
   entity.mesh.material.userData.kidsGalaxyKidMotifProjection = true;
-  entity.mesh.material.userData.kidsGalaxyKidDesignMapping = 'front-motif-and-smaller-back-echo';
+  entity.mesh.material.userData.kidsGalaxyKidDesignMapping =
+    'front-motif-and-smaller-back-echo';
   entity.mesh.material.userData.kidsGalaxyFaithfulAccentPixels = maps.accentPixels;
   entity.mesh.material.userData.kidsGalaxyMotifDominantPalette = analysis.dominant;
   entity.mesh.material.userData.kidsGalaxyMotifAccentPalettes = [...analysis.accents];
+  entity.mesh.material.userData.accentCoverage = finalCoverage;
+  entity.mesh.material.userData.kidsGalaxyFinalMotifCoverage = finalCoverage;
   return true;
 }
 
