@@ -1,5 +1,6 @@
 package com.kidsgalaxy.manager.ui
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -66,9 +67,8 @@ fun PlanetExportScreen(
                     context.contentResolver.openOutputStream(uri)?.use { output ->
                         output.write(pending.second)
                     } ?: error("Could not open export document")
-                }.onFailure {
-                    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
                 }
+                    .onFailure { showExportError(context) }
             }
             pendingStl = null
         }
@@ -105,7 +105,8 @@ fun PlanetExportScreen(
                                             .apply {
                                                 scaleMode = PrintHelper.SCALE_MODE_FIT
                                                 colorMode = PrintHelper.COLOR_MODE_COLOR
-                                            }.printBitmap("${planet.name} - Kids Galaxy", bitmap)
+                                            }
+                                            .printBitmap("${planet.name} - Kids Galaxy", bitmap)
                                     }
                                 }
                                 .onFailure { showExportError(context) }
@@ -164,7 +165,7 @@ private fun ExportPlanetRow(
     }
 }
 
-private fun showExportError(context: android.content.Context) {
+private fun showExportError(context: Context) {
     Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
 }
 
