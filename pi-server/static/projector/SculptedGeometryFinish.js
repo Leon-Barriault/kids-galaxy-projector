@@ -23,9 +23,6 @@ function softenPatchColours(geometry) {
   const position = geometry.getAttribute('position');
   if (!colors || !position || position.count < 9) return;
 
-  // SculptedArtworkGeometry creates three equal contour rings: lower edge,
-  // shoulder and top. Recover the child colour from the top ring and keep the
-  // sidewall visibly darker without the near-black outline of the first pass.
   const ringSize = Math.floor(position.count / 3);
   if (ringSize < 3) return;
   const base = new THREE.Color();
@@ -38,9 +35,11 @@ function softenPatchColours(geometry) {
   }
   base.multiplyScalar(1 / sampleCount);
 
-  const lower = base.clone().offsetHSL(0, -0.006, -0.075);
-  const shoulder = base.clone().offsetHSL(0, -0.002, -0.032);
-  const top = base.clone().offsetHSL(0, 0.008, 0.008);
+  // The reference has a same-hue shoulder, not an outline. Keep only enough
+  // tonal falloff to reveal thickness when the light grazes the molded piece.
+  const lower = base.clone().offsetHSL(0, -0.004, -0.038);
+  const shoulder = base.clone().offsetHSL(0, -0.001, -0.016);
+  const top = base.clone().offsetHSL(0, 0.008, 0.012);
   const tones = [lower, shoulder, top];
   tones.forEach((tone, ring) => {
     const start = ring * ringSize;
@@ -51,6 +50,7 @@ function softenPatchColours(geometry) {
   });
   colors.needsUpdate = true;
   geometry.userData.kidsGalaxySoftSameHueBevel = true;
+  geometry.userData.kidsGalaxyNoDarkOutline = true;
 }
 
 function finishSculptedGroup(entity) {
@@ -69,27 +69,33 @@ function finishSculptedGroup(entity) {
     smoothPatchNormals(child.geometry);
     softenPatchColours(child.geometry);
 
-    // Concave child contours can invert some triangulated winding after being
-    // curved over a sphere. Double-side keeps those pieces complete while the
-    // explicit bevel geometry supplies their physical silhouette and depth.
     child.material.side = THREE.DoubleSide;
     child.material.shadowSide = THREE.DoubleSide;
-    child.material.roughness = 0.47;
+    child.material.roughness = 0.45;
     child.material.metalness = 0.001;
-    child.material.clearcoat = 0.06;
-    child.material.clearcoatRoughness = 0.66;
+    child.material.clearcoat = 0.065;
+    child.material.clearcoatRoughness = 0.64;
     child.material.dithering = true;
     child.material.polygonOffset = true;
-    child.material.polygonOffsetFactor = -0.08;
-    child.material.polygonOffsetUnits = -0.08;
+    child.material.polygonOffsetFactor = -0.04;
+    child.material.polygonOffsetUnits = -0.04;
+
+    // Point-light shadow maps made the first real-geometry pass read as if it
+    // had a black ink outline. The bevel itself supplies depth; letting it
+    // receive light/shadow while not casting a hard self-shadow matches the
+    // soft studio contact depth in the supplied clay/plastic references.
+    child.castShadow = false;
+    child.receiveShadow = true;
     child.material.needsUpdate = true;
   });
   group.userData.kidsGalaxyVisibleSculptedPatchCount = patchCount;
   group.userData.kidsGalaxySmoothedReferenceFinish = true;
+  group.userData.kidsGalaxySoftContactEdges = true;
   if (body) {
     body.userData.kidsGalaxyVisibleSculptedPatchCount = patchCount;
     body.userData.kidsGalaxySculptedGeometryVisible = patchCount > 0;
     body.userData.kidsGalaxySmoothedReferenceFinish = true;
+    body.userData.kidsGalaxySoftContactEdges = true;
   }
 }
 
