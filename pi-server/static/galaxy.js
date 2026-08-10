@@ -13,6 +13,7 @@ import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
+import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -37,13 +38,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Valid kid drawings preserve their authored colour/shape language. The dominant
-// paint owns the clean planet body; deliberate partial strokes in that same hue
-// become lower-profile molded ribbons instead of disappearing into the body.
-// The extracted traits are then stretched as one composition across the sphere
-// so the result reads as the child's planet-wide design rather than a small
-// central patch. Ringed planets keep the accepted Saturn particle composition
-// while the tablet-selected ring colour remains the dominant ring hue.
+// Kid drawings keep their authored shapes/colours as molded planet-wide traits.
+// New tablets explicitly send the bucket/background colour as the planet body,
+// so the final renderer does not have to infer that body colour from stroke area.
+// Older stored planets without body_color remain on the legacy inference path.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -62,6 +60,9 @@ installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
+// Must be outermost: sculpt the drawing first, then make the tablet-selected
+// background/body colour authoritative over every inference/tuning layer.
+installExplicitBodyColor();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
@@ -103,10 +104,7 @@ function animate() {
   galaxyScene.render(cameraController.camera);
 }
 
-/**
- * Stable diagnostics contract used by projector QA and by kiosk operators
- * inspecting a live projector from the browser console.
- */
+/** Stable diagnostics contract used by projector QA and kiosk operators. */
 window.kidsGalaxy = {
   scene: galaxyScene.scene,
   renderer: galaxyScene.renderer,
@@ -123,7 +121,5 @@ window.kidsGalaxy = {
   },
 };
 
-// Render before network bootstrap: a failed request must never leave a black
-// projector screen.
 animate();
 planetLoader.bootstrap();
