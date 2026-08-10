@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                         onBehaviorModeChange = managerViewModel::setBehaviorMode,
                         onManualThemeChange = managerViewModel::setManualTheme,
                         onThemeEnabledChange = managerViewModel::setThemeEnabled,
-                        onAmbientEffectsChange = managerViewModel::setAmbientEffectsEnabled,
+                        onAmbientEffectsChange = managerViewModel::setAmbientEffects,
                     )
                 }
 
