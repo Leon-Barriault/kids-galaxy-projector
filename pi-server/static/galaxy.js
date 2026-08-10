@@ -35,6 +35,7 @@ import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeome
 import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
+import { installStrokeWrapProjection } from './projector/StrokeWrapProjection.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 import { installVisualRefinement } from './projector/VisualRefinement.js';
 
@@ -72,9 +73,12 @@ const PLANET_RENDER_STAGES = Object.freeze([
   // Outermost for the final body material. No colour inference happens here:
   // the core sculptor has already separated body pixels from authored traits.
   { name: 'explicit-body-color', install: installExplicitBodyColor },
-  // Deliberately last: reshapes authoritative sculpted art, deepens installed
-  // crater geometry, and replaces the astronaut companion.
+  // Reshapes authoritative sculpted art, deepens installed crater geometry,
+  // and replaces the astronaut companion.
   { name: 'visual-refinement', install: installVisualRefinement },
+  // Deliberately last for new tablet planets: the selected background remains
+  // the sphere body while only extracted kid strokes wind around the globe.
+  { name: 'stroke-wrap-projection', install: installStrokeWrapProjection },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
