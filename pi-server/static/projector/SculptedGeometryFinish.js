@@ -35,11 +35,9 @@ function softenPatchColours(geometry) {
   }
   base.multiplyScalar(1 / sampleCount);
 
-  // The reference has a same-hue shoulder, not an outline. Keep only enough
-  // tonal falloff to reveal thickness when the light grazes the molded piece.
-  const lower = base.clone().offsetHSL(0, -0.004, -0.038);
-  const shoulder = base.clone().offsetHSL(0, -0.001, -0.016);
-  const top = base.clone().offsetHSL(0, 0.008, 0.012);
+  const lower = base.clone().offsetHSL(0, -0.003, -0.03);
+  const shoulder = base.clone().offsetHSL(0, 0, -0.012);
+  const top = base.clone().offsetHSL(0, 0.007, 0.014);
   const tones = [lower, shoulder, top];
   tones.forEach((tone, ring) => {
     const start = ring * ringSize;
@@ -69,21 +67,17 @@ function finishSculptedGroup(entity) {
     smoothPatchNormals(child.geometry);
     softenPatchColours(child.geometry);
 
-    child.material.side = THREE.DoubleSide;
-    child.material.shadowSide = THREE.DoubleSide;
+    // The geometry winding is valid once the runtime radius bug is fixed.
+    // FrontSide avoids Three.js flipping normals on back-facing bevel facets,
+    // which was the source of the almost-black cartoon outline.
+    child.material.side = THREE.FrontSide;
+    child.material.shadowSide = THREE.FrontSide;
     child.material.roughness = 0.45;
     child.material.metalness = 0.001;
     child.material.clearcoat = 0.065;
     child.material.clearcoatRoughness = 0.64;
     child.material.dithering = true;
-    child.material.polygonOffset = true;
-    child.material.polygonOffsetFactor = -0.04;
-    child.material.polygonOffsetUnits = -0.04;
-
-    // Point-light shadow maps made the first real-geometry pass read as if it
-    // had a black ink outline. The bevel itself supplies depth; letting it
-    // receive light/shadow while not casting a hard self-shadow matches the
-    // soft studio contact depth in the supplied clay/plastic references.
+    child.material.polygonOffset = false;
     child.castShadow = false;
     child.receiveShadow = true;
     child.material.needsUpdate = true;
