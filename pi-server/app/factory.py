@@ -18,6 +18,7 @@ from app.application.use_cases import (
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
     GetCurrentSceneUseCase,
+    GetPlanetByIdUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
@@ -29,6 +30,7 @@ from app.infrastructure.clock import SystemClock
 from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
+from app.infrastructure.planet_export_renderer import PillowPlanetExportRenderer
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
 from app.infrastructure.service_advertiser import (
     NullServiceAdvertiser,
@@ -69,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     image_processor = PillowImageProcessor()
     surface_styler = _styler_for(settings.surface_style)
+    export_renderer = PillowPlanetExportRenderer()
     authorizer = AuthorizationPolicy(settings)
     clock = SystemClock()
     seasonal_resolver = SeasonalThemeResolver()
@@ -82,6 +85,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
+    get_planet = GetPlanetByIdUseCase(
+        repository,
+        max_scan=settings.max_stored_planets,
+    )
     get_current_scene = GetCurrentSceneUseCase(
         repository,
         max_planets=settings.gallery_size,
@@ -131,7 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.4.0",
+        version="1.5.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -158,12 +165,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             submit_planet=submit_planet,
             get_current_planet=get_current_planet,
             get_current_scene=get_current_scene,
+            get_planet=get_planet,
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
             clear_planets=clear_planets,
             get_behavior=get_behavior,
             update_behavior=update_behavior,
             repository=repository,
+            export_renderer=export_renderer,
             publisher=publisher,
             settings_galaxy=galaxy,
             authorizer=authorizer,
