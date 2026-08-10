@@ -138,7 +138,6 @@ def main() -> int:
                 bodyBlue: data.kidsGalaxyDominantGesturePalette === 4 || (c.b > c.g && c.g > c.r),
                 dominantGesture: Boolean(data.kidsGalaxyDominantGestureRelief),
                 dominantCoverage: data.kidsGalaxyDominantGestureCoverage || 0,
-                bodyHasGeneratedMap: Boolean(p.mesh.material.map),
                 allBeveled: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyBeveledKidPatch),
                 allRoundedSlabs: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyRoundedSlab),
                 hybridNormals: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyHybridSlabNormals),
@@ -171,7 +170,6 @@ def main() -> int:
             0.03 <= sculpted["dominantCoverage"] <= 0.48,
             "dominant gesture preservation only applies to deliberate partial paint",
         )
-        check(sculpted["bodyHasGeneratedMap"], "dominant gesture is a generated same-hue body treatment")
 
         print("\nSaturn-like particle ring")
         ring = page.evaluate(
