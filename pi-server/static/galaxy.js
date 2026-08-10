@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
+import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -55,6 +56,7 @@ installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
 installSculptedArtworkRoundedSlab();
+installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
