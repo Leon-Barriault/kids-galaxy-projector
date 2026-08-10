@@ -16,7 +16,11 @@ DEFAULT_RATE_LIMIT_SECONDS = 3.0
 DEFAULT_MAX_STORED_PLANETS = 30
 DEFAULT_GALLERY_SIZE = 12
 
-DEFAULT_SURFACE_STYLE = "terrain"
+# The projector owns the artistic interpretation of the child's drawing. The
+# historical terrain/blend options remain parseable for deployed environment
+# compatibility, but factory.py deliberately treats them as passthrough so no
+# server-side diffusion can destroy the child's composition before rendering.
+DEFAULT_SURFACE_STYLE = "off"
 SURFACE_STYLES = ("terrain", "blend", "off")
 DEFAULT_GALAXY_NAME = "Kids Galaxy"
 DEFAULT_ADVERTISE = True
