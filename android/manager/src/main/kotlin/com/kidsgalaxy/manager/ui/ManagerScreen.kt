@@ -60,7 +60,6 @@ import androidx.print.PrintHelper
 import coil.compose.AsyncImage
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
-import com.kidsgalaxy.manager.BuildConfig
 import com.kidsgalaxy.manager.ManagerError
 import com.kidsgalaxy.manager.ManagerStatus
 import com.kidsgalaxy.manager.ManagerUiState
@@ -168,14 +167,22 @@ fun ManagerScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(text = subtitle, color = TextMuted, fontSize = 14.sp)
+                Text(
+                    text = subtitle,
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                )
             }
             TextButton(
                 onClick = onToggleLanguage,
                 modifier = Modifier.semantics { contentDescription = languageDescription },
             ) {
                 Text(
-                    if (language == UiLanguage.ENGLISH) "EN ●  FR" else "EN  ● FR",
+                    if (language == UiLanguage.ENGLISH) {
+                        "EN ●  FR"
+                    } else {
+                        "EN  ● FR"
+                    },
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -232,17 +239,24 @@ fun ManagerScreen(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
         when {
             state.isLoading && state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Accent)
                 }
             }
+
             state.planets.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.no_planets), color = TextMuted, fontSize = 16.sp)
+                    Text(
+                        stringResource(R.string.no_planets),
+                        color = TextMuted,
+                        fontSize = 16.sp,
+                    )
                 }
             }
+
             else -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -282,7 +296,9 @@ fun ManagerScreen(
                         confirmClearAll = false
                         onClearAll()
                     },
-                ) { Text(stringResource(R.string.clear_all), color = Danger) }
+                ) {
+                    Text(stringResource(R.string.clear_all), color = Danger)
+                }
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearAll = false }) {
@@ -297,7 +313,13 @@ fun ManagerScreen(
             onDismissRequest = { pendingDelete = null },
             title = { Text(stringResource(R.string.remove_planet)) },
             text = {
-                Text(stringResource(R.string.remove_planet_body, planet.name, galaxy.name))
+                Text(
+                    stringResource(
+                        R.string.remove_planet_body,
+                        planet.name,
+                        galaxy.name,
+                    ),
+                )
             },
             confirmButton = {
                 Button(
@@ -306,7 +328,9 @@ fun ManagerScreen(
                         pendingDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger),
-                ) { Text(stringResource(R.string.remove)) }
+                ) {
+                    Text(stringResource(R.string.remove))
+                }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
@@ -321,7 +345,9 @@ fun ManagerScreen(
             onDismissRequest = onClearError,
             title = { Text(stringResource(R.string.something_went_wrong)) },
             text = { Text(managerErrorText(error)) },
-            confirmButton = { TextButton(onClick = onClearError) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = onClearError) { Text("OK") }
+            },
         )
     }
 }
@@ -367,14 +393,20 @@ private fun ProjectorLanguageControl(
                 )
             } else {
                 TextButton(
-                    onClick = { onSelect(if (selectedLanguage == "fr") "en" else "fr") },
+                    onClick = {
+                        onSelect(if (selectedLanguage == "fr") "en" else "fr")
+                    },
                     modifier =
                         Modifier.semantics {
                             contentDescription = projectorLanguageDescription
                         },
                 ) {
                     Text(
-                        if (selectedLanguage == "fr") "EN  ● FR" else "EN ●  FR",
+                        if (selectedLanguage == "fr") {
+                            "EN  ● FR"
+                        } else {
+                            "EN ●  FR"
+                        },
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -386,11 +418,16 @@ private fun ProjectorLanguageControl(
 @Composable
 private fun managerStatusText(status: ManagerStatus): String =
     when (status) {
-        is ManagerStatus.Stored -> stringResource(R.string.status_planets_stored, status.count)
+        is ManagerStatus.Stored ->
+            stringResource(R.string.status_planets_stored, status.count)
+
         is ManagerStatus.Removed ->
             status.name?.let { stringResource(R.string.status_removed_named, it) }
                 ?: stringResource(R.string.status_planet_removed)
-        is ManagerStatus.Cleared -> stringResource(R.string.status_cleared, status.count)
+
+        is ManagerStatus.Cleared ->
+            stringResource(R.string.status_cleared, status.count)
+
         is ManagerStatus.ProjectorLanguageChanged ->
             stringResource(
                 R.string.status_projector_language_changed,
@@ -425,7 +462,11 @@ private fun PlanetRow(
     onDeleteClick: () -> Unit,
 ) {
     val imageUrl =
-        if (planet.url.startsWith("http")) planet.url else baseUrl.trimEnd('/') + planet.url
+        if (planet.url.startsWith("http")) {
+            planet.url
+        } else {
+            baseUrl.trimEnd('/') + planet.url
+        }
     val shape = stringResource(shapeLabelResource(planet.style))
 
     Row(
