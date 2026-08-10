@@ -118,7 +118,15 @@ class DrawingTest {
                 .undo()
 
         assertEquals(1, drawing.strokes.size)
-        assertEquals(0f, drawing.strokes.first().points.first().x, 0.001f)
+        assertEquals(
+            0f,
+            drawing.strokes
+                .first()
+                .points
+                .first()
+                .x,
+            0.001f,
+        )
     }
 
     @Test
