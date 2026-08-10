@@ -42,6 +42,7 @@ class PlanetRepository(ABC):
         ring_color: str = DEFAULT_RING_COLOR,
         crater_color: str = DEFAULT_CRATER_COLOR,
         mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
+        body_color: str | None = None,
     ) -> Planet:
         """Store richer design metadata; legacy adapters fall back to classic saves."""
         return self.save(planet_id, display_name, image_bytes)
