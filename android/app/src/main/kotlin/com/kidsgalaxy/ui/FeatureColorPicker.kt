@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kidsgalaxy.domain.model.DEFAULT_CRATER_COLOR_ARGB
@@ -83,6 +85,7 @@ internal fun FeatureColorPicker(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             colors.forEach { colorArgb ->
                 val selected = colorArgb == selectedColorArgb
+                val colorDescription = colorContentDescription(colorArgb)
                 Box(
                     modifier =
                         Modifier
@@ -97,7 +100,9 @@ internal fun FeatureColorPicker(
                                         MaterialTheme.colorScheme.outline
                                     },
                                 shape = CircleShape,
-                            ).selectable(
+                            ).semantics {
+                                contentDescription = colorDescription
+                            }.selectable(
                                 selected = selected,
                                 role = Role.RadioButton,
                                 onClick = { onColorChange(colorArgb) },
