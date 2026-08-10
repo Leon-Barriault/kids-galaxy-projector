@@ -27,6 +27,7 @@ import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrad
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
+import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
 const GALLERY_SIZE = 12;
@@ -44,6 +45,7 @@ installHighFidelityPlanetFeatures();
 installReferenceSurfaceTuning();
 installKidArtworkComponentSurface();
 installReferenceFinish();
+installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
