@@ -72,6 +72,23 @@ class PlanetRepository(ABC):
         """Resolve a public image filename inside the backing store."""
 
 
+class PlanetExportRenderer(ABC):
+    """Create volunteer-only printable representations of a stored planet."""
+
+    @abstractmethod
+    def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
+        """Return a PNG containing a rendered planet view and the kid drawing."""
+
+    @abstractmethod
+    def export_stl(
+        self,
+        planet: Planet,
+        image_path: Path,
+        diameter_mm: float,
+    ) -> bytes:
+        """Return a watertight binary STL with kid artwork encoded as relief."""
+
+
 class BehaviorRepository(ABC):
     """Persistence for operator-selected galaxy behaviour settings."""
 
