@@ -142,6 +142,20 @@ class GetCurrentPlanetUseCase:
         return planet.to_payload() if planet else NO_PLANET_PAYLOAD
 
 
+class GetPlanetByIdUseCase:
+    """Look up one retained planet for manager-only operations."""
+
+    def __init__(self, repository: PlanetRepository, max_scan: int = DEFAULT_RETENTION):
+        self._repository = repository
+        self._max_scan = max_scan
+
+    def execute(self, planet_id: str) -> Planet:
+        for planet in self._repository.recent(self._max_scan):
+            if planet.id == planet_id:
+                return planet
+        raise NotFoundError()
+
+
 class GetCurrentSceneUseCase:
     """Build an immutable Scene snapshot of the planets currently in the sky."""
 
