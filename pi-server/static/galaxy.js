@@ -26,14 +26,15 @@ import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
+import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
 const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
-// images. The component surface owns valid kid drawings; ReferenceFinish then
-// applies the final clay proportions/edge smoothing and unresolved Saturn-band
-// treatment used by the visual acceptance comparison.
+// images. Valid kid drawings end as true curved/beveled geometry: dominant paint
+// owns the planet body and every meaningful secondary gesture becomes its own
+// physical molded piece with a smaller styled echo on the far hemisphere.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -43,6 +44,7 @@ installHighFidelityPlanetFeatures();
 installReferenceSurfaceTuning();
 installKidArtworkComponentSurface();
 installReferenceFinish();
+installSculptedArtworkGeometry();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
