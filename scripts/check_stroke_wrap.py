@@ -14,11 +14,16 @@ from check_projector import FAILURES, Server, check, wait_for
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_DIR = REPO_ROOT / "artifacts"
 BODY_COLOR = "#596fd8"
+BODY_RGB = (89, 111, 216)
 
 
 def colored_body_artwork() -> bytes:
-    image = Image.new("RGB", (256, 256), BODY_COLOR)
+    # Reproduce the old Android export shape: an opaque white square behind the
+    # selected circular body colour. The white perimeter is transport residue,
+    # not authored artwork, and must not become a 480-degree sculpted ring.
+    image = Image.new("RGB", (256, 256), (255, 255, 255))
     draw = ImageDraw.Draw(image)
+    draw.ellipse((8, 8, 247, 247), fill=BODY_RGB)
     draw.line(
         [(22, 72), (62, 38), (112, 92), (162, 48), (232, 88)],
         fill=(229, 57, 53),
@@ -31,6 +36,9 @@ def colored_body_artwork() -> bytes:
         width=18,
         joint="curve",
     )
+    # White is a valid brush colour. Keep a deliberate interior white stroke so
+    # the acceptance test proves we reject only the perimeter artifact.
+    draw.line([(111, 126), (145, 126)], fill=(255, 255, 255), width=12)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
@@ -48,7 +56,7 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            args=["--use-gl=swiftshader", "--enable-unsafe-swshader"]
         )
         page = browser.new_page(viewport={"width": 1000, "height": 1000})
         errors: list[str] = []
@@ -72,11 +80,15 @@ def main() -> int:
               const group = entity.sculptedArtworkGroup;
               const front = (group?.children || []).filter((mesh) =>
                 mesh.isMesh &&
+                mesh.visible &&
                 mesh.geometry?.userData?.kidsGalaxySculptedKidPatch &&
                 !mesh.userData?.kidsGalaxyBackDesignEcho
               );
               const back = (group?.children || []).filter((mesh) =>
                 mesh.isMesh && mesh.userData?.kidsGalaxyBackDesignEcho
+              );
+              const suppressedWhiteRims = (group?.children || []).filter((mesh) =>
+                mesh.isMesh && mesh.userData?.kidsGalaxySuppressedWhiteDiscRim
               );
 
               let minWrapped = Infinity;
@@ -111,7 +123,7 @@ def main() -> int:
                     const g = colours.getY(index);
                     const b = colours.getZ(index);
                     colouredVertices += 1;
-                    if (r > 0.9 && g > 0.9 && b > 0.9) whiteishVertices += 1;
+                    if (r > 0.82 && g > 0.82 && b > 0.82) whiteishVertices += 1;
                   }}
                 }}
               }});
@@ -126,12 +138,15 @@ def main() -> int:
                 groupWrapDegrees: group?.userData?.kidsGalaxyStrokeWrapDegrees || 0,
                 primaryCount: group?.userData?.kidsGalaxyStrokeWrapPrimaryPatchCount || 0,
                 suppressedBackCount: group?.userData?.kidsGalaxySuppressedLegacyBackEchoCount || 0,
+                suppressedWhiteRimCount: group?.userData?.kidsGalaxySuppressedWhiteDiscRimCount || 0,
                 visibleBackCount: back.filter((mesh) => mesh.visible).length,
+                visibleSuppressedWhiteRimCount: suppressedWhiteRims.filter((mesh) => mesh.visible).length,
                 legacyShellsHidden: !entity.accentEdgeMesh.visible && !entity.accentMesh.visible,
                 minWrapped: Number.isFinite(minWrapped) ? minWrapped : 0,
                 maxWrapped: Number.isFinite(maxWrapped) ? maxWrapped : 0,
                 frontHemisphereVertices,
                 farHemisphereVertices,
+                whiteishVertices,
                 whiteFraction: colouredVertices ? whiteishVertices / colouredVertices : 1,
                 allPrimaryMeshesWrapped: front.length > 0 && front.every((mesh) =>
                   mesh.geometry?.userData?.kidsGalaxyAngularStrokeWrap &&
@@ -149,9 +164,11 @@ def main() -> int:
         check(result["wrapDegrees"] == 480, "final material records a 480-degree stroke wrap")
         check(result["groupWrapDegrees"] == 480, "sculpted stroke group records the 480-degree wrap")
         check(result["allPrimaryMeshesWrapped"], "every visible primary kid-stroke mesh uses angular wrapping")
-        check(result["primaryCount"] >= 2, "multiple authored stroke components remain distinct")
+        check(result["primaryCount"] >= 3, "coloured and intentional white authored strokes remain distinct")
         check(result["visibleBackCount"] == 0, "legacy mirrored far-side copies are suppressed")
         check(result["suppressedBackCount"] >= 1, "the superseded back-echo geometry is explicitly suppressed")
+        check(result["suppressedWhiteRimCount"] >= 1, "legacy white circular backing is recognized as a perimeter artifact")
+        check(result["visibleSuppressedWhiteRimCount"] == 0, "legacy white circular backing never enters the 480-degree wrap")
         check(result["legacyShellsHidden"], "no white alpha-shell layer can separate strokes from the body")
         check(
             result["maxWrapped"] - result["minWrapped"] >= 470,
@@ -161,7 +178,8 @@ def main() -> int:
             result["frontHemisphereVertices"] > 0 and result["farHemisphereVertices"] > 0,
             "one continuous stroke composition reaches both near and far hemispheres",
         )
-        check(result["whiteFraction"] < 0.02, "non-white artwork does not acquire a white fringe")
+        check(result["whiteishVertices"] > 0, "intentional interior white brushwork is preserved")
+        check(result["whiteFraction"] < 0.35, "the perimeter artifact cannot dominate visible white geometry")
 
         page.evaluate(
             f"""
