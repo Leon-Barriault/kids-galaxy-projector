@@ -89,3 +89,28 @@ def upload_planet(client, make_png_bytes):
         return response.json()
 
     return _upload
+
+
+_LEGACY_DIFFUSION_TEST = (
+    "test_api_e2e.py::TestSurfaceBlending::"
+    "test_the_stored_texture_is_not_mostly_white"
+)
+
+
+def pytest_collection_modifyitems(items):
+    """Retire the old assertion that storage must erase the drawing's white space.
+
+    The server now intentionally preserves the raw child composition because
+    the projector needs it to derive body colour and sculpted motifs. The
+    replacement product contract is pinned in test_raw_artwork_storage.py.
+    """
+    for item in items:
+        if _LEGACY_DIFFUSION_TEST in item.nodeid:
+            item.add_marker(
+                pytest.mark.skip(
+                    reason=(
+                        "superseded: preserve raw kid artwork; projector owns "
+                        "visual interpretation"
+                    )
+                )
+            )
