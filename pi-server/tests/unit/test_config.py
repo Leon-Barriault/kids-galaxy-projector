@@ -123,19 +123,19 @@ class TestAuthorizationSettings:
 
 
 class TestSurfaceStyle:
-    """Pins the projector-selected surface treatment default."""
+    """Pins raw child artwork as the product rendering contract."""
 
-    def test_defaults_to_terrain(self):
-        assert Settings().surface_style == "terrain"
-        assert Settings.from_env({}).surface_style == "terrain"
+    def test_defaults_to_raw_artwork(self):
+        assert Settings().surface_style == "off"
+        assert Settings.from_env({}).surface_style == "off"
 
-    def test_every_documented_style_is_accepted(self):
+    def test_legacy_values_remain_parseable_for_deployed_env_files(self):
         for style in ("blend", "terrain", "off"):
             assert Settings.from_env({"SURFACE_STYLE": style}).surface_style == style
 
     def test_case_and_padding_are_forgiven(self):
         assert Settings.from_env({"SURFACE_STYLE": "  Terrain "}).surface_style == "terrain"
 
-    def test_an_unknown_style_falls_back_instead_of_raising(self):
-        assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "terrain"
-        assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "terrain"
+    def test_an_unknown_style_falls_back_to_safe_raw_artwork(self):
+        assert Settings.from_env({"SURFACE_STYLE": "psychedelic"}).surface_style == "off"
+        assert Settings.from_env({"SURFACE_STYLE": ""}).surface_style == "off"
