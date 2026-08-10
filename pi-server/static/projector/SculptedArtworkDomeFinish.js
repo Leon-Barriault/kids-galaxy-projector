@@ -46,7 +46,7 @@ function extractDirections(position, start, count) {
   return result;
 }
 
-function smoothClosedDirections(input, passes = 2) {
+function smoothClosedDirections(input, passes = 4) {
   let current = input.map((vector) => vector.clone());
   for (let pass = 0; pass < passes; pass += 1) {
     current = current.map((vector, index) => {
@@ -54,9 +54,9 @@ function smoothClosedDirections(input, passes = 2) {
       const next = current[(index + 1) % current.length];
       return previous
         .clone()
-        .multiplyScalar(0.22)
-        .add(vector.clone().multiplyScalar(0.56))
-        .add(next.clone().multiplyScalar(0.22))
+        .multiplyScalar(0.2)
+        .add(vector.clone().multiplyScalar(0.6))
+        .add(next.clone().multiplyScalar(0.2))
         .normalize();
     });
   }
@@ -85,10 +85,10 @@ function installReferenceNormals(geometry, ringSize, fullRings) {
   const actual = new THREE.Vector3();
   const radial = new THREE.Vector3();
   const blended = new THREE.Vector3();
-  const actualWeights = [0.5, 0.32, 0.13, 0.08, 0.06];
+  const actualWeights = [0.42, 0.44, 0.5, 0.42, 0.32];
 
   for (let ring = 0; ring < fullRings; ring += 1) {
-    const weight = actualWeights[ring] ?? 0.05;
+    const weight = actualWeights[ring] ?? 0.25;
     for (let index = 0; index < ringSize; index += 1) {
       const vertex = ring * ringSize + index;
       actual.set(normal.getX(vertex), normal.getY(vertex), normal.getZ(vertex)).normalize();
@@ -101,10 +101,12 @@ function installReferenceNormals(geometry, ringSize, fullRings) {
   }
 
   const centre = fullRings * ringSize;
+  actual.set(normal.getX(centre), normal.getY(centre), normal.getZ(centre)).normalize();
   radial
     .set(position.getX(centre), position.getY(centre), position.getZ(centre))
     .normalize();
-  normal.setXYZ(centre, radial.x, radial.y, radial.z);
+  blended.copy(radial).multiplyScalar(0.8).addScaledVector(actual, 0.2).normalize();
+  normal.setXYZ(centre, blended.x, blended.y, blended.z);
   normal.needsUpdate = true;
 }
 
@@ -129,24 +131,25 @@ function rebuildAsDome(sourceGeometry) {
     0.76,
   );
 
-  const outerColour = ringColour(sourceColour, outerStart, ringSize).offsetHSL(0, 0, 0.015);
-  const shoulderColour = ringColour(sourceColour, shoulderStart, ringSize).offsetHSL(0, 0, 0.008);
+  // Derive the entire bevel from the kid's top colour. The previous pipeline's
+  // edge colour was intentionally much darker and could read as a black outline
+  // even after geometric smoothing. The reference planets keep their shoulder
+  // unmistakably in the same hue.
   const topColour = ringColour(sourceColour, topStart, ringSize);
-  const midColour = topColour.clone().offsetHSL(0, 0.003, 0.008);
-  const innerColour = topColour.clone().offsetHSL(0, 0.004, 0.014);
-  const centreColour = topColour.clone().offsetHSL(0, 0.005, 0.018);
+  const outerColour = topColour.clone().offsetHSL(0, -0.004, -0.055);
+  const shoulderColour = topColour.clone().offsetHSL(0, -0.002, -0.026);
+  const midColour = topColour.clone().offsetHSL(0, 0.002, 0.008);
+  const innerColour = topColour.clone().offsetHSL(0, 0.003, 0.014);
+  const centreColour = topColour.clone().offsetHSL(0, 0.004, 0.018);
 
   const outerDirections = smoothClosedDirections(
     extractDirections(sourcePosition, outerStart, ringSize),
-    2,
   );
   const shoulderDirections = smoothClosedDirections(
     extractDirections(sourcePosition, shoulderStart, ringSize),
-    2,
   );
   const topDirections = smoothClosedDirections(
     extractDirections(sourcePosition, topStart, ringSize),
-    2,
   );
 
   const centreDirection = new THREE.Vector3();
@@ -235,10 +238,10 @@ function tuneMaterial(material) {
   if (!material?.isMeshPhysicalMaterial) return;
   material.side = THREE.DoubleSide;
   material.shadowSide = THREE.DoubleSide;
-  material.roughness = 0.3;
+  material.roughness = 0.28;
   material.metalness = 0.001;
-  material.clearcoat = 0.15;
-  material.clearcoatRoughness = 0.38;
+  material.clearcoat = 0.18;
+  material.clearcoatRoughness = 0.34;
   material.emissive?.setHex(0x000000);
   material.emissiveIntensity = 0;
   material.flatShading = false;
@@ -262,7 +265,7 @@ function domeSculptedGroup(entity) {
     mesh.geometry = replacement;
     tuneMaterial(mesh.material);
     mesh.castShadow = false;
-    mesh.receiveShadow = true;
+    mesh.receiveShadow = false;
     count += 1;
     minimumRelief = Math.min(minimumRelief, replacement.userData.kidsGalaxyPatchRelief);
   });
@@ -277,7 +280,7 @@ function domeSculptedGroup(entity) {
   return true;
 }
 
-/** Final geometry pass: turn flat patch caps into soft sphere-following domes. */
+/** Final geometry pass: turn flat patch caps into softly lit molded forms. */
 export function installSculptedArtworkDomeFinish() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxySculptedDomeFinish) return;
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
