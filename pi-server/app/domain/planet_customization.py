@@ -65,6 +65,21 @@ def _normalize_feature_color(
     return value.lower()
 
 
+def normalize_body_color(raw: str | None) -> str | None:
+    """Return the tablet-selected planet body colour when explicitly supplied.
+
+    Older tablets did not send this field, so blank / None deliberately stays
+    ``None`` and lets the projector's legacy artwork inference remain available.
+    New tablets always send the bucket/background colour, including ``#ffffff``.
+    """
+    if raw is None or not raw.strip():
+        return None
+    value = raw.strip()
+    if not _HEX_COLOR.fullmatch(value):
+        raise ValidationError("Choose one of the available planet background colors.")
+    return value.lower()
+
+
 def normalize_ring_color(raw: str | None) -> str:
     """Return a canonical CSS-style RGB hex value for the 3D ring."""
     return _normalize_feature_color(raw, DEFAULT_RING_COLOR, "ring")
