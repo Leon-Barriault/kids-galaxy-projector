@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 
 const BODY_CONTACT_RADIUS = 1.056;
-const MID_CROWN_RISE = 0.014;
-const INNER_CROWN_RISE = 0.025;
-const DOME_CENTRE_RISE = 0.032;
+const MID_CROWN_RISE = 0.007;
+const INNER_CROWN_RISE = 0.013;
+const DOME_CENTRE_RISE = 0.018;
 
 function averageRingRadius(position, start, count) {
   let total = 0;
@@ -22,7 +22,7 @@ function averageRingRadius(position, start, count) {
 
 function ringColour(colours, start, count) {
   const colour = new THREE.Color();
-  const sampleCount = Math.min(count, 32);
+  const sampleCount = Math.min(count, 40);
   for (let index = 0; index < sampleCount; index += 1) {
     const vertex = start + Math.floor((index / sampleCount) * count);
     colour.r += colours.getX(vertex);
@@ -32,13 +32,80 @@ function ringColour(colours, start, count) {
   return colour.multiplyScalar(1 / Math.max(1, sampleCount));
 }
 
+function extractDirections(position, start, count) {
+  const result = [];
+  for (let index = 0; index < count; index += 1) {
+    result.push(
+      new THREE.Vector3(
+        position.getX(start + index),
+        position.getY(start + index),
+        position.getZ(start + index),
+      ).normalize(),
+    );
+  }
+  return result;
+}
+
+function smoothClosedDirections(input, passes = 2) {
+  let current = input.map((vector) => vector.clone());
+  for (let pass = 0; pass < passes; pass += 1) {
+    current = current.map((vector, index) => {
+      const previous = current[(index - 1 + current.length) % current.length];
+      const next = current[(index + 1) % current.length];
+      return previous
+        .clone()
+        .multiplyScalar(0.22)
+        .add(vector.clone().multiplyScalar(0.56))
+        .add(next.clone().multiplyScalar(0.22))
+        .normalize();
+    });
+  }
+  return current;
+}
+
 function pushVertex(positions, colours, vector, colour) {
   positions.push(vector.x, vector.y, vector.z);
   colours.push(colour.r, colour.g, colour.b);
 }
 
 function blendDirection(boundary, centre, amount) {
-  return boundary.clone().normalize().lerp(centre, amount).normalize();
+  return boundary.clone().lerp(centre, amount).normalize();
+}
+
+function softenedRadius(sourceRadius, fraction) {
+  return BODY_CONTACT_RADIUS + Math.max(0, sourceRadius - BODY_CONTACT_RADIUS) * fraction;
+}
+
+function installReferenceNormals(geometry, ringSize, fullRings) {
+  geometry.computeVertexNormals();
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  if (!position || !normal) return;
+
+  const actual = new THREE.Vector3();
+  const radial = new THREE.Vector3();
+  const blended = new THREE.Vector3();
+  const actualWeights = [0.5, 0.32, 0.13, 0.08, 0.06];
+
+  for (let ring = 0; ring < fullRings; ring += 1) {
+    const weight = actualWeights[ring] ?? 0.05;
+    for (let index = 0; index < ringSize; index += 1) {
+      const vertex = ring * ringSize + index;
+      actual.set(normal.getX(vertex), normal.getY(vertex), normal.getZ(vertex)).normalize();
+      radial
+        .set(position.getX(vertex), position.getY(vertex), position.getZ(vertex))
+        .normalize();
+      blended.copy(radial).multiplyScalar(1 - weight).addScaledVector(actual, weight).normalize();
+      normal.setXYZ(vertex, blended.x, blended.y, blended.z);
+    }
+  }
+
+  const centre = fullRings * ringSize;
+  radial
+    .set(position.getX(centre), position.getY(centre), position.getZ(centre))
+    .normalize();
+  normal.setXYZ(centre, radial.x, radial.y, radial.z);
+  normal.needsUpdate = true;
 }
 
 function rebuildAsDome(sourceGeometry) {
@@ -51,66 +118,72 @@ function rebuildAsDome(sourceGeometry) {
   const outerStart = 0;
   const shoulderStart = ringSize;
   const topStart = ringSize * 2;
-  const topRadius = averageRingRadius(sourcePosition, topStart, ringSize);
+
+  const outerRadius = averageRingRadius(sourcePosition, outerStart, ringSize);
+  const shoulderRadius = softenedRadius(
+    averageRingRadius(sourcePosition, shoulderStart, ringSize),
+    0.84,
+  );
+  const topRadius = softenedRadius(
+    averageRingRadius(sourcePosition, topStart, ringSize),
+    0.76,
+  );
+
+  const outerColour = ringColour(sourceColour, outerStart, ringSize).offsetHSL(0, 0, 0.015);
+  const shoulderColour = ringColour(sourceColour, shoulderStart, ringSize).offsetHSL(0, 0, 0.008);
   const topColour = ringColour(sourceColour, topStart, ringSize);
-  const midColour = topColour.clone().offsetHSL(0, 0.004, 0.014);
-  const innerColour = topColour.clone().offsetHSL(0, 0.006, 0.024);
-  const centreColour = topColour.clone().offsetHSL(0, 0.008, 0.032);
+  const midColour = topColour.clone().offsetHSL(0, 0.003, 0.008);
+  const innerColour = topColour.clone().offsetHSL(0, 0.004, 0.014);
+  const centreColour = topColour.clone().offsetHSL(0, 0.005, 0.018);
+
+  const outerDirections = smoothClosedDirections(
+    extractDirections(sourcePosition, outerStart, ringSize),
+    2,
+  );
+  const shoulderDirections = smoothClosedDirections(
+    extractDirections(sourcePosition, shoulderStart, ringSize),
+    2,
+  );
+  const topDirections = smoothClosedDirections(
+    extractDirections(sourcePosition, topStart, ringSize),
+    2,
+  );
 
   const centreDirection = new THREE.Vector3();
-  for (let index = 0; index < ringSize; index += 1) {
-    centreDirection.add(
-      new THREE.Vector3(
-        sourcePosition.getX(topStart + index),
-        sourcePosition.getY(topStart + index),
-        sourcePosition.getZ(topStart + index),
-      ).normalize(),
-    );
-  }
+  topDirections.forEach((direction) => centreDirection.add(direction));
   centreDirection.normalize();
 
   const positions = [];
   const colours = [];
-  const sourceRings = [outerStart, shoulderStart, topStart];
-  sourceRings.forEach((start) => {
-    for (let index = 0; index < ringSize; index += 1) {
-      const source = start + index;
+  const sourceRings = [
+    { directions: outerDirections, radius: outerRadius, colour: outerColour },
+    { directions: shoulderDirections, radius: shoulderRadius, colour: shoulderColour },
+    { directions: topDirections, radius: topRadius, colour: topColour },
+  ];
+  sourceRings.forEach(({ directions, radius, colour }) => {
+    directions.forEach((direction) => {
       pushVertex(
         positions,
         colours,
-        new THREE.Vector3(
-          sourcePosition.getX(source),
-          sourcePosition.getY(source),
-          sourcePosition.getZ(source),
-        ),
-        new THREE.Color(
-          sourceColour.getX(source),
-          sourceColour.getY(source),
-          sourceColour.getZ(source),
-        ),
+        direction.clone().multiplyScalar(radius),
+        colour,
       );
-    }
+    });
   });
 
   const crownDefinitions = [
-    { amount: 0.36, radius: topRadius + MID_CROWN_RISE, colour: midColour },
-    { amount: 0.7, radius: topRadius + INNER_CROWN_RISE, colour: innerColour },
+    { amount: 0.3, radius: topRadius + MID_CROWN_RISE, colour: midColour },
+    { amount: 0.62, radius: topRadius + INNER_CROWN_RISE, colour: innerColour },
   ];
   crownDefinitions.forEach(({ amount, radius, colour }) => {
-    for (let index = 0; index < ringSize; index += 1) {
-      const source = topStart + index;
-      const boundary = new THREE.Vector3(
-        sourcePosition.getX(source),
-        sourcePosition.getY(source),
-        sourcePosition.getZ(source),
-      );
+    topDirections.forEach((boundary) => {
       pushVertex(
         positions,
         colours,
         blendDirection(boundary, centreDirection, amount).multiplyScalar(radius),
         colour,
       );
-    }
+    });
   });
 
   const centreIndex = positions.length / 3;
@@ -142,7 +215,7 @@ function rebuildAsDome(sourceGeometry) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
+  installReferenceNormals(geometry, ringSize, fullRings);
   geometry.computeBoundingSphere();
   geometry.userData = {
     ...sourceGeometry.userData,
@@ -150,6 +223,7 @@ function rebuildAsDome(sourceGeometry) {
     kidsGalaxyBeveledKidPatch: true,
     kidsGalaxyDomedKidPatch: true,
     kidsGalaxyReferenceRoundedRelief: true,
+    kidsGalaxySmoothSphereFollowingNormals: true,
     kidsGalaxyPatchVertexCount: positions.length / 3,
     kidsGalaxyPatchRelief: topRadius + DOME_CENTRE_RISE - BODY_CONTACT_RADIUS,
     kidsGalaxyDomeRingCount: fullRings,
@@ -161,10 +235,10 @@ function tuneMaterial(material) {
   if (!material?.isMeshPhysicalMaterial) return;
   material.side = THREE.DoubleSide;
   material.shadowSide = THREE.DoubleSide;
-  material.roughness = 0.25;
+  material.roughness = 0.3;
   material.metalness = 0.001;
-  material.clearcoat = 0.23;
-  material.clearcoatRoughness = 0.31;
+  material.clearcoat = 0.15;
+  material.clearcoatRoughness = 0.38;
   material.emissive?.setHex(0x000000);
   material.emissiveIntensity = 0;
   material.flatShading = false;
@@ -203,7 +277,7 @@ function domeSculptedGroup(entity) {
   return true;
 }
 
-/** Final geometry pass: convert flat patch caps into smoothly raised domes. */
+/** Final geometry pass: turn flat patch caps into soft sphere-following domes. */
 export function installSculptedArtworkDomeFinish() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxySculptedDomeFinish) return;
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
