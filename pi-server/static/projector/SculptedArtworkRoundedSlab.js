@@ -122,7 +122,15 @@ function tangentBasis(centre) {
   return { u, v };
 }
 
-function projectedContour(directions, centre) {
+function projectedContour(directions, centre, backEcho) {
+  if (!backEcho) {
+    // Front kid artwork was authored in this x/y screen plane. Triangulating
+    // the cap in the same plane preserves long concave zigzags without the
+    // self-folding that a local tangent projection can introduce near the limb.
+    return directions.map((direction) =>
+      new THREE.Vector2(direction.x, direction.y),
+    );
+  }
   const { u, v } = tangentBasis(centre);
   return directions.map(
     (direction) => new THREE.Vector2(direction.dot(u), direction.dot(v)),
@@ -194,10 +202,14 @@ function rebuildRoundedSlab(sourceGeometry) {
   const dominantGesture = Boolean(
     sourceGeometry.userData?.kidsGalaxyDominantGesturePatch,
   );
+  const backEcho = Boolean(sourceGeometry.userData?.kidsGalaxyPatchBackEcho);
   const rings = dominantGesture ? DOMINANT_RINGS : SECONDARY_RINGS;
   const sourceRingSize = position.count / 3;
   const sourceTopStart = sourceRingSize * 2;
   const topColour = averageColour(colours, sourceTopStart, sourceRingSize);
+  if (dominantGesture) {
+    topColour.offsetHSL(0, 0.055, -0.018);
+  }
 
   let outerDirections = sourceDirections(position, 0, sourceRingSize);
   outerDirections = resampleClosedDirections(outerDirections);
@@ -213,7 +225,7 @@ function rebuildRoundedSlab(sourceGeometry) {
   rings.forEach((ring, ringIndex) => {
     const colour = topColour.clone().offsetHSL(
       0,
-      dominantGesture ? 0.008 : ringIndex < 2 ? -0.003 : 0.001,
+      dominantGesture ? 0.018 : ringIndex < 2 ? -0.003 : 0.001,
       ring.lightness,
     );
     appendRing(
@@ -250,7 +262,7 @@ function rebuildRoundedSlab(sourceGeometry) {
 
   const topDirections = directionsByRing[directionsByRing.length - 1];
   const topStart = (rings.length - 1) * ringSize;
-  const projected = projectedContour(topDirections, centre);
+  const projected = projectedContour(topDirections, centre, backEcho);
   const triangles = THREE.ShapeUtils.triangulateShape(projected, []);
   triangles.forEach(([a, b, c]) => {
     appendOutwardTriangle(
@@ -283,6 +295,7 @@ function rebuildRoundedSlab(sourceGeometry) {
     kidsGalaxyContourSmoothed: true,
     kidsGalaxyUniformContourResampling: true,
     kidsGalaxyConcaveTopTriangulation: true,
+    kidsGalaxyFrontArtworkPlaneTriangulation: !backEcho,
     kidsGalaxyVisibleRoundedBevel: true,
     kidsGalaxyHybridSlabNormals: true,
     kidsGalaxyRoundedSlabRingCount: rings.length,
@@ -365,7 +378,7 @@ function roundSculptedPieces(entity) {
 /**
  * Final production finish: secondary kid colours remain broad rounded slabs;
  * deliberate partial strokes in the dominant body hue use a shallower five-ring
- * profile so they read as molded ribbons integrated into the planet body.
+ * profile and front-plane cap triangulation so long concave ribbons stay intact.
  */
 export function installSculptedArtworkRoundedSlab() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyRoundedSlab) return;
