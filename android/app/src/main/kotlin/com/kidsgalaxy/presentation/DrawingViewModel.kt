@@ -66,7 +66,18 @@ class DrawingViewModel(
         }
     }
 
+    /**
+     * Select a brush colour, or apply that colour to the complete planet
+     * background when the UI sends the bucket-fill command (transparent ARGB).
+     * Kid palette colours themselves are always opaque, so alpha=0 is reserved
+     * as a presentation-boundary command and never enters the domain model.
+     */
     fun changeColor(colorArgb: Int) {
+        if ((colorArgb ushr 24) == 0) {
+            val opaque = colorArgb or 0xFF000000.toInt()
+            _uiState.update { it.copy(drawing = it.drawing.fillBackground(opaque)) }
+            return
+        }
         _uiState.update { it.copy(currentColorArgb = colorArgb) }
     }
 
