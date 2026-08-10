@@ -38,10 +38,10 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
           g.sunLight.decay = 0;
           g.ambientLight.visible = true;
           g.ambientLight.color.setHex(0xffffff);
-          g.ambientLight.intensity = 0.38;
+          g.ambientLight.intensity = 0.50;
           g.fillLight.visible = true;
           g.fillLight.color.setHex(0xdde8ff);
-          g.fillLight.intensity = 0.22;
+          g.fillLight.intensity = 0.36;
 
           // Remove scene guide lines from the comparison frame. This is test
           // presentation only; the production projector remains untouched.
@@ -129,14 +129,21 @@ def main() -> int:
               const front = patches.filter((child) => !child.userData?.kidsGalaxyBackDesignEcho);
               const back = patches.filter((child) => child.userData?.kidsGalaxyBackDesignEcho);
               const c = p.mesh.material.color;
+              const data = p.mesh.material.userData || {{}};
               return {{
-                trueSculpted: Boolean(p.mesh.material.userData.kidsGalaxyTrueSculptedArtwork),
-                projection: p.mesh.material.userData.designProjection,
+                trueSculpted: Boolean(data.kidsGalaxyTrueSculptedArtwork),
+                projection: data.designProjection,
                 patchCount: front.length,
                 backCount: back.length,
                 shellsHidden: !p.accentEdgeMesh.visible && !p.accentMesh.visible,
-                bodyBlue: c.b > c.g && c.g > c.r,
+                bodyBlue: data.kidsGalaxyDominantGesturePalette === 4 || (c.b > c.g && c.g > c.r),
+                dominantGesture: Boolean(data.kidsGalaxyDominantGestureRelief),
+                dominantCoverage: data.kidsGalaxyDominantGestureCoverage || 0,
+                bodyHasGeneratedMap: Boolean(p.mesh.material.map),
                 allBeveled: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyBeveledKidPatch),
+                allRoundedSlabs: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyRoundedSlab),
+                hybridNormals: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyHybridSlabNormals),
+                broadPlateau: front.every((mesh) => mesh.geometry?.userData?.kidsGalaxyBroadPlateau),
                 minimumRelief: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchRelief || 0)),
                 minimumVertices: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchVertexCount || 0)),
                 physical: front.every((mesh) => mesh.material?.isMeshPhysicalMaterial),
@@ -156,9 +163,18 @@ def main() -> int:
         check(sculpted["backCount"] <= 4, "only a smaller styled echo is added to the far hemisphere")
         check(sculpted["shellsHidden"], "flat alpha-shell artwork is removed from the final planet")
         check(sculpted["allBeveled"], "every visible kid patch has a physical beveled shoulder")
-        check(sculpted["minimumRelief"] >= 0.045, "kid patches stand visibly proud of the body")
-        check(sculpted["minimumVertices"] >= 18, "kid patch contours are smoothed into real geometry")
+        check(sculpted["allRoundedSlabs"], "kid pieces use the broad rounded-slab reference profile")
+        check(sculpted["hybridNormals"], "slab tops stay smooth while shoulders retain physical depth")
+        check(sculpted["broadPlateau"], "raised pieces keep broad tops instead of pinched domes")
+        check(sculpted["minimumRelief"] >= 0.04, "kid patches stand visibly but softly proud of the body")
+        check(sculpted["minimumVertices"] >= 30, "kid patch contours are smoothed into dense real geometry")
         check(sculpted["physical"], "sculpted kid patches use physically lit materials")
+        check(sculpted["dominantGesture"], "partial dominant kid strokes remain visible in the body design")
+        check(
+            0.03 <= sculpted["dominantCoverage"] <= 0.48,
+            "dominant gesture preservation only applies to deliberate partial paint",
+        )
+        check(sculpted["bodyHasGeneratedMap"], "dominant gesture is a generated same-hue body treatment")
 
         print("\nSaturn-like particle ring")
         ring = page.evaluate(
@@ -170,6 +186,8 @@ def main() -> int:
               return {{
                 saturn: Boolean(ring?.userData?.kidsGalaxySaturnParticleRing),
                 solid: ring?.userData?.kidsGalaxyRingIsSolid,
+                fineGrained: Boolean(ring?.userData?.kidsGalaxyFineGrainedSaturnRing),
+                unresolvedBands: Boolean(ring?.userData?.kidsGalaxyUnresolvedParticleBands),
                 particles: ring?.userData?.kidsGalaxyRingParticleCount || 0,
                 gap: ring?.userData?.cassiniGap,
                 ice: layers.some((layer) => layer.userData?.kidsGalaxyRingParticleKind === 'ice'),
@@ -182,8 +200,9 @@ def main() -> int:
             """
         )
         check(ring["saturn"] and ring["solid"] is False, "ring is a Saturn particle system, not a solid record")
-        check(not ring["solidGeometry"], "no solid annulus geometry remains around ringed planets")
-        check(ring["particles"] >= 3000, "ring has dense fine dust, ice and small-rock material")
+        check(ring["fineGrained"] and ring["unresolvedBands"], "fine particles merge optically into Saturn-like bands")
+        check(not ring["solidGeometry"], "no visible solid annulus geometry remains around ringed planets")
+        check(ring["particles"] >= 50_000, "ring has very dense fine dust, ice and sparse small-rock material")
         check(ring["ice"] and ring["rock"] and ring["dust"], "ring visibly mixes ice, rock and dust layers")
         check(ring["gap"] and ring["gap"][1] > ring["gap"][0], "ring keeps a Cassini-style separation")
         check(ring["speeds"] >= 3, "ring layers rotate at different angular speeds")
