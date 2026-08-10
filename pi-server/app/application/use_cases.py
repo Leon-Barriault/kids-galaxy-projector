@@ -97,7 +97,13 @@ class SubmitPlanetUseCase:
             max_dimension=max_dimension,
             target_size=target_size,
         )
-        clean_png = self._surface_styler.style(clean_png)
+        # New tablet clients explicitly state the planet body/background colour.
+        # Their uploaded pixels are therefore authored design input, not white
+        # paper that needs the legacy diffusion/wash treatment. Keeping the raw
+        # normalized drawing here prevents the old styler from smearing strokes
+        # or replacing the bucket colour before the 3D projector sees it.
+        if body_color is None:
+            clean_png = self._surface_styler.style(clean_png)
 
         display_name = normalize_display_name(raw_name)
         planet_id = uuid.uuid4().hex[:10]
