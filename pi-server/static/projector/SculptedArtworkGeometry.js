@@ -6,14 +6,17 @@ const DISC_SIZE = 256;
 const GRID = 128;
 const MAX_COLORS = 3;
 const MAX_EXPLICIT_BODY_COLORS = 6;
-const MAX_SECONDARY_COMPONENTS = 9;
+const MAX_SECONDARY_COMPONENTS = 7;
+const MAX_EXPLICIT_BODY_COMPONENTS = 9;
 const MAX_DOMINANT_COMPONENTS = 2;
-const MAX_BACK_ECHO_COMPONENTS = 9;
+const MAX_BACK_ECHO_COMPONENTS = 7;
+const MAX_EXPLICIT_BACK_ECHO_COMPONENTS = 9;
 const MIN_COMPONENT_CELLS = 14;
 const MIN_DOMINANT_GESTURE_COVERAGE = 0.035;
 const MAX_DOMINANT_GESTURE_COVERAGE = 0.48;
 const ARTWORK_TARGET_FILL = 0.94;
-const ARTWORK_MAX_FIT_SCALE = 1.85;
+const ARTWORK_MAX_FIT_SCALE = 1.55;
+const EXPLICIT_ARTWORK_MAX_FIT_SCALE = 1.85;
 const BODY_MATCH_DISTANCE = 54;
 const BODY_RADIUS = 1.05;
 const BASE_RADIUS = 1.056;
@@ -179,17 +182,22 @@ function fitArtworkToDisc(disc, explicitBodyRgb = null) {
   }
 
   const targetPixels = DISC_SIZE * ARTWORK_TARGET_FILL;
+  const maximumScale = explicitBodyRgb
+    ? EXPLICIT_ARTWORK_MAX_FIT_SCALE
+    : ARTWORK_MAX_FIT_SCALE;
   const fitScaleX = THREE.MathUtils.clamp(
     targetPixels / bounds.width,
     1,
-    ARTWORK_MAX_FIT_SCALE,
+    maximumScale,
   );
   const fitScaleY = THREE.MathUtils.clamp(
     targetPixels / bounds.height,
     1,
-    ARTWORK_MAX_FIT_SCALE,
+    maximumScale,
   );
-  const fitScale = explicitBodyRgb ? Math.max(fitScaleX, fitScaleY) : Math.min(fitScaleX, fitScaleY);
+  const fitScale = explicitBodyRgb
+    ? Math.max(fitScaleX, fitScaleY)
+    : Math.min(fitScaleX, fitScaleY);
 
   if (!explicitBodyRgb && fitScale <= 1.01) {
     disc.kidsGalaxyArtworkFitScale = 1;
@@ -309,9 +317,10 @@ function analyse(texture, explicitBodyColor = null) {
       const b = pixels[pixel + 2];
       if (!isAuthoredPixel(r, g, b, explicitBodyRgb)) continue;
       const colour = paletteIndex(r, g, b);
-      // Antialiased edges of a same-colour brush stroke should merge into the
-      // body just like the fully opaque centre of that stroke.
-      if (explicitBodyRgb && rgbDistance(PALETTE[colour], explicitBodyRgb) <= BODY_MATCH_DISTANCE) {
+      if (
+        explicitBodyRgb &&
+        rgbDistance(PALETTE[colour], explicitBodyRgb) <= BODY_MATCH_DISTANCE
+      ) {
         continue;
       }
       labels[indexOf(x, y)] = colour;
@@ -440,7 +449,12 @@ function componentsFor(analysis) {
   const secondary = components
     .filter((component) => !component.isDominantGesture)
     .sort((a, b) => b.cells.length - a.cells.length)
-    .slice(0, MAX_SECONDARY_COMPONENTS);
+    .slice(
+      0,
+      analysis.explicitBodyColor
+        ? MAX_EXPLICIT_BODY_COMPONENTS
+        : MAX_SECONDARY_COMPONENTS,
+    );
   const dominant = components
     .filter((component) => component.isDominantGesture)
     .sort((a, b) => b.cells.length - a.cells.length)
@@ -719,6 +733,9 @@ function buildSculptedArtwork(entity, texture) {
 
   const seed = entity.animator.hashId(`${entity.id}-sculpted-back-echo`);
   const backRotation = 0.34 + entity.seededUnit(seed, 5) * 0.28;
+  const backEchoLimit = explicitBody
+    ? MAX_EXPLICIT_BACK_ECHO_COMPONENTS
+    : MAX_BACK_ECHO_COMPONENTS;
   let dominantGestureCount = 0;
   let secondaryCount = 0;
   let backEchoCount = 0;
@@ -745,10 +762,7 @@ function buildSculptedArtwork(entity, texture) {
     if (component.isDominantGesture) dominantGestureCount += 1;
     else secondaryCount += 1;
 
-    // A nearly full-size echo of the same authored trait continues that visual
-    // language around the far hemisphere as the planet rotates; colours and
-    // component relationships stay unchanged rather than being procedurally remixed.
-    if (backEchoCount < MAX_BACK_ECHO_COMPONENTS) {
+    if (backEchoCount < backEchoLimit) {
       const back = new THREE.Mesh(
         createPatchGeometry(component.contour, colour, {
           back: true,
