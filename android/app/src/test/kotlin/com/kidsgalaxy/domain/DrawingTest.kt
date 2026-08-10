@@ -9,12 +9,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The Drawing aggregate holds stroke history and the undo/clear rules.
- * Pure Kotlin - no Compose, no Android, so it is trivially testable.
- */
 class DrawingTest {
     private val red = 0xFFE53935.toInt()
+    private val blue = 0xFF2196F3.toInt()
 
     private fun stroke(vararg coords: Pair<Float, Float>) =
         StrokePath(
@@ -28,6 +25,7 @@ class DrawingTest {
         val drawing = Drawing()
         assertTrue(drawing.isEmpty)
         assertEquals(0, drawing.strokes.size)
+        assertEquals(0xFFFFFFFF.toInt(), drawing.backgroundColorArgb)
     }
 
     @Test
@@ -39,14 +37,76 @@ class DrawingTest {
 
     @Test
     fun `single-point strokes are ignored`() {
-        // A tap is not a stroke; storing it would render nothing but cost memory.
-        val drawing = Drawing().addStroke(stroke(5f to 5f))
-        assertTrue(drawing.isEmpty)
+        assertTrue(Drawing().addStroke(stroke(5f to 5f)).isEmpty)
     }
 
     @Test
     fun `empty strokes are ignored`() {
         assertTrue(Drawing().addStroke(stroke()).isEmpty)
+    }
+
+    @Test
+    fun `bucket fill changes only background and preserves authored strokes`() {
+        val originalStroke = stroke(10f to 20f, 90f to 80f)
+        val drawing =
+            Drawing()
+                .withCanvasSize(CanvasSize(100f, 100f))
+                .addStroke(originalStroke)
+                .fillBackground(blue)
+
+        assertEquals(blue, drawing.backgroundColorArgb)
+        assertTrue(drawing.hasExplicitBackgroundFill)
+        assertFalse(drawing.isEmpty)
+        assertEquals(2, drawing.strokes.size)
+        assertTrue(drawing.strokes.first().isBackgroundFill)
+        assertEquals(originalStroke, drawing.strokes.last())
+    }
+
+    @Test
+    fun `bucket-only planet is launchable drawing and white is a valid explicit body`() {
+        val drawing =
+            Drawing()
+                .withCanvasSize(CanvasSize(200f, 160f))
+                .fillBackground(0xFFFFFFFF.toInt())
+
+        assertFalse(drawing.isEmpty)
+        assertEquals(0xFFFFFFFF.toInt(), drawing.backgroundColorArgb)
+        assertTrue(drawing.strokes.single().isBackgroundFill)
+    }
+
+    @Test
+    fun `changing bucket color replaces fill underneath existing strokes`() {
+        val authored = stroke(20f to 20f, 80f to 80f)
+        val drawing =
+            Drawing()
+                .withCanvasSize(CanvasSize(100f, 100f))
+                .addStroke(authored)
+                .fillBackground(red)
+                .fillBackground(blue)
+
+        assertEquals(2, drawing.strokes.size)
+        assertEquals(blue, drawing.strokes.first().colorArgb)
+        assertTrue(drawing.strokes.first().isBackgroundFill)
+        assertEquals(authored, drawing.strokes.last())
+    }
+
+    @Test
+    fun `undo removes authored stroke before removing bucket fill`() {
+        val filled =
+            Drawing()
+                .withCanvasSize(CanvasSize(100f, 100f))
+                .fillBackground(blue)
+                .addStroke(stroke(0f to 0f, 10f to 10f))
+
+        val afterStrokeUndo = filled.undo()
+        assertFalse(afterStrokeUndo.isEmpty)
+        assertTrue(afterStrokeUndo.hasExplicitBackgroundFill)
+        assertTrue(afterStrokeUndo.strokes.single().isBackgroundFill)
+
+        val afterFillUndo = afterStrokeUndo.undo()
+        assertTrue(afterFillUndo.isEmpty)
+        assertFalse(afterFillUndo.hasExplicitBackgroundFill)
+        assertEquals(0xFFFFFFFF.toInt(), afterFillUndo.backgroundColorArgb)
     }
 
     @Test
@@ -58,15 +118,7 @@ class DrawingTest {
                 .undo()
 
         assertEquals(1, drawing.strokes.size)
-        assertEquals(
-            0f,
-            drawing.strokes
-                .first()
-                .points
-                .first()
-                .x,
-            0.001f,
-        )
+        assertEquals(0f, drawing.strokes.first().points.first().x, 0.001f)
     }
 
     @Test
@@ -75,13 +127,16 @@ class DrawingTest {
     }
 
     @Test
-    fun `clear removes everything`() {
+    fun `clear removes strokes and restores white background`() {
         val drawing =
             Drawing()
+                .withCanvasSize(CanvasSize(100f, 100f))
+                .fillBackground(blue)
                 .addStroke(stroke(0f to 0f, 1f to 1f))
-                .addStroke(stroke(2f to 2f, 3f to 3f))
                 .clear()
         assertTrue(drawing.isEmpty)
+        assertEquals(0xFFFFFFFF.toInt(), drawing.backgroundColorArgb)
+        assertFalse(drawing.hasExplicitBackgroundFill)
     }
 
     @Test
@@ -108,7 +163,6 @@ class DrawingTest {
 
     @Test
     fun `clear keeps the measured canvas size`() {
-        // Re-measuring after every clear would be wasteful and briefly wrong.
         val drawing =
             Drawing()
                 .withCanvasSize(CanvasSize(600f, 1000f))
