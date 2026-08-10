@@ -3,16 +3,17 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 
 const BODY_RADIUS = 1.056;
-const CONTACT_RADIUS = 1.058;
-const LOWER_BEVEL_RADIUS = 1.069;
-const UPPER_BEVEL_RADIUS = 1.086;
-const TOP_EDGE_RADIUS = 1.100;
-const TOP_SURFACE_RADIUS = 1.105;
-const TOP_INNER_RADIUS = 1.106;
+const RINGS = [
+  { inset: 0.0, radius: 1.058, lightness: -0.048 },
+  { inset: 0.028, radius: 1.068, lightness: -0.032 },
+  { inset: 0.058, radius: 1.082, lightness: -0.018 },
+  { inset: 0.086, radius: 1.096, lightness: -0.004 },
+  { inset: 0.108, radius: 1.104, lightness: 0.008 },
+];
 
 function ringColour(colours, start, count) {
   const colour = new THREE.Color();
-  const samples = Math.min(count, 40);
+  const samples = Math.min(count, 48);
   for (let index = 0; index < samples; index += 1) {
     const vertex = start + Math.floor((index / samples) * count);
     colour.r += colours.getX(vertex);
@@ -36,7 +37,7 @@ function extractDirections(position, start, count) {
   return result;
 }
 
-function smoothClosedDirections(input, passes = 4) {
+function smoothClosedDirections(input, passes = 3) {
   let current = input.map((vector) => vector.clone());
   for (let pass = 0; pass < passes; pass += 1) {
     const previousPass = current;
@@ -45,23 +46,46 @@ function smoothClosedDirections(input, passes = 4) {
       const next = previousPass[(index + 1) % previousPass.length];
       return previous
         .clone()
-        .multiplyScalar(0.2)
-        .add(vector.clone().multiplyScalar(0.6))
-        .add(next.clone().multiplyScalar(0.2))
+        .multiplyScalar(0.18)
+        .add(vector.clone().multiplyScalar(0.64))
+        .add(next.clone().multiplyScalar(0.18))
         .normalize();
     });
   }
   return current;
 }
 
-function interpolateDirections(from, to, amount) {
-  return from.map((direction, index) =>
-    direction.clone().lerp(to[index], amount).normalize(),
-  );
+function resampleClosedDirections(input) {
+  const source = input.map((direction) => direction.clone().normalize());
+  const targetCount = THREE.MathUtils.clamp(source.length * 3, 48, 128);
+  const cumulative = [0];
+  let total = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const next = source[(index + 1) % source.length];
+    total += source[index].distanceTo(next);
+    cumulative.push(total);
+  }
+  if (total <= 0.000001) return source;
+
+  const result = [];
+  for (let sample = 0; sample < targetCount; sample += 1) {
+    const distance = (sample / targetCount) * total;
+    let segment = 0;
+    while (segment + 1 < cumulative.length && cumulative[segment + 1] < distance) {
+      segment += 1;
+    }
+    const start = source[segment % source.length];
+    const end = source[(segment + 1) % source.length];
+    const segmentStart = cumulative[segment];
+    const segmentLength = Math.max(0.000001, cumulative[segment + 1] - segmentStart);
+    const amount = THREE.MathUtils.clamp((distance - segmentStart) / segmentLength, 0, 1);
+    result.push(start.clone().lerp(end, amount).normalize());
+  }
+  return result;
 }
 
-function shrinkTowardCentre(directions, centre, amount) {
-  return directions.map((direction) =>
+function insetDirections(base, centre, amount) {
+  return base.map((direction) =>
     direction.clone().lerp(centre, amount).normalize(),
   );
 }
@@ -72,7 +96,23 @@ function pushVertex(positions, colours, direction, radius, colour) {
   colours.push(colour.r, colour.g, colour.b);
 }
 
-function installReferenceNormals(geometry, ringSize, fullRings) {
+function tangentBasis(normal) {
+  const helper = Math.abs(normal.y) < 0.86
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(1, 0, 0);
+  const tangentX = new THREE.Vector3().crossVectors(helper, normal).normalize();
+  const tangentY = new THREE.Vector3().crossVectors(normal, tangentX).normalize();
+  return { tangentX, tangentY };
+}
+
+function projectedContour(directions, centreDirection) {
+  const { tangentX, tangentY } = tangentBasis(centreDirection);
+  return directions.map(
+    (direction) => new THREE.Vector2(direction.dot(tangentX), direction.dot(tangentY)),
+  );
+}
+
+function installReferenceNormals(geometry, ringSize) {
   geometry.computeVertexNormals();
   const position = geometry.getAttribute('position');
   const normal = geometry.getAttribute('normal');
@@ -81,13 +121,11 @@ function installReferenceNormals(geometry, ringSize, fullRings) {
   const actual = new THREE.Vector3();
   const radial = new THREE.Vector3();
   const blended = new THREE.Vector3();
-  // The bevel keeps enough physical normal to catch a rounded edge highlight;
-  // the raised top becomes progressively sphere-following so it reads as a
-  // molded layer conforming to the planet rather than a button or bubble.
-  const actualWeights = [0.72, 0.82, 0.74, 0.54, 0.28, 0.16];
+  // Bevel normals remain physical; top normals progressively follow the sphere.
+  const actualWeights = [0.78, 0.86, 0.76, 0.5, 0.22];
 
-  for (let ring = 0; ring < fullRings; ring += 1) {
-    const weight = actualWeights[ring] ?? 0.2;
+  for (let ring = 0; ring < RINGS.length; ring += 1) {
+    const weight = actualWeights[ring];
     for (let index = 0; index < ringSize; index += 1) {
       const vertex = ring * ringSize + index;
       actual.set(normal.getX(vertex), normal.getY(vertex), normal.getZ(vertex)).normalize();
@@ -102,16 +140,6 @@ function installReferenceNormals(geometry, ringSize, fullRings) {
       normal.setXYZ(vertex, blended.x, blended.y, blended.z);
     }
   }
-
-  const centreIndex = fullRings * ringSize;
-  radial
-    .set(
-      position.getX(centreIndex),
-      position.getY(centreIndex),
-      position.getZ(centreIndex),
-    )
-    .normalize();
-  normal.setXYZ(centreIndex, radial.x, radial.y, radial.z);
   normal.needsUpdate = true;
 }
 
@@ -121,73 +149,30 @@ function rebuildAsRaisedPatch(sourceGeometry) {
   if (!sourcePosition || !sourceColour || sourcePosition.count < 18) return null;
   if (sourcePosition.count % 3 !== 0) return null;
 
-  const ringSize = sourcePosition.count / 3;
-  const outerStart = 0;
-  const shoulderStart = ringSize;
-  const topStart = ringSize * 2;
+  const sourceRingSize = sourcePosition.count / 3;
+  const sourceTopStart = sourceRingSize * 2;
+  const topColour = ringColour(sourceColour, sourceTopStart, sourceRingSize);
 
-  const outer = smoothClosedDirections(extractDirections(sourcePosition, outerStart, ringSize));
-  const shoulder = smoothClosedDirections(
-    extractDirections(sourcePosition, shoulderStart, ringSize),
-  );
-  const top = smoothClosedDirections(extractDirections(sourcePosition, topStart, ringSize));
+  let base = extractDirections(sourcePosition, 0, sourceRingSize);
+  base = resampleClosedDirections(base);
+  base = smoothClosedDirections(base);
+  const ringSize = base.length;
   const centreDirection = new THREE.Vector3();
-  top.forEach((direction) => centreDirection.add(direction));
+  base.forEach((direction) => centreDirection.add(direction));
   centreDirection.normalize();
-
-  const topColour = ringColour(sourceColour, topStart, ringSize);
-  const coloursByRing = [
-    topColour.clone().offsetHSL(0, -0.004, -0.05),
-    topColour.clone().offsetHSL(0, -0.003, -0.032),
-    topColour.clone().offsetHSL(0, -0.001, -0.014),
-    topColour.clone().offsetHSL(0, 0.001, 0.002),
-    topColour.clone().offsetHSL(0, 0.002, 0.01),
-    topColour.clone().offsetHSL(0, 0.002, 0.012),
-  ];
-
-  const rings = [
-    { directions: outer, radius: CONTACT_RADIUS },
-    {
-      directions: interpolateDirections(outer, shoulder, 0.52),
-      radius: LOWER_BEVEL_RADIUS,
-    },
-    { directions: shoulder, radius: UPPER_BEVEL_RADIUS },
-    {
-      directions: interpolateDirections(shoulder, top, 0.6),
-      radius: TOP_EDGE_RADIUS,
-    },
-    { directions: top, radius: TOP_SURFACE_RADIUS },
-    {
-      directions: shrinkTowardCentre(top, centreDirection, 0.5),
-      radius: TOP_INNER_RADIUS,
-    },
-  ];
 
   const positions = [];
   const colours = [];
-  rings.forEach((ring, ringIndex) => {
-    ring.directions.forEach((direction) => {
-      pushVertex(
-        positions,
-        colours,
-        direction,
-        ring.radius,
-        coloursByRing[ringIndex],
-      );
+  const directionsByRing = RINGS.map((ring) => insetDirections(base, centreDirection, ring.inset));
+  RINGS.forEach((ring, ringIndex) => {
+    const colour = topColour.clone().offsetHSL(0, ringIndex < 2 ? -0.002 : 0.001, ring.lightness);
+    directionsByRing[ringIndex].forEach((direction) => {
+      pushVertex(positions, colours, direction, ring.radius, colour);
     });
   });
 
-  const centreIndex = positions.length / 3;
-  pushVertex(
-    positions,
-    colours,
-    centreDirection,
-    TOP_INNER_RADIUS,
-    coloursByRing[coloursByRing.length - 1],
-  );
-
   const indices = [];
-  for (let ring = 0; ring < rings.length - 1; ring += 1) {
+  for (let ring = 0; ring < RINGS.length - 1; ring += 1) {
     const currentStart = ring * ringSize;
     const nextStart = (ring + 1) * ringSize;
     for (let index = 0; index < ringSize; index += 1) {
@@ -197,17 +182,22 @@ function rebuildAsRaisedPatch(sourceGeometry) {
     }
   }
 
-  const innerStart = (rings.length - 1) * ringSize;
-  for (let index = 0; index < ringSize; index += 1) {
-    const next = (index + 1) % ringSize;
-    indices.push(innerStart + index, centreIndex, innerStart + next);
-  }
+  // Correctly triangulate the potentially concave kid-drawn top. A centre fan
+  // folds concave gestures into radial wedges; ShapeUtils preserves the actual
+  // child contour with no artificial spokes.
+  const topDirections = directionsByRing[directionsByRing.length - 1];
+  const top2d = projectedContour(topDirections, centreDirection);
+  const triangles = THREE.ShapeUtils.triangulateShape(top2d, []);
+  const topStart = (RINGS.length - 1) * ringSize;
+  triangles.forEach(([a, b, c]) => {
+    indices.push(topStart + a, topStart + b, topStart + c);
+  });
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
   geometry.setIndex(indices);
-  installReferenceNormals(geometry, ringSize, rings.length);
+  installReferenceNormals(geometry, ringSize);
   geometry.computeBoundingSphere();
   geometry.userData = {
     ...sourceGeometry.userData,
@@ -216,9 +206,12 @@ function rebuildAsRaisedPatch(sourceGeometry) {
     kidsGalaxyRoundedRaisedKidPatch: true,
     kidsGalaxyReferenceRoundedRelief: true,
     kidsGalaxySmoothSphereFollowingNormals: true,
+    kidsGalaxyConcaveTopTriangulation: true,
+    kidsGalaxyUniformContourResampling: true,
     kidsGalaxyPatchVertexCount: positions.length / 3,
-    kidsGalaxyPatchRelief: TOP_INNER_RADIUS - BODY_RADIUS,
-    kidsGalaxyRaisedPatchRingCount: rings.length,
+    kidsGalaxyPatchRelief: RINGS[RINGS.length - 1].radius - BODY_RADIUS,
+    kidsGalaxyRaisedPatchRingCount: RINGS.length,
+    kidsGalaxyRaisedPatchContourVertices: ringSize,
   };
   return geometry;
 }
@@ -227,10 +220,10 @@ function tuneMaterial(material) {
   if (!material?.isMeshPhysicalMaterial) return;
   material.side = THREE.DoubleSide;
   material.shadowSide = THREE.DoubleSide;
-  material.roughness = 0.23;
+  material.roughness = 0.22;
   material.metalness = 0.001;
-  material.clearcoat = 0.24;
-  material.clearcoatRoughness = 0.29;
+  material.clearcoat = 0.25;
+  material.clearcoatRoughness = 0.28;
   material.emissive?.setHex(0x000000);
   material.emissiveIntensity = 0;
   material.flatShading = false;
@@ -242,9 +235,9 @@ function tuneMaterial(material) {
 
 function tuneBody(material) {
   if (!material?.isMeshPhysicalMaterial) return;
-  material.roughness = 0.31;
-  material.clearcoat = 0.14;
-  material.clearcoatRoughness = 0.36;
+  material.roughness = 0.3;
+  material.clearcoat = 0.15;
+  material.clearcoatRoughness = 0.34;
   material.emissive?.setHex(0x000000);
   material.emissiveIntensity = 0;
   material.needsUpdate = true;
@@ -256,6 +249,7 @@ function finishSculptedGroup(entity) {
 
   let count = 0;
   let minimumRelief = Number.POSITIVE_INFINITY;
+  let minimumContourVertices = Number.POSITIVE_INFINITY;
   group.children.forEach((mesh) => {
     if (!mesh.isMesh || !mesh.geometry?.userData?.kidsGalaxySculptedKidPatch) return;
     const replacement = rebuildAsRaisedPatch(mesh.geometry);
@@ -266,9 +260,10 @@ function finishSculptedGroup(entity) {
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     count += 1;
-    minimumRelief = Math.min(
-      minimumRelief,
-      replacement.userData.kidsGalaxyPatchRelief,
+    minimumRelief = Math.min(minimumRelief, replacement.userData.kidsGalaxyPatchRelief);
+    minimumContourVertices = Math.min(
+      minimumContourVertices,
+      replacement.userData.kidsGalaxyRaisedPatchContourVertices,
     );
   });
 
@@ -277,6 +272,7 @@ function finishSculptedGroup(entity) {
   group.userData.kidsGalaxyRoundedRaisedReferenceFinish = true;
   group.userData.kidsGalaxyRoundedRaisedPatchCount = count;
   group.userData.kidsGalaxyRoundedRaisedMinimumRelief = minimumRelief;
+  group.userData.kidsGalaxyRoundedRaisedMinimumContourVertices = minimumContourVertices;
   entity.mesh.material.userData.kidsGalaxyRoundedRaisedReferenceFinish = true;
   entity.mesh.material.userData.kidsGalaxyRoundedRaisedPatchCount = count;
   entity.mesh.material.userData.kidsGalaxyRoundedRaisedMinimumRelief = minimumRelief;
@@ -284,9 +280,8 @@ function finishSculptedGroup(entity) {
 }
 
 /**
- * Final geometry pass: broad rounded bevel + sphere-following raised top.
- * This matches the molded reference language without turning kid motifs into
- * either flat decals or peaked button-like domes.
+ * Final geometry pass: smooth broad bevel + correctly triangulated raised top.
+ * This keeps the child's contour while matching the reference molded language.
  */
 export function installSculptedArtworkDomeFinish() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxySculptedDomeFinish) return;
