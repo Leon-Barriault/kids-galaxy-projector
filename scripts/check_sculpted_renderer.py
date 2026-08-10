@@ -139,6 +139,45 @@ def main() -> int:
               );
               const dominantReliefs = reliefs(dominant);
               const secondaryReliefs = reliefs(secondary);
+
+              let minX = Infinity;
+              let maxX = -Infinity;
+              let minY = Infinity;
+              let maxY = -Infinity;
+              front.forEach((mesh) => {{
+                const position = mesh.geometry?.getAttribute('position');
+                if (!position) return;
+                for (let index = 0; index < position.count; index += 1) {{
+                  const x = position.getX(index);
+                  const y = position.getY(index);
+                  const z = position.getZ(index);
+                  const radius = Math.max(0.0001, Math.hypot(x, y, z));
+                  minX = Math.min(minX, x / radius);
+                  maxX = Math.max(maxX, x / radius);
+                  minY = Math.min(minY, y / radius);
+                  maxY = Math.max(maxY, y / radius);
+                }}
+              }});
+
+              const averageColour = (mesh) => {{
+                const colors = mesh.geometry?.getAttribute('color');
+                if (!colors?.count) return null;
+                const c = {{ r: 0, g: 0, b: 0 }};
+                const stride = Math.max(1, Math.floor(colors.count / 24));
+                let samples = 0;
+                for (let index = 0; index < colors.count; index += stride) {{
+                  c.r += colors.getX(index);
+                  c.g += colors.getY(index);
+                  c.b += colors.getZ(index);
+                  samples += 1;
+                }}
+                c.r /= Math.max(1, samples);
+                c.g /= Math.max(1, samples);
+                c.b /= Math.max(1, samples);
+                return c;
+              }};
+              const secondaryColours = secondary.map(averageColour).filter(Boolean);
+
               return {{
                 trueSculpted: Boolean(data.kidsGalaxyTrueSculptedArtwork),
                 projection: data.designProjection,
@@ -146,6 +185,11 @@ def main() -> int:
                 secondaryCount: secondary.length,
                 dominantCount: dominant.length,
                 backCount: back.length,
+                fitScale: data.kidsGalaxyArtworkFitScale || 1,
+                targetFill: data.kidsGalaxyArtworkTargetFill || 0,
+                stretchedTraits: Boolean(data.kidsGalaxyTraitsStretchedToPlanet),
+                traitSpanX: Number.isFinite(minX) ? maxX - minX : 0,
+                traitSpanY: Number.isFinite(minY) ? maxY - minY : 0,
                 shellsHidden: !p.accentEdgeMesh.visible && !p.accentMesh.visible,
                 bodyBlue: data.kidsGalaxyBodyPalette === 4 ||
                   (body.color.b > body.color.g && body.color.g > body.color.r),
@@ -161,7 +205,9 @@ def main() -> int:
                 secondaryMinRelief: secondaryReliefs.length ? Math.min(...secondaryReliefs) : 0,
                 minimumVertices: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchVertexCount || 0)),
                 physical: front.every((mesh) => mesh.material?.isMeshPhysicalMaterial),
-                dominantNoBackEcho: dominant.every((mesh) => !mesh.userData?.kidsGalaxyBackDesignEcho),
+                backHasDominant: back.some((mesh) => mesh.userData?.kidsGalaxyDominantGesturePatch),
+                hasGreen: secondaryColours.some((c) => c.g > c.r * 1.15 && c.g > c.b * 1.05),
+                hasYellow: secondaryColours.some((c) => c.r > 0.55 && c.g > 0.45 && c.b < c.g * 0.8),
               }};
             }})()
             """
@@ -169,16 +215,25 @@ def main() -> int:
         check(sculpted["trueSculpted"], "valid kid artwork ends as real sculpted geometry")
         check(
             sculpted["projection"]
-            == "true-beveled-kid-components-with-dominant-ribbons-and-back-echo",
-            "the child's visible layout drives secondary pieces and same-hue body ribbons",
+            == "stretched-preserved-kid-components-with-full-size-back-echo",
+            "the complete child composition is stretched across the planet without remapping its traits",
         )
         check(sculpted["bodyBlue"], "dominant kid blue remains the coherent planet body")
         check(sculpted["cleanBody"], "dominant body stays clean instead of receiving a literal artwork texture")
+        check(sculpted["fitScale"] >= 1.15, "unused tablet margin is removed before sculpting the kid design")
+        check(sculpted["targetFill"] >= 0.93, "kid traits are fitted to almost the full planet design area")
+        check(sculpted["stretchedTraits"], "renderer records the full-planet trait expansion contract")
+        check(sculpted["traitSpanX"] >= 1.65, "kid traits span most of the visible planet width")
+        check(sculpted["traitSpanY"] >= 1.65, "kid traits span most of the visible planet height")
         check(3 <= sculpted["secondaryCount"] <= 7, "secondary child gestures remain separate molded pieces")
-        check(1 <= sculpted["dominantCount"] <= 2, "partial dominant strokes survive as a small set of molded ribbons")
-        check(4 <= sculpted["patchCount"] <= 9, "the final front design remains intentionally sparse")
-        check(sculpted["backCount"] <= 4, "only secondary pieces receive a smaller far-hemisphere echo")
-        check(sculpted["dominantNoBackEcho"], "dominant body ribbons are not redundantly copied to the back")
+        check(1 <= sculpted["dominantCount"] <= 2, "partial dominant strokes survive as molded ribbons")
+        check(4 <= sculpted["patchCount"] <= 9, "the recognizable child composition remains intentionally structured")
+        check(
+            sculpted["backCount"] >= min(sculpted["patchCount"], 5),
+            "near-full-size authored traits continue around the far hemisphere",
+        )
+        check(sculpted["backHasDominant"], "dominant kid ribbons also continue around the rotating planet")
+        check(sculpted["hasGreen"] and sculpted["hasYellow"], "secondary tablet colours survive the stretched rendering")
         check(sculpted["shellsHidden"], "flat alpha-shell artwork is removed from the final planet")
         check(sculpted["allBeveled"], "every visible kid patch has a physical beveled shoulder")
         check(sculpted["allRoundedSlabs"], "kid pieces use the broad rounded-slab reference profile")
