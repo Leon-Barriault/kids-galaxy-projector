@@ -12,6 +12,7 @@ from check_visual_renderer import kid_disc_image, png_bytes
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_DIR = REPO_ROOT / "artifacts"
+SELECTED_RING_COLOR = "#ff4f9a"
 
 
 def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
@@ -43,8 +44,6 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
           g.fillLight.color.setHex(0xdde8ff);
           g.fillLight.intensity = 0.36;
 
-          // Remove scene guide lines from the comparison frame. This is test
-          // presentation only; the production projector remains untouched.
           kg.scene.traverse((object) => {
             if (object.isLine || object.isLineLoop || object.isLineSegments) {
               object.visible = false;
@@ -98,7 +97,7 @@ def main() -> int:
             "Sculpted Kid Ringed",
             artwork=png_bytes(drawing),
             style="ringed",
-            ring_color="#b9d9e8",
+            ring_color=SELECTED_RING_COLOR,
         )
 
         browser = pw.chromium.launch(
@@ -147,8 +146,6 @@ def main() -> int:
                 minimumRelief: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchRelief || 0)),
                 minimumVertices: Math.min(...front.map((mesh) => mesh.geometry?.userData?.kidsGalaxyPatchVertexCount || 0)),
                 physical: front.every((mesh) => mesh.material?.isMeshPhysicalMaterial),
-                roughness: front[0]?.material?.roughness,
-                clearcoat: front[0]?.material?.clearcoat,
               }};
             }})()
             """
@@ -183,11 +180,35 @@ def main() -> int:
               const p = window.kidsGalaxy.kidPlanets.get('{ringed}');
               const ring = p.decorations.find((item) => item.userData?.kidsGalaxySaturnParticleRing);
               const layers = ring?.children || [];
+              const dust = layers.find((layer) => layer.isPoints && layer.userData?.kidsGalaxySaturnDust);
+              const colors = dust?.geometry?.getAttribute('color');
+              const average = {{ r: 0, g: 0, b: 0 }};
+              let samples = 0;
+              if (colors) {{
+                const stride = Math.max(1, Math.floor(colors.count / 256));
+                for (let index = 0; index < colors.count; index += stride) {{
+                  average.r += colors.getX(index);
+                  average.g += colors.getY(index);
+                  average.b += colors.getZ(index);
+                  samples += 1;
+                }}
+              }}
+              if (samples) {{
+                average.r /= samples;
+                average.g /= samples;
+                average.b /= samples;
+              }}
               return {{
                 saturn: Boolean(ring?.userData?.kidsGalaxySaturnParticleRing),
                 solid: ring?.userData?.kidsGalaxyRingIsSolid,
                 fineGrained: Boolean(ring?.userData?.kidsGalaxyFineGrainedSaturnRing),
                 unresolvedBands: Boolean(ring?.userData?.kidsGalaxyUnresolvedParticleBands),
+                colorFidelity: Boolean(ring?.userData?.kidsGalaxyRingColorFidelity),
+                selectedColor: ring?.userData?.kidsGalaxySelectedRingColor,
+                colorTreatment: ring?.userData?.kidsGalaxyRingColorTreatment,
+                recolored: ring?.userData?.kidsGalaxyRecoloredParticleCount || 0,
+                pinkChannelOrder: average.r > average.b && average.b > average.g,
+                chroma: Math.max(average.r, average.g, average.b) - Math.min(average.r, average.g, average.b),
                 particles: ring?.userData?.kidsGalaxyRingParticleCount || 0,
                 gap: ring?.userData?.cassiniGap,
                 ice: layers.some((layer) => layer.userData?.kidsGalaxyRingParticleKind === 'ice'),
@@ -206,6 +227,18 @@ def main() -> int:
         check(ring["ice"] and ring["rock"] and ring["dust"], "ring visibly mixes ice, rock and dust layers")
         check(ring["gap"] and ring["gap"][1] > ring["gap"][0], "ring keeps a Cassini-style separation")
         check(ring["speeds"] >= 3, "ring layers rotate at different angular speeds")
+        check(ring["colorFidelity"], "ring colour fidelity pass is active")
+        check(
+            ring["selectedColor"] == SELECTED_RING_COLOR,
+            "ring keeps the exact tablet-selected feature colour as its source hue",
+        )
+        check(
+            ring["colorTreatment"] == "selected-hue-radial-variants",
+            "ice, dust and rock vary around the selected hue instead of neutral grey",
+        )
+        check(ring["recolored"] >= 50_000, "the selected hue is applied across the complete particle system")
+        check(ring["pinkChannelOrder"], "a saturated pink tablet choice remains visibly pink in ring particles")
+        check(ring["chroma"] >= 0.12, "ring particles retain strong selected-colour chroma")
 
         print("\nvisual comparison artifacts")
         page.add_style_tag(
