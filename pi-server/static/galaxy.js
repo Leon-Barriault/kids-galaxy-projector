@@ -28,14 +28,15 @@ import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTunin
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
+import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 
 const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
 // images. Valid kid drawings end as true curved/beveled geometry: dominant paint
-// owns the planet body and every meaningful secondary gesture becomes its own
-// physical molded piece with a smaller styled echo on the far hemisphere.
+// owns the body, secondary gestures become physical pieces, then the geometry
+// finish smooths their normals and same-hue shoulders to the supplied references.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -47,6 +48,7 @@ installKidArtworkComponentSurface();
 installReferenceFinish();
 installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
+installSculptedGeometryFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
