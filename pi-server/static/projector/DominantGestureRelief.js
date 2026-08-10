@@ -8,6 +8,10 @@ const MAP_WIDTH = 512;
 const MAP_HEIGHT = 256;
 const MIN_GESTURE_COVERAGE = 0.035;
 const MAX_GESTURE_COVERAGE = 0.48;
+const FRONT_HALF_LONGITUDE = 0.22;
+const FRONT_HALF_LATITUDE = 0.36;
+const BACK_HALF_LONGITUDE = 0.16;
+const BACK_HALF_LATITUDE = 0.29;
 
 const PALETTE = [
   [0xe5, 0x39, 0x35],
@@ -57,9 +61,17 @@ function nearestPalette(r, g, b) {
 }
 
 function recoverLegacy(source) {
-  const sourceContext = source.getContext('2d', { alpha: false, willReadFrequently: true });
+  const sourceContext = source.getContext('2d', {
+    alpha: false,
+    willReadFrequently: true,
+  });
   if (!sourceContext) return null;
-  const sourcePixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
+  const sourcePixels = sourceContext.getImageData(
+    0,
+    0,
+    source.width,
+    source.height,
+  ).data;
   const output = canvas(DISC_SIZE, DISC_SIZE);
   const context = output.getContext('2d', { alpha: false });
   if (!context) return null;
@@ -169,7 +181,10 @@ function closeMask(mask) {
 
 function analyseDominantGesture(disc) {
   const sample = canvas(GRID, GRID);
-  const context = sample.getContext('2d', { alpha: false, willReadFrequently: true });
+  const context = sample.getContext('2d', {
+    alpha: false,
+    willReadFrequently: true,
+  });
   if (!context) return null;
   context.fillStyle = '#fff';
   context.fillRect(0, 0, GRID, GRID);
@@ -203,7 +218,12 @@ function analyseDominantGesture(disc) {
     if (count > counts[dominant]) dominant = index;
   });
   const coverage = counts[dominant] / Math.max(1, inside);
-  if (coverage < MIN_GESTURE_COVERAGE || coverage > MAX_GESTURE_COVERAGE) return null;
+  if (
+    coverage < MIN_GESTURE_COVERAGE ||
+    coverage > MAX_GESTURE_COVERAGE
+  ) {
+    return null;
+  }
 
   const mask = new Uint8Array(labels.length);
   labels.forEach((label, index) => {
@@ -213,10 +233,18 @@ function analyseDominantGesture(disc) {
 }
 
 function sampleMask(mask, x, y) {
+  if (x * x + y * y > 1) return false;
   const gx = Math.round((0.5 + x * 0.49) * (GRID - 1));
   const gy = Math.round((0.5 - y * 0.49) * (GRID - 1));
   if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) return false;
   return Boolean(mask[gridIndex(gx, gy)]);
+}
+
+function wrapSigned(value) {
+  let result = value;
+  while (result > 0.5) result -= 1;
+  while (result < -0.5) result += 1;
+  return result;
 }
 
 function buildSphereMask(entity, analysis) {
@@ -225,29 +253,41 @@ function buildSphereMask(entity, analysis) {
   if (!context) return null;
   const image = context.createImageData(MAP_WIDTH, MAP_HEIGHT);
   const seed = entity.animator.hashId(`${entity.id}-dominant-gesture-back`);
-  const backAngle = 0.2 + entity.seededUnit(seed, 5) * 0.3;
+  const backAngle = 0.18 + entity.seededUnit(seed, 5) * 0.26;
   const cosine = Math.cos(backAngle);
   const sine = Math.sin(backAngle);
 
   for (let y = 0; y < MAP_HEIGHT; y += 1) {
     const v = (y + 0.5) / MAP_HEIGHT;
-    const latitude = (0.5 - v) * Math.PI;
-    const cosLatitude = Math.cos(latitude);
-    const sphereY = Math.sin(latitude);
+    const latitude = 0.5 - v;
     for (let x = 0; x < MAP_WIDTH; x += 1) {
       const u = (x + 0.5) / MAP_WIDTH;
-      const longitude = (u - 0.5) * Math.PI * 2;
-      let discX = Math.sin(longitude) * cosLatitude;
-      let discY = sphereY;
-      const front = Math.cos(longitude) * cosLatitude >= 0;
-      if (!front) {
-        const mirrored = -discX;
-        const rotatedX = mirrored * cosine - discY * sine;
-        const rotatedY = mirrored * sine + discY * cosine;
-        discX = rotatedX * 0.86;
-        discY = rotatedY * 0.86;
+      const frontU = wrapSigned(u - 0.5);
+      let on = false;
+
+      if (
+        Math.abs(frontU) <= FRONT_HALF_LONGITUDE &&
+        Math.abs(latitude) <= FRONT_HALF_LATITUDE
+      ) {
+        on = sampleMask(
+          analysis.mask,
+          frontU / FRONT_HALF_LONGITUDE,
+          latitude / FRONT_HALF_LATITUDE,
+        );
+      } else {
+        const backU = wrapSigned(u);
+        if (
+          Math.abs(backU) <= BACK_HALF_LONGITUDE &&
+          Math.abs(latitude) <= BACK_HALF_LATITUDE
+        ) {
+          const rawX = -backU / BACK_HALF_LONGITUDE;
+          const rawY = latitude / BACK_HALF_LATITUDE;
+          const rotatedX = rawX * cosine - rawY * sine;
+          const rotatedY = rawX * sine + rawY * cosine;
+          on = sampleMask(analysis.mask, rotatedX * 0.9, rotatedY * 0.9);
+        }
       }
-      const on = sampleMask(analysis.mask, discX, discY);
+
       const pixel = (y * MAP_WIDTH + x) * 4;
       const value = on ? 255 : 0;
       image.data[pixel] = value;
@@ -272,45 +312,19 @@ function blurred(source, pixels) {
   return output;
 }
 
-function srgbBytes(colour) {
-  const resolved = colour.clone().convertLinearToSRGB();
-  return [
-    Math.round(THREE.MathUtils.clamp(resolved.r, 0, 1) * 255),
-    Math.round(THREE.MathUtils.clamp(resolved.g, 0, 1) * 255),
-    Math.round(THREE.MathUtils.clamp(resolved.b, 0, 1) * 255),
-  ];
-}
-
-function buildBodyColourMap(baseColour, maskCanvas) {
-  const output = canvas(MAP_WIDTH, MAP_HEIGHT);
-  const context = output.getContext('2d', { alpha: false, willReadFrequently: true });
-  const maskContext = maskCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
-  if (!context || !maskContext) return null;
-  const mask = maskContext.getImageData(0, 0, MAP_WIDTH, MAP_HEIGHT).data;
-  const image = context.createImageData(MAP_WIDTH, MAP_HEIGHT);
-  const base = srgbBytes(baseColour);
-  const gesture = srgbBytes(baseColour.clone().offsetHSL(0, 0.018, 0.07));
-
-  for (let index = 0; index < MAP_WIDTH * MAP_HEIGHT; index += 1) {
-    const pixel = index * 4;
-    const mix = mask[pixel] / 255;
-    image.data[pixel] = Math.round(THREE.MathUtils.lerp(base[0], gesture[0], mix));
-    image.data[pixel + 1] = Math.round(THREE.MathUtils.lerp(base[1], gesture[1], mix));
-    image.data[pixel + 2] = Math.round(THREE.MathUtils.lerp(base[2], gesture[2], mix));
-    image.data[pixel + 3] = 255;
-  }
-  context.putImageData(image, 0, 0);
-  return output;
-}
-
-function makeTexture(source, colorSpace, renderer) {
+function makeTexture(source, renderer) {
   const texture = new THREE.CanvasTexture(source);
-  texture.colorSpace = colorSpace;
+  texture.colorSpace = THREE.NoColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
-  texture.anisotropy = Math.min(12, renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = Math.min(
+    12,
+    renderer.capabilities.getMaxAnisotropy(),
+  );
+  // SphereGeometry presents +Z at u=0.25 while the authored front motif sits
+  // at u=0.5, matching the rest of the kid-artwork projection pipeline.
   texture.offset.x = 0.25;
   texture.needsUpdate = true;
   return texture;
@@ -323,25 +337,33 @@ function applyDominantGesture(entity, image) {
   if (!analysis) return false;
   const maskCanvas = buildSphereMask(entity, analysis);
   if (!maskCanvas) return false;
-  const softMask = blurred(maskCanvas, 2.1);
-  const colourCanvas = buildBodyColourMap(entity.mesh.material.color, softMask);
-  if (!colourCanvas) return false;
 
   const material = entity.mesh.material;
+  const bodyColour = material.color.clone();
+
+  // Dominant paint already defines the body. Preserve any deliberate strokes
+  // in that same colour only as shallow physical relief; do not repaint the
+  // whole sphere through a texture or turn the material white. This keeps the
+  // clean reference-style body while retaining the child's gesture under light.
   material.map?.dispose();
   material.bumpMap?.dispose();
   material.displacementMap?.dispose();
-  material.map = makeTexture(colourCanvas, THREE.SRGBColorSpace, entity.scene.renderer);
-  material.bumpMap = makeTexture(softMask, THREE.NoColorSpace, entity.scene.renderer);
-  material.bumpScale = 0.022;
-  material.displacementMap = makeTexture(blurred(maskCanvas, 3.8), THREE.NoColorSpace, entity.scene.renderer);
-  material.displacementScale = 0.0065;
-  material.displacementBias = -0.0004;
-  material.color.setHex(0xffffff);
+  material.map = null;
+  material.bumpMap = makeTexture(blurred(maskCanvas, 2.4), entity.scene.renderer);
+  material.bumpScale = 0.008;
+  material.displacementMap = makeTexture(
+    blurred(maskCanvas, 4.4),
+    entity.scene.renderer,
+  );
+  material.displacementScale = 0.0024;
+  material.displacementBias = -0.00015;
+  material.color.copy(bodyColour);
   material.userData.kidsGalaxyDominantGestureRelief = true;
   material.userData.kidsGalaxyDominantGestureCoverage = analysis.coverage;
   material.userData.kidsGalaxyDominantGesturePalette = analysis.dominant;
-  material.userData.kidsGalaxyDominantGestureStyle = 'same-hue-body-emboss';
+  material.userData.kidsGalaxyDominantGestureStyle =
+    'subtle-localized-same-hue-emboss';
+  material.userData.kidsGalaxyDominantGestureBumpScale = material.bumpScale;
   material.needsUpdate = true;
   return true;
 }
@@ -349,10 +371,14 @@ function applyDominantGesture(entity, image) {
 /**
  * Preserve partial dominant-colour brush gestures after that colour becomes the
  * planet body. Broad/fill-like dominant paint stays a clean body; deliberate
- * partial strokes become a subtle same-hue embossed motif instead of vanishing.
+ * partial strokes become a subtle localized emboss instead of disappearing.
  */
 export function installDominantGestureRelief() {
-  if (PlanetEntity.prototype.applyTexture?.kidsGalaxyDominantGestureRelief) return;
+  if (
+    PlanetEntity.prototype.applyTexture?.kidsGalaxyDominantGestureRelief
+  ) {
+    return;
+  }
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
 
   function dominantGestureTexture(texture) {
@@ -374,7 +400,12 @@ export function installDominantGestureRelief() {
     }
 
     previousApplyTexture.call(this, texture);
-    if (!copy || !this.mesh.material.userData?.kidsGalaxyComponentSurface) return;
+    if (
+      !copy ||
+      !this.mesh.material.userData?.kidsGalaxyComponentSurface
+    ) {
+      return;
+    }
     applyDominantGesture(this, copy);
   }
 
