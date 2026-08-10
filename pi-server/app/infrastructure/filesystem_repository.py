@@ -118,19 +118,43 @@ class FileSystemPlanetRepository(PlanetRepository):
         fallback_name = stem.split("_", 1)[1] if "_" in stem else stem
 
         raw_name = metadata.get("name")
-        display_name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else fallback_name
+        display_name = (
+            raw_name.strip()
+            if isinstance(raw_name, str) and raw_name.strip()
+            else fallback_name
+        )
 
         raw_style = metadata.get("style")
-        style = raw_style.strip().lower() if isinstance(raw_style, str) and raw_style.strip() else "classic"
+        style = (
+            raw_style.strip().lower()
+            if isinstance(raw_style, str) and raw_style.strip()
+            else "classic"
+        )
 
         raw_companions = metadata.get("companions")
-        companions = tuple(item for item in raw_companions if isinstance(item, str)) if isinstance(raw_companions, list) else ()
+        companions = (
+            tuple(item for item in raw_companions if isinstance(item, str))
+            if isinstance(raw_companions, list)
+            else ()
+        )
 
         ring_color = self._metadata_color(metadata, "ring_color", DEFAULT_RING_COLOR)
-        crater_color = self._metadata_color(metadata, "crater_color", DEFAULT_CRATER_COLOR)
-        mountain_color = self._metadata_color(metadata, "mountain_color", DEFAULT_MOUNTAIN_COLOR)
+        crater_color = self._metadata_color(
+            metadata,
+            "crater_color",
+            DEFAULT_CRATER_COLOR,
+        )
+        mountain_color = self._metadata_color(
+            metadata,
+            "mountain_color",
+            DEFAULT_MOUNTAIN_COLOR,
+        )
         raw_body_color = metadata.get("body_color")
-        body_color = raw_body_color.strip().lower() if isinstance(raw_body_color, str) and raw_body_color.strip() else None
+        body_color = (
+            raw_body_color.strip().lower()
+            if isinstance(raw_body_color, str) and raw_body_color.strip()
+            else None
+        )
 
         return Planet(
             id=planet_id,
@@ -210,7 +234,8 @@ class FileSystemPlanetRepository(PlanetRepository):
         for stale in self._images_newest_first()[keep:]:
             try:
                 stale.unlink(missing_ok=True)
-                (self._directory / Path(stale.name).with_suffix(".json").name).unlink(missing_ok=True)
+                metadata_path = self._directory / Path(stale.name).with_suffix(".json").name
+                metadata_path.unlink(missing_ok=True)
                 logger.info("Pruned old planet: %s", stale.name)
             except OSError as e:
                 logger.warning("Could not prune %s: %s", stale.name, e)
