@@ -116,6 +116,7 @@ data class Drawing(
     }
 
     companion object {
-        const val DEFAULT_BACKGROUND_COLOR_ARGB: Int = 0xFFFFFFFF.toInt()
+        /** Opaque white in signed ARGB Int form (0xFFFFFFFF). */
+        const val DEFAULT_BACKGROUND_COLOR_ARGB: Int = -1
     }
 }
