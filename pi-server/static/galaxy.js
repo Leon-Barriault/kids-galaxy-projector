@@ -35,6 +35,7 @@ import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRo
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
+import { installVisualRefinement } from './projector/VisualRefinement.js';
 
 const GALLERY_SIZE = 12;
 
@@ -64,6 +65,9 @@ installThemedGalaxyEnvironment();
 // Outermost only for the final body material. No colour inference happens here:
 // the core sculptor has already separated body pixels from authored traits.
 installExplicitBodyColor();
+// Deliberately last: this only reshapes the already-authoritative sculpted art,
+// deepens the installed crater geometry, and replaces the astronaut companion.
+installVisualRefinement();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
