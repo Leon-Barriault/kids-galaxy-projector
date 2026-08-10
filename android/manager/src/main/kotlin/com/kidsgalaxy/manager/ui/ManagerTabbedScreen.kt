@@ -69,41 +69,39 @@ fun ManagerTabbedScreen(
             )
         }
 
-        when (selectedTab) {
-            0 ->
-                ManagerScreen(
-                    state = state,
-                    galaxy = galaxy,
-                    language = language,
-                    onToggleLanguage = onToggleLanguage,
-                    onProjectorLanguageChange = onProjectorLanguageChange,
-                    onConfigureGalaxy = onConfigureGalaxy,
-                    onRefresh = onRefresh,
-                    onDelete = onDelete,
-                    onClearAll = onClearAll,
-                    onClearError = onClearError,
-                )
-
-            1 ->
-                GalaxyAdminScreen(
-                    state = state,
-                    galaxy = galaxy,
-                    language = language,
-                    onToggleLanguage = onToggleLanguage,
-                    onConfigureGalaxy = onConfigureGalaxy,
-                    onRefresh = onRefresh,
-                    onAsteroidBeltChange = onAsteroidBeltChange,
-                    onCometsChange = onCometsChange,
-                    onCometFrequencyChange = onCometFrequencyChange,
-                    onFlybyAsteroidsChange = onFlybyAsteroidsChange,
-                    onFlybyFrequencyChange = onFlybyFrequencyChange,
-                    onBehaviorModeChange = onBehaviorModeChange,
-                    onManualThemeChange = onManualThemeChange,
-                    onThemeEnabledChange = onThemeEnabledChange,
-                    onAmbientEffectsChange = onAmbientEffectsChange,
-                )
-
-            else -> PlanetExportScreen(state = state, galaxy = galaxy)
+        if (selectedTab == 0) {
+            ManagerScreen(
+                state = state,
+                galaxy = galaxy,
+                language = language,
+                onToggleLanguage = onToggleLanguage,
+                onProjectorLanguageChange = onProjectorLanguageChange,
+                onConfigureGalaxy = onConfigureGalaxy,
+                onRefresh = onRefresh,
+                onDelete = onDelete,
+                onClearAll = onClearAll,
+                onClearError = onClearError,
+            )
+        } else if (selectedTab == 1) {
+            GalaxyAdminScreen(
+                state = state,
+                galaxy = galaxy,
+                language = language,
+                onToggleLanguage = onToggleLanguage,
+                onConfigureGalaxy = onConfigureGalaxy,
+                onRefresh = onRefresh,
+                onAsteroidBeltChange = onAsteroidBeltChange,
+                onCometsChange = onCometsChange,
+                onCometFrequencyChange = onCometFrequencyChange,
+                onFlybyAsteroidsChange = onFlybyAsteroidsChange,
+                onFlybyFrequencyChange = onFlybyFrequencyChange,
+                onBehaviorModeChange = onBehaviorModeChange,
+                onManualThemeChange = onManualThemeChange,
+                onThemeEnabledChange = onThemeEnabledChange,
+                onAmbientEffectsChange = onAmbientEffectsChange,
+            )
+        } else {
+            PlanetExportScreen(state = state, galaxy = galaxy)
         }
     }
 }
