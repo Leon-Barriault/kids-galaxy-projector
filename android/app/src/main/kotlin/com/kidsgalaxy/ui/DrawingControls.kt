@@ -104,8 +104,7 @@ fun DrawingControls(
                                     isWhite -> Modifier.border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
                                     else -> Modifier
                                 },
-                            )
-                            .semantics {
+                            ).semantics {
                                 contentDescription = colorDescription
                             }.selectable(
                                 selected = selected,
