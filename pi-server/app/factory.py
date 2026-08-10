@@ -35,16 +35,25 @@ from app.infrastructure.service_advertiser import (
     ZeroconfServiceAdvertiser,
 )
 from app.infrastructure.surface_styler import PillowSurfaceStyler
-from app.infrastructure.terrain_styler import TerrainSurfaceStyler
 
 logger = logging.getLogger("kids-galaxy")
 
 
 def _styler_for(style: str):
-    if style == "terrain":
-        return TerrainSurfaceStyler()
-    if style == "blend":
-        return PillowSurfaceStyler()
+    """Return the product-safe passthrough surface styler.
+
+    Planet appearance is now interpreted by the projector from the child's raw
+    drawing. The old ``terrain``/``blend`` server styles diffused marker colours
+    until untouched paper disappeared, permanently destroying the recognizable
+    composition before Three.js could see it. Keep accepting the legacy config
+    strings so deployed environment files do not fail to boot, but never bake
+    those transformations into newly stored planets.
+    """
+    if style != "off":
+        logger.info(
+            "Ignoring legacy SURFACE_STYLE=%s; projector owns planet art direction",
+            style,
+        )
     return PillowSurfaceStyler(enabled=False)
 
 
