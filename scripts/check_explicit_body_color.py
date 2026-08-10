@@ -34,6 +34,67 @@ def white_body_artwork() -> bytes:
     return buffer.getvalue()
 
 
+def isolate_planet_for_screenshot(page, planet_id: str) -> None:
+    """Render only the tested planet against the neutral studio background."""
+    page.evaluate(
+        """
+        (id) => {
+          const kg = window.kidsGalaxy;
+          const entity = kg.kidPlanets.get(id);
+          const galaxy = kg.engine.galaxyScene;
+          const camera = kg.engine.cameraController;
+          if (!entity) return false;
+
+          kg.scene.background.setHex(0xf7f6f3);
+          kg.scene.fog = null;
+          kg.renderer.toneMappingExposure = 0.98;
+          galaxy.stars.visible = false;
+          galaxy.companions.forEach((record) => { record.mesh.visible = false; });
+          galaxy.sunGroup.children.forEach((child) => {
+            if (child.isMesh) child.visible = false;
+          });
+          galaxy.sunLight.visible = true;
+          galaxy.sunLight.position.set(3.7, 4.5, 5.6);
+          galaxy.sunLight.intensity = 2.4;
+          galaxy.sunLight.decay = 0;
+          galaxy.ambientLight.visible = true;
+          galaxy.ambientLight.color.setHex(0xffffff);
+          galaxy.ambientLight.intensity = 0.50;
+          galaxy.fillLight.visible = true;
+          galaxy.fillLight.color.setHex(0xdde8ff);
+          galaxy.fillLight.intensity = 0.36;
+
+          kg.scene.traverse((object) => {
+            if (object.isLine || object.isLineLoop || object.isLineSegments) {
+              object.visible = false;
+            }
+          });
+
+          kg.kidPlanets.forEach((planet) => {
+            planet.mesh.visible = planet === entity;
+            planet.ring.visible = false;
+            planet.decorations.forEach((item) => { item.visible = false; });
+            planet.companions.forEach((item) => { item.object.visible = false; });
+          });
+
+          entity.mesh.position.set(0, 0, 0);
+          entity.mesh.scale.setScalar(1.5);
+          entity.mesh.rotation.set(0.03, -0.06, 0.015);
+          entity.update = () => entity.mesh.position.set(0, 0, 0);
+
+          camera.controls.autoRotate = false;
+          camera.controls.enabled = false;
+          camera.camera.position.set(0, 0.12, 4.2);
+          camera.camera.lookAt(0, 0, 0);
+          camera.camera.updateProjectionMatrix();
+          return true;
+        }
+        """,
+        planet_id,
+    )
+    page.wait_for_timeout(700)
+
+
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -157,33 +218,7 @@ def main() -> int:
         check(result["cleanBody"], "body remains clean rather than receiving a literal texture")
         check(result["rounded"], "explicit-body traits are rounded molded geometry")
 
-        page.evaluate(
-            f"""
-            (() => {{
-              const kg = window.kidsGalaxy;
-              const entity = kg.kidPlanets.get('{planet_id}');
-              kg.scene.background.setHex(0xf7f6f3);
-              kg.scene.fog = null;
-              kg.engine.galaxyScene.stars.visible = false;
-              kg.kidPlanets.forEach((planet) => {{
-                planet.mesh.visible = planet === entity;
-                planet.decorations.forEach((item) => item.visible = false);
-                planet.companions.forEach((item) => item.object.visible = false);
-              }});
-              entity.mesh.position.set(0, 0, 0);
-              entity.mesh.scale.setScalar(1.5);
-              entity.mesh.rotation.set(0.03, -0.06, 0.015);
-              entity.update = () => entity.mesh.position.set(0, 0, 0);
-              const camera = kg.engine.cameraController;
-              camera.controls.autoRotate = false;
-              camera.controls.enabled = false;
-              camera.camera.position.set(0, 0.12, 4.2);
-              camera.camera.lookAt(0, 0, 0);
-              camera.camera.updateProjectionMatrix();
-            }})()
-            """
-        )
-        page.wait_for_timeout(700)
+        isolate_planet_for_screenshot(page, planet_id)
         page.screenshot(path=str(ARTIFACT_DIR / "planet-explicit-white-body.png"))
 
         check(not errors, "explicit-body projector run has no browser console errors")
