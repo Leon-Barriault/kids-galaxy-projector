@@ -15,6 +15,7 @@ import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
 import { installExplicitBodyArtwork } from './projector/ExplicitBodyArtwork.js';
 import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
+import { installExplicitBodySentinelCleanup } from './projector/ExplicitBodySentinelCleanup.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -62,10 +63,12 @@ installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
-// These two wrappers are intentionally outermost. First rebuild new-tablet
-// artwork relative to the explicit bucket colour; then lock that colour onto
-// the clean planet body after every older inference/tuning stage has run.
+// These wrappers are intentionally outermost. First preprocess new-tablet
+// artwork relative to the explicit bucket colour and let the established
+// sculptor build it. Then remove the internal analysis-only sentinel mesh and
+// finally lock the selected bucket colour onto the clean planet body.
 installExplicitBodyArtwork();
+installExplicitBodySentinelCleanup();
 installExplicitBodyColor();
 
 const container = document.getElementById('canvas-container');
