@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-const MIN_AMBIENT_INTENSITY = 0.43;
-const MIN_FILL_INTENSITY = 0.31;
+const MIN_AMBIENT_INTENSITY = 0.5;
+const MIN_FILL_INTENSITY = 0.36;
 
 function preserveStudioFill(galaxyScene) {
   if (galaxyScene.ambientLight) {
@@ -28,6 +28,8 @@ export function applyDesktopVisualUpgrade(galaxyScene) {
   renderer.userData.kidsGalaxyQualityProfile = 'laptop-high';
   renderer.userData.kidsGalaxyRealtimeShadows = true;
   renderer.userData.kidsGalaxyStudioFill = true;
+  renderer.userData.kidsGalaxyStudioAmbientFloor = MIN_AMBIENT_INTENSITY;
+  renderer.userData.kidsGalaxyStudioHemisphereFloor = MIN_FILL_INTENSITY;
 
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048, 2048);
@@ -48,9 +50,9 @@ export function applyDesktopVisualUpgrade(galaxyScene) {
   galaxyScene.createSeasonalParticles = (palette, count = 1200) =>
     originalSeasonalParticles(palette, count);
 
-  // Theme changes used to restore the much dimmer Raspberry-Pi-era light
-  // levels. Preserve a studio-like fill floor on every live behavior update so
-  // saturated kid colours stay readable around the full molded sphere.
+  // Preserve a studio-like fill floor on every live theme/behavior update.
+  // The sun remains the directional key light, but the shadow side now keeps
+  // the child's hue instead of collapsing toward black/navy on the projector.
   const originalApplyBehavior = galaxyScene.applyBehavior.bind(galaxyScene);
   galaxyScene.applyBehavior = (behavior) => {
     originalApplyBehavior(behavior);
