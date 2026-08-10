@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug policy: cleartext is allowed for local bench development. The manager
+  can target the emulator alias, localhost, or a developer-selected LAN host,
+  so a fixed host allowlist would make physical-device debugging brittle.
+
+  This file is debug-only. Release keeps the strict HTTPS-only policy in
+  src/main and authenticates with the manager mTLS certificate.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

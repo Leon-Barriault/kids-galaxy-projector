@@ -25,8 +25,8 @@ pip install -r requirements-dev.txt
 pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
 ```
 
-From the repository root, `make verify` runs everything CI runs: lint,
-architecture boundaries, both Python suites, and the Android JVM tests.
+From the repository root, `make verify` runs the normal application gates: lint,
+architecture boundaries, both Python suites, and Android JVM tests.
 
 The suites are separated by cost and purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)):
 
@@ -46,10 +46,21 @@ no emulator:
 cd android && ./gradlew testDebugUnitTest
 ```
 
-This covers the texture-projection mathematics, the drawing/undo rules, and the
-whole ViewModel state machine including error wording per HTTP status.
+This covers the texture-projection mathematics, drawing/undo rules, ViewModel
+state, and the shared connection module.
 
-CI runs all of the above on every push/PR (see `.github/workflows/ci.yml`).
+### Projector tests
+
+The projector requires a real browser/WebGL runtime. Run the core smoke contract
+locally with:
+
+```bash
+make check-projector
+```
+
+Projector CI installs Chromium/Playwright and runs that core contract plus the
+focused sculpted-artwork, coverage, ring-color and explicit-body-color checks.
+These are required CI gates, not documentation-only manual steps.
 
 ## Architecture boundaries
 
@@ -61,8 +72,8 @@ make arch
 
 It fails the build if the Kotlin domain imports `android`/`androidx`, if either
 domain layer reaches outward, if the Python domain imports FastAPI or Pillow, or
-if the projector's assets reference a remote URL (which would break the offline
-deployment). Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a layer.
+if any active projector module references a remote URL (which would break the
+offline deployment). Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a layer.
 
 ## Offline assets
 
@@ -79,39 +90,50 @@ projector would render a black screen in the field.
 
 ## Certificate-based authentication (mTLS)
 
-We use **mutual TLS** between the tablet and the server. This is:
-
-- Passwordless
-- Tokenless
-- Certificate-based (exactly what you asked for)
+We use **mutual TLS** for field/release tablet traffic. The kid and manager apps
+have separate role-specific client identities.
 
 ### Generate certificates
 
 ```bash
 cd pi-server/certs
 chmod +x generate_certs.sh
-SERVER_IP=10.42.0.1 ./generate_certs.sh          # bake the Pi's address in
+SERVER_IP=10.42.0.1 ./generate_certs.sh
 # Optional overrides:
 #   SERVER_DNS=kids-galaxy.local
-#   CLIENT_P12_PASSWORD=<install-time secret>
+#   CLIENT_P12_PASSWORD=<kid-install-secret>
+#   MANAGER_P12_PASSWORD=<manager-install-secret>
 #   DAYS=825
 ```
 
-The server certificate carries `subjectAltName` entries for the IP **and** the
-DNS name. This is not optional: modern Android and OkHttp ignore the certificate
-Common Name entirely, so a certificate without a matching SAN fails the handshake
-— and because the tablet connects to `10.42.0.1`, an IP SAN is what it needs. The
-CA is also issued with explicit `basicConstraints=CA:TRUE`, which strict clients
-require before they will treat it as an issuer.
+The generator creates:
+
+- `server.crt` / `server.key` — gateway identity
+- `client.crt` / `client.p12` — drawing tablet identity (`OU=kid`)
+- `manager.crt` / `manager.p12` — manager identity (`OU=manager`)
+- `ca.crt` / `ca.key` — deployment CA
+
+The server certificate carries `subjectAltName` entries for the IP **and** DNS
+name. Modern Android/OkHttp validate SANs rather than relying on Common Name.
 
 Verify what you generated:
 
 ```bash
 openssl verify -CAfile ca.crt server.crt
+openssl verify -CAfile ca.crt client.crt
+openssl verify -CAfile ca.crt manager.crt
 openssl x509 -in server.crt -noout -ext subjectAltName
 ```
 
-### Run the server with mTLS enforced
+### Run the field gateway with mTLS enforced
+
+The production deployment is intended to sit behind the local mTLS gateway so
+verified certificate information can be translated into the trusted role marker
+used by the FastAPI auth layer. Do not expose the authority-bearing API directly
+on an untrusted event network.
+
+For direct TLS testing, a server can be started with a required client
+certificate:
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8443 \
@@ -121,45 +143,54 @@ uvicorn main:app --host 0.0.0.0 --port 8443 \
   --ssl-cert-reqs 2
 ```
 
-### Give the app its client certificate
+### Give each app its client certificate
 
-The app presents its certificate from its own assets (it does not read the system
-credential store), so copy both files in before building a release APK:
+Both apps read their certificate from application assets rather than the Android
+system credential store. Copy the deployment-specific material before release
+builds:
 
 ```bash
+mkdir -p android/app/src/main/assets android/manager/src/main/assets
 cp pi-server/certs/client.p12 pi-server/certs/ca.crt \
    android/app/src/main/assets/
-cd android && ./gradlew assembleRelease
+cp pi-server/certs/manager.p12 pi-server/certs/ca.crt \
+   android/manager/src/main/assets/
 ```
 
-Both files are gitignored — certificates are per-deployment and must never be
-committed.
+These files are gitignored and must never be committed.
 
-How the transport is chosen: `app/build.gradle.kts` injects `SERVER_BASE_URL`,
-`USE_MTLS` and `CLIENT_CERT_PASSWORD` per build type. **Debug** builds talk
-cleartext HTTP to `http://<host>:8000` for lab work; **release** builds talk
-HTTPS + mTLS to `https://<host>:8443`. Override per site without touching source:
+Build release APKs with the matching password properties:
 
 ```bash
-./gradlew assembleRelease \
+cd android
+./gradlew :app:assembleRelease \
   -PkidsGalaxyServerHost=10.42.0.1 \
-  -PkidsGalaxyCertPassword=<install-time secret>
+  -PkidsGalaxyCertPassword=<kid-install-secret>
+
+./gradlew :manager:assembleRelease \
+  -PkidsGalaxyServerHost=10.42.0.1 \
+  -PkidsGalaxyCertPassword=<manager-install-secret>
 ```
 
-`ApiClient` pins trust to the project CA (the Pi's certificate is self-signed, so
-the system trust store would reject it) and presents `client.p12` as the client
-identity. If either asset is missing, it raises a clear
-`CertificateSetupException` rather than silently falling back to an
-unauthenticated connection.
+Both modules inject `SERVER_BASE_URL`, `USE_MTLS` and the certificate password by
+build type. **Debug** builds use cleartext HTTP for lab work and their debug-only
+network-security policy permits it. **Release** builds use HTTPS + mTLS and their
+main network-security policy rejects cleartext fallback.
 
-For a full production deployment you would issue one client certificate per
-tablet (or per batch) and revoke as needed.
+The kid app presents `client.p12`; the manager app presents `manager.p12`. The
+shared `MutualTls` implementation pins trust to the project CA and installs the
+client identity. Missing or invalid deployment assets fail setup rather than
+silently downgrading to unauthenticated transport.
+
+For production deployments, issue distinct certificates per tablet or batch and
+rotate/revoke them as operational needs require.
 
 > **Note on Wi-Fi itself**: A full EAP-TLS (WPA2-Enterprise) hotspot on the Pi is possible with hostapd + FreeRADIUS, but it is significantly more operationally heavy for a portable kids setup. mTLS protects the application path, which is the critical trust boundary. An optional EAP-TLS guide can be added later if required.
 
 ## Android kiosk / single-app mode
 
-The app is intended to be the **only** application on the tablet (Corporate-Owned Single-Use / COSU style).
+The kid app is intended to be the **only** application on its tablet
+(Corporate-Owned Single-Use / COSU style).
 
 ### Development / lab (ADB)
 
@@ -184,6 +215,6 @@ See `android/.../AndroidManifest.xml` and the Device Admin receiver for the hook
 ## Branching & Definition of Done (SDLC alignment)
 
 - Prefer `main` (production-ready) + short-lived feature branches.
-- Every change should keep the CI green (unit + integration).
+- Every change should keep the CI green (unit + integration + projector gates).
 - Update `UNRELEASED.md` (or CHANGELOG) when the project adopts changelog-driven releases.
 - A red pipeline blocks merge / release candidate creation.

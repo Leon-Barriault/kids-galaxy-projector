@@ -1,270 +1,113 @@
-# AGENTS.md — handoff for the next agent
+# AGENTS.md — current handoff
 
-Features 1–3 from the original tablet/projector handoff are implemented and
-on main. A fourth slice (brighter planets + manager app + delete API) is
-**mostly on main but not finished** — see §4 for the exact remaining work.
-Read this whole file before touching anything.
+Read this file before changing the repository. It records current contracts,
+owner decisions, validation gates, and failure modes that have already caused
+regressions.
 
 ---
 
 ## 1. What this project is
 
-Children draw a planet on an Android tablet. It appears, live, in a projected
-3D galaxy running on a Raspberry Pi. Local network only, no accounts, mTLS in
-the field.
+Children draw a planet on an Android tablet. It appears live in a projected 3D
+galaxy running on a Raspberry Pi. The field deployment is local-network only
+and uses mTLS at the tablet-facing gateway.
 
-Four deployable pieces:
+Deployable pieces:
 
 | Piece | Where | Stack |
 |---|---|---|
 | Drawing tablet app | `android/app` | Kotlin, Jetpack Compose, AGP 9 |
-| **Manager app (new)** | `android/manager` | Separate `applicationId` `com.kidsgalaxy.manager` |
+| Manager app | `android/manager` | Separate `applicationId` `com.kidsgalaxy.manager` |
+| Shared tablet connection | `android/connection` | Discovery, target parsing, mTLS |
 | Server | `pi-server/` | FastAPI, Pillow, SSE |
 | Projector page | `pi-server/static/` | Three.js r185, vendored, offline |
 
-`README.md` covers setup, `ARCHITECTURE.md` the layering, `DEVELOPMENT.md` the
-workflow, `android/ANDROID_STUDIO.md` how to run the drawing app.
+`README.md` covers setup, `ARCHITECTURE.md` the layering and projector
+composition rules, `DEVELOPMENT.md` local/field workflow, and
+`android/ANDROID_STUDIO.md` Android Studio usage.
 
 ---
 
-## 2. Features 1–3 (complete on main)
+## 2. Settled owner decisions
 
-Settled owner decisions — do not re-litigate:
+Do not re-litigate these unless the owner explicitly asks to change them.
 
-- **Polar wrapping**: disc centre → north pole, rim → south pole.
-- **Guide circle**: outline only, fixed, not a stroke; clips drawing + mapping.
-- **Gallery size 12**: oldest disposed; store keeps up to 30 on disk.
-
-Implemented:
-
-- `PlanetGuide` + `SphericalProjection` + `TextureProjection.mapGuide` (domain, TDD).
-- Two-stage Android texture renderer (disc clip → polar equirectangular PNG).
-- Projector `kidPlanets` Map, SSE arrivals, `disposeOldestIfNeeded`.
-- Server `GET /api/planets`, payload shape `{has_planet, id, url, name, timestamp}`.
+- Gallery size is 12; server retention is up to 30 planets.
+- Kid-authored shape and colour composition must remain recognizable on the
+  rendered planet. The projector owns the spherical interpretation.
+- New tablet uploads keep the original authored drawing and send an explicit
+  body/background colour when available.
+- Manager and kid tablets are separate applications.
+- Print/STL actions are exposed only by the manager APK. The export endpoints
+  intentionally do **not** require a manager role; app separation is the chosen
+  access boundary for those two non-destructive export actions.
+- Delete, clear-all, and other authority-bearing manager operations remain
+  protected by the role/auth layer in secure deployments.
+- STL v1 is one slicer-friendly radial planet mesh. Rings and orbiting
+  companions are intentionally omitted; kid artwork becomes raised relief.
 
 ---
 
-## 3. Session four: repair pass
+## 3. Architecture and security
 
-The brighter-planets / manager-app / delete-API slice landed across eight
-commits that were all red in CI (#70 to #77, each failing inside twenty
-seconds at the lint gate). This section records what was wrong and what was
-done, because two of the causes are the kind that recur.
+### 3.1 Clean architecture
 
-### 3.1 Main was red for eight commits — fixed
+The Python and Android application code use inward dependencies:
 
-`pi-server/tests/integration/test_api_e2e.py` had been overwritten with the
-literal text `PLACEHOLDER_WILL_FAIL`, destroying 446 lines and twelve test
-classes. Recovered verbatim from commit `7d70397` rather than rewritten, so the
-coverage is provably the same coverage.
+- domain: rules/entities, framework-free
+- application/use cases: orchestration through ports
+- infrastructure/data: adapters
+- API/UI: transport and presentation
 
-Separately, `NotFoundError` was imported out of alphabetical order in
-`use_cases.py`, tripping ruff `I001`. That alone kept the whole pipeline red:
-**the lint job gates every other job**, which makes it the cheapest place to
-fail and the most expensive place to be careless.
+`make arch` and main CI enforce the important boundaries.
 
-### 3.2 Delete API and manager app — kept, with fixes
+### 3.2 Field transport and manager mTLS
 
-The clean-architecture shape of the delete work was sound and is unchanged:
-`PlanetRepository.delete`, `DeletePlanetUseCase` publishing
-`{has_planet: false, id, removed: true}` on the arrivals channel,
-`DELETE /api/planets/{id}` mapping `NotFoundError` to 404, list ceiling raised
-from gallery size to retention so the manager can see everything stored.
+The manager **does have mTLS support**. Do not repeat the historical claim that
+it is an HTTP-only field app.
 
-Added the test coverage that had never been pushed: `TestDelete` against a real
-temp directory, `DeletePlanetUseCase` tests, and `TestDeletePlanet` over HTTP.
-Two of those assert things only the unit layer can see — that a *failed* delete
-publishes nothing, and that the removal rides the `planet` channel rather than
-a channel of its own.
+Current release path:
 
-Manager app fixes: wrapped in a `MaterialTheme` (its dialogs were rendering
-with the default *light* palette inside a dark app), `safeDrawingPadding` for
-the edge-to-edge window, the OkHttp logging interceptor gated on
-`BuildConfig.DEBUG`, and a guard on the `ViewModelProvider.Factory` cast. The
-release variant now uses HTTP rather than pretending to do HTTPS it cannot do:
-there is no mTLS here and the Pi's certificate is project-CA-signed, so every
-release request would have failed on a trust anchor.
+1. `pi-server/certs/generate_certs.sh` creates role-specific kid and manager
+   identities (`client.p12` and `manager.p12`).
+2. Release Android builds set `USE_MTLS=true` and HTTPS server URLs.
+3. Shared `MutualTls` installs the client identity and project CA trust.
+4. Secure deployment advertises `https` on port `8443` over mDNS.
+5. nginx is the tablet-facing mTLS gateway; FastAPI listens on loopback `8000`.
+6. The gateway overwrites trusted role headers and derives `kid` / `manager`
+   from the verified client-certificate OU.
 
-`io.coil-kt:coil-compose:2.7.0` is the final Coil 2 release and could not be
-verified against Compose BOM 2026.06 offline. Left as-is deliberately — CI
-builds `:manager`, so it answers definitively, and switching to Coil 3 blind
-would introduce two new failure modes (`coil3.compose.AsyncImage` and a
-required `coil-network-okhttp`). **If the Android job fails on Coil, that is
-the fix.**
+Network-security resources are split by source set:
 
-### 3.3 The projector had eight real bugs — fixed
+- debug: cleartext permitted for bench/LAN development
+- release (`src/main`): cleartext rejected
 
-`galaxy.js` had been rewritten rather than edited, and the rewrite dropped
-OrbitControls, the 3200-star coloured field, the fog, the orbit rings and the
-sparkle bursts. All restored, on top of the multi-planet work and the
-brightness changes.
+A secure release configuration must fail loudly rather than silently downgrade
+to HTTP.
 
-The correctness bugs shared one root cause: **the dedupe check ran before the
-async texture load, but the Map was only written after it.** Every entry is now
-inserted synchronously — mesh and orbit ring built immediately with a plain
-material, the drawing swapped in when it arrives. That single change is what
-makes dedupe, removal-while-loading and eviction all work, because each of them
-needs something concrete to act on.
+### 3.3 Projector composition
 
-The rest: eviction now picks the oldest by arrival order rather than whichever
-PNG decoded first; orbits are derived from a hash of the planet id, so a reload
-or an earlier deletion no longer reshuffles the whole sky; the polling fallback
-was restored (it had been deleted, leaving a projector behind a
-stream-buffering proxy frozen forever); the fallback reconciles against
-`/api/planets` so it handles deletions as well as arrivals; celebrations no
-longer fire for planets restored on load.
+The projector is a first-class subsystem. `galaxy.js` is its composition root.
+Active planet-render stages are declared once, by name and order, in
+`PLANET_RENDER_STAGES` and installed by `PlanetRenderPipeline`.
 
-### 3.4 A pre-existing bug worth knowing
+Some legacy stages still extend `PlanetEntity` at runtime. That is known
+technical debt. Do **not** add another scattered installer call or hidden global
+patch. Prefer explicit collaborators/context transforms for new work and
+migrate an existing legacy stage when touching it if that migration can be
+proven by the browser/WebGL acceptance suite.
 
-**`manifestPlaceholders` are substituted into `AndroidManifest.xml` only, never
-into resource XML.** `network_security_config.xml` had carried a
-`${serverHost}` since the file was created; it was always literal text and
-always matched no host. The symptom is that a debug build pointed at a LAN
-address — the physical-tablet case — fails every request with an opaque
-`CLEARTEXT communication not permitted` that reads like a server fault.
+The stage order is part of the visual contract. Preserve it unless a deliberate
+visual change has matching acceptance coverage.
 
-Now split by source set: `src/debug/res/xml` permits cleartext, `src/main`
-(release) is HTTPS-only. The dead placeholder is gone from both modules.
+Superseded renderer experiments should be deleted rather than left dormant
+beside the live path.
 
-### 3.5 New: a projector smoke test
+---
 
-`scripts/check_projector.py`, wired as `make check-projector`. It starts a real
-server, uploads real planets and drives the real page in headless Chromium via
-Playwright, asserting dedupe, live arrival, deletion, the gallery cap, eviction
-order, orbit determinism across a reload, and a clean console.
+## 4. Validation gates
 
-`galaxy.js` is the one part of this project with no unit tests — it needs WebGL,
-a live server and a real EventSource, so there is nothing to fake it with. This
-is how it gets verified now. Running it against the previous version reproduces
-three of the bugs above, which is the point.
-
-**Not a CI gate**: CI has no browser installed, and adding one to lint a
-projector is a poor trade. Run it locally before pushing anything that touches
-`static/`. It needs `pip install playwright httpx` and a Chromium.
-
-## 3.6 Session five: clear-all and surface blending
-
-**Clear all** (`DELETE /api/planets`). `PlanetRepository.clear`,
-`ClearPlanetsUseCase`, and a confirmed full-width button in the manager. One
-broadcast (`{"has_planet": false, "cleared": true}`) rather than a loop over
-the single delete: thirty round trips would make the projector flicker through
-a cascade of disposals instead of emptying in one frame. The clear event
-carries no `id`, so `galaxy.js` checks `cleared` *before* its `!data.id` guard.
-The collection route is registered before `/{planet_id}` because Starlette
-matches in order.
-
-**Surface blending** (`SurfaceStyler` port, `PillowSurfaceStyler`). A drawing
-is marker on white paper; wrapped onto a sphere that is what it looks like.
-The styler diffuses the child's own colours outwards until the paper is gone,
-then lays the strokes back at 80% so they still recognise it, then adds
-multi-octave grain. Applied in `SubmitPlanetUseCase` strictly *after* the
-security re-encode - the styler must only ever see bytes the image processor
-has already vouched for. `SURFACE_BLEND=0` turns it off and returns the raw
-drawing byte for byte.
-
-Three things about it that are easy to undo by accident:
-
-- The diffusion is **coarse to fine** - radius starts at a quarter of the
-  texture and halves. A fixed small radius cannot cross a large empty region,
-  so a child who draws one small shape gets a mostly white planet; a fixed
-  large one turns the strokes to mud.
-- It runs at **quarter resolution** and scales back up. The wash is
-  low-frequency, and full-size blurs took the better part of two seconds.
-- The noise is a **seeded** RNG, not `Image.effect_noise`, which cannot be
-  seeded and made the same drawing style differently every time. The seed is a
-  hash of the drawing, so a planet is stable but two planets differ.
-
-Also dropped `optimize=True` from both PNG saves: it was ~700ms of zlib
-strategy search per upload for a few percent of size, on the one path where a
-child is watching a spinner. Styling now costs ~170ms total.
-
-## 3.7 Sessions six and seven: terrain, twice
-
-The eight palette colours now carry the character of a kind of terrain: blue
-water, green forest, orange lava, red volcanic rupture, purple gas bands, pink
-cloud pockets, plus yellow desert and black basalt. `SURFACE_STYLE` picks
-`terrain` (default), `blend` or `off`; an unrecognised value falls back rather
-than raising.
-
-**It took two attempts, and the first one is the lesson.** That version
-*replaced* the drawn colours - blue became a realistic deep navy, regions were
-separated by hard ink outlines and shaded in flat posterised bands. Rejected on
-sight: a planet stopped being the child's drawing and became a generated world
-that happened to be shaped like it. Nobody in the room could point at it and
-say "that is mine".
-
-What shipped modulates instead of substituting. The base is exactly the colour
-they drew; each region gains only a *signed* brightness pattern on top - slow
-swell in water, clumps in forest, ridged channels in lava - which averages near
-zero, so the colour stays put. Membership is a Gaussian over palette distance
-rather than a nearest-neighbour pick, so regions fade into one another. The
-first version needed ink lines precisely because nearest-neighbour left a seam;
-soft weights remove the seam instead of decorating it.
-
-Lava and volcano are the one exception, adding warmth on top. That does lighten
-the orange a child drew - known, accepted, and tested for so nobody "fixes" it.
-
-Strength is 0.32. 0.18 is invisible at projector distance and 0.48 starts to
-look mottled; both were seen on a real projector before choosing.
-
-Needs **numpy** (pinned). Also used now by the plain blend - see below.
-
-### Two real bugs found while doing it
-
-**The diffusion never worked properly.** It blurred the whole image, which
-drags white paper inwards along with the colour; the two fight and converge on
-something close to white. A child who drew one small shape got a pale ghost of
-it on a still-white world. It is now a normalised convolution - blur the known
-colour, blur the record of where it is known, divide - so only drawn colour
-propagates.
-
-That bug hid behind a passing test. The check was "is any white left", and the
-grain pass darkens everything just enough to slip under the threshold, so it
-went green for entirely the wrong reason. Worth remembering: a test that
-asserts an *absence* can be satisfied by something unrelated.
-
-**Strokes had a white halo.** Feathering the strokes back from the original
-paints paper into the edge, because just outside a stroke the original is
-white. Fixed by compositing onto the wash with a hard edge first, and by
-eroding the mask so a stroke's anti-aliased outer ring is not treated as ink.
-Both worst on sparse drawings - three strokes on an empty canvas, which is most
-of what a child actually draws. A faint soft edge remains; it reads as a
-highlight, not an artifact.
-
-### Not done: separate emissive and cloud layers
-
-The demo that first sold terrain had three textures per planet - albedo, an
-emissive map, and a translucent cloud sphere. Everything is baked into one
-texture instead, because companion files need `Planet`, the payload, the
-repository and prune/delete/clear to all learn about siblings. Before starting,
-measure on the real Pi: three textures times twelve planets is 36 live on a GPU
-that also composites a star field.
-
-## 4. What is left
-
-Nothing is broken. In rough order of value:
-
-- **Manager app in CI.** `:manager` is built by `./gradlew assembleDebug` (no
-  module qualifier), and its sources are now under ktlint, but it has no unit
-  tests at all. `ManagerViewModel` is a plain `ViewModel` and is the obvious
-  first target.
-- **mTLS for the manager**, so it can be a genuine field build rather than a
-  closed-hotspot tool. `app/.../ApiClient.kt` already has the pattern.
-- **Document the manager** in `README.md` and `DEVELOPMENT.md`: how to install
-  the second APK on a volunteer's phone, and that it is LAN-only today.
-- Per-planet labels on the projector; richer arrival animations.
-- Dependency versions stay pinned to the set from `7d70397` unless asked.
-
-
-## 5. How to work in this repository
-
-### 5.1 Method
-
-TDD and clean architecture, explicitly. Domain first, then application, then
-infrastructure, then UI. Dependencies point inwards. `make arch` fails the
-build if boundaries are violated.
-
-### 5.2 The gates, exactly as CI should run them
+Run these before considering a change complete:
 
 ```bash
 cd pi-server && ruff check . --config ruff.toml
@@ -272,90 +115,148 @@ hadolint --config .hadolint.yaml pi-server/Dockerfile
 shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
     scripts/dev-up.sh pi-server/certs/generate_certs.sh
 cd android && ktlint --relative --editorconfig=.editorconfig \
-    "app/src/**/*.kt" "manager/src/**/*.kt"
+    "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
 make arch
-cd pi-server && python -m pytest tests/ -q          # PYTHONPATH=.
-cd android && ./gradlew testDebugUnitTest assembleDebug   # builds :manager too
+cd pi-server && python -m pytest tests/ -q
+cd android && ./gradlew testDebugUnitTest assembleDebug
 ```
 
-`assembleDebug` with no module qualifier builds **both** app modules, so a
-compile error in `:manager` fails the whole pipeline.
+`assembleDebug` without a module qualifier builds both app modules, so a manager
+compile error fails the pipeline.
 
-Not a CI gate, but run it before touching `static/`:
+**ktlint must be exactly 1.5.0.**
+
+### Projector gate
+
+Run locally when changing `pi-server/static/`:
 
 ```bash
 make check-projector
 ```
 
-**ktlint must be exactly 1.5.0.**
+Projector CI also installs Chromium/Playwright and runs the core
+`check_projector.py` contract as a required gate, followed by the focused
+sculpted-artwork, artwork-coverage, ring-colour, and explicit-body-colour checks.
+The syntax job parses every active projector ES module and verifies the runtime
+stays offline/self-hosted.
 
-### 5.3 Environment notes
+---
 
-- **Gradle cannot run in the Claude cloud container** - `services.gradle.org` is
-  blocked through the proxy. Kotlin and build-script changes are verified by CI
-  only. Read Gradle Kotlin DSL twice before pushing it.
-- Python tests, ruff, shellcheck, ktlint and the projector smoke test all *do*
-  run locally. Playwright and a Chromium are present.
-- Owner preference: **push straight to main** when the tree is green. Small
-  CI-green commits. Confirm before a push that could break it.
-- Conventional commits: prefix + *why*, not only *what*.
+## 5. Important runtime contracts
 
-### 5.4 Payload / wire contracts (do not drift)
-
-**Planet payload** (REST + SSE):
+### Planet payload (REST + SSE)
 
 ```json
 { "has_planet": true, "id": "...", "url": "/uploads/....png", "name": "...", "timestamp": 0 }
 ```
 
-**Gallery:** `{ "planets": [ ... ] }` newest first.
+Gallery response:
 
-**Removal event (same SSE channel, event type `planet`):**
+```json
+{ "planets": [ ... ] }
+```
+
+Removal event, same named SSE event `planet`:
 
 ```json
 { "has_planet": false, "id": "...", "removed": true }
 ```
 
-**Upload success (tablet):** `{ "status": "success", "message": "...", "planet_id", "name", "url" }`.
+Clear-all event:
 
-**Delete success (manager):** `{ "status": "deleted", "planet_id", "name" }`.
+```json
+{ "has_planet": false, "cleared": true }
+```
 
-Projector `galaxy.js` must keep matching these field names (`url` / `name`, not
-legacy `texture_url` / `display_name` alone — aliases exist only as fallback).
+Upload success includes `planet_id`, `name`, and `url`.
+Delete success includes `planet_id` and `name`.
+
+Projector code must keep matching `url` / `name`; legacy aliases are fallback
+compatibility only.
+
+### Export routes
+
+- `GET /api/admin/planets/{planet_id}/print.png`
+- `GET /api/admin/planets/{planet_id}/model.stl?diameter_mm=...`
+
+These routes are intentionally not role-gated by owner decision. Do not confuse
+that with the destructive manager routes, which are authority-bearing.
 
 ---
 
-## 6. Traps already sprung (do not undo)
+## 6. Projector-specific rules
 
-- HTML-escaped Kotlin generics (`\u003c`) in pushes — always push real source.
-- ktlint `chain-method-continuation`: join `}.pointerInput` after multi-line
-  trailing lambdas.
-- `StrokePath.strokeWidth` not `.width`.
+- Register a new planet in the Map **synchronously**, before its texture starts
+  loading. Deferring insertion breaks dedupe, delete-while-loading, and eviction.
+- Eviction is by arrival order, not image decode completion.
+- Orbits are deterministic from planet id so reload/deletion does not reshuffle
+  the sky.
+- Keep the polling fallback alongside SSE; buffering proxies can otherwise leave
+  a projector frozen.
+- A restored planet must not fire a new-arrival celebration.
+- Never replace `galaxy.js` wholesale to make a small change. A historical
+  rewrite silently dropped OrbitControls, the star field, fog, orbit rings, and
+  sparkle effects.
+- Projector runtime assets must never depend on public-network URLs.
+- Visual comparison scripts may provide different lighting/reference profiles,
+  but they must share contracts through explicit parameters rather than
+  monkey-patching imported module globals.
+
+---
+
+## 7. Android/UI rules
+
+- Touch targets are intentionally at least 48dp.
+- Color swatches are radio-button semantics and must have localized accessible
+  names for TalkBack; keep the shared `ColorAccessibility` mapping in sync when
+  adding a palette colour.
+- Destructive manager actions require confirmation dialogs and clear action
+  labeling.
+- Debug and release transport policies differ intentionally. Do not move a
+  blanket `usesCleartextTraffic=true` back into the manager manifest.
+
+---
+
+## 8. Traps already sprung
+
+- Never push placeholder content into a real source/test file. One historical
+  change replaced 446 lines of integration coverage and left main red across
+  multiple commits.
+- HTML-escaped Kotlin generics (`\u003c`) in source are invalid; push real source.
+- ktlint `chain-method-continuation`: keep chained modifiers formatted exactly
+  as the pinned linter expects.
+- `StrokePath.strokeWidth`, not `.width`.
 - Gallery JSON is an object with `planets`, not a bare array.
-- SSE uses named event `planet`; listen with `addEventListener('planet', …)`.
-- Never push placeholder content to a real source file on main. It cost eight
-  red commits and destroyed 446 lines of test coverage; only git history got it
-  back.
-- List `max_limit` is retention (30) for the API ceiling; projector still uses 12.
-- `manifestPlaceholders` never reach resource XML - only `AndroidManifest.xml`.
-  Use source-set overrides for per-variant resources.
-- In `galaxy.js`, register a planet in the Map **synchronously**, before its
-  texture starts loading. Deferring the insert breaks dedupe, delete-while-
-  loading and eviction all at once, and each failure looks unrelated.
-- Rewriting a file to change one thing loses the rest of it. The projector
-  rewrite dropped OrbitControls, the star field, fog, orbit rings and sparkles
-  as collateral. Prefer targeted edits; diff against the previous version
-  before pushing a file you rewrote.
+- SSE uses named event `planet`; listen with `addEventListener('planet', ...)`.
+- `manifestPlaceholders` affect `AndroidManifest.xml`, not resource XML. Use
+  source-set resource overrides for build-type-specific network policy.
+- Do not infer security state from old comments. Verify build config, mTLS
+  setup, discovery advertisement, gateway configuration, and tests together.
+- Prefer targeted edits and inspect diffs before pushing. Projector changes are
+  especially sensitive to accidental whole-file loss.
 
 ---
 
-## 7. Suggested first actions for the next agent
+## 9. Current high-value follow-up work
 
-1. Run the gates in §5.2 and `make check-projector`. Everything should be
-   green; if it is not, fix that before anything else.
-2. Check the Actions run on main. If the Android job failed on Coil, see §3.2 -
-   the fix is Coil 3 plus `coil3.compose.AsyncImage` and `coil-network-okhttp`.
-3. Pick from §4. `ManagerViewModel` unit tests are the highest-value next step:
-   the manager is the only module with no tests at all.
+Nothing here is required to keep the current feature set working, but these are
+useful next improvements:
 
-Do not start new feature work while anything above is red.
+1. Add focused `ManagerViewModel` JVM tests; the manager has less behavioral
+   unit coverage than the kid app.
+2. Continue migrating legacy projector prototype-extension stages into explicit
+   stage collaborators as those modules are changed for real features.
+3. Keep accessibility semantics covered as new kid/manager controls are added.
+4. Add per-planet projector labels / richer arrival animation only after the
+   existing visual contracts stay green.
+
+Dependency versions stay pinned unless a deliberate upgrade is requested.
+
+---
+
+## 10. Working method
+
+TDD and clean architecture are the default. Prefer small, conventional commits.
+Do not start or leave unrelated work while CI is red. For projector work, use
+the real browser acceptance suite rather than reasoning from screenshots or
+module syntax alone.

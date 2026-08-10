@@ -53,6 +53,24 @@
     <string name="sending_to_galaxy">Envoi vers la galaxie…</string>
     <string name="drawing_canvas_description">Zone de dessin. Glisse ton doigt pour peindre ta planète.</string>
 
+    <string name="color_red">Rouge</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Jaune</string>
+    <string name="color_green">Vert</string>
+    <string name="color_blue">Bleu</string>
+    <string name="color_purple">Violet</string>
+    <string name="color_pink">Rose</string>
+    <string name="color_black">Noir</string>
+    <string name="color_white">Blanc</string>
+    <string name="color_lavender">Lavande</string>
+    <string name="color_gray">Gris</string>
+    <string name="color_brown">Brun</string>
+    <string name="color_gold">Or</string>
+    <string name="color_sky_blue">Bleu ciel</string>
+    <string name="color_coral">Corail</string>
+    <string name="color_light_green">Vert clair</string>
+    <string name="color_custom">Couleur personnalisée</string>
+
     <string name="choose_galaxy">Choisis une galaxie</string>
     <string name="current_galaxy">Actuelle : %1$s</string>
     <string name="searching_local_network">Recherche sur le réseau local…</string>

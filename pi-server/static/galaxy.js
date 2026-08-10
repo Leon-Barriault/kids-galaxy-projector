@@ -24,6 +24,7 @@ import { installKidArtworkPresentationFix } from './projector/KidArtworkPresenta
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
+import { installPlanetRenderPipeline } from './projector/PlanetRenderPipeline.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
@@ -44,30 +45,39 @@ const GALLERY_SIZE = 12;
 // SculptedArtworkGeometry reads that colour directly: matching pixels are the
 // body and every other kid-selected colour is artwork, regardless of area.
 // Older stored planets without body_color remain on the legacy inference path.
-installKidArtworkUpgrade();
-installKidArtworkFaithfulMask();
-installKidArtworkMotifProjection();
-installKidArtworkPresentationFix();
-installSaturnPlanetRings();
-installHighFidelityPlanetFeatures();
-installReferenceSurfaceTuning();
-installKidArtworkComponentSurface();
-installReferenceFinish();
-installRingColorFidelity();
-installSculptedArtworkRuntimeCompat();
-installSculptedArtworkGeometry();
-installArtworkCoverageProjection();
-installSculptedGeometryFinish();
-installSculptedArtworkRoundedSlab();
-installDominantRibbonFinish();
-installReferencePlanetUpgrade();
-installThemedGalaxyEnvironment();
-// Outermost only for the final body material. No colour inference happens here:
-// the core sculptor has already separated body pixels from authored traits.
-installExplicitBodyColor();
-// Deliberately last: this only reshapes the already-authoritative sculpted art,
-// deepens the installed crater geometry, and replaces the astronaut companion.
-installVisualRefinement();
+//
+// Order is part of the rendering contract. The legacy installers still extend
+// PlanetEntity at runtime, so every stage is declared here as data and installed
+// through one composition point. Move a stage only with projector acceptance
+// coverage proving the resulting behavior is intentional.
+const PLANET_RENDER_STAGES = Object.freeze([
+  { name: 'kid-artwork-upgrade', install: installKidArtworkUpgrade },
+  { name: 'kid-artwork-faithful-mask', install: installKidArtworkFaithfulMask },
+  { name: 'kid-artwork-motif-projection', install: installKidArtworkMotifProjection },
+  { name: 'kid-artwork-presentation-fix', install: installKidArtworkPresentationFix },
+  { name: 'saturn-planet-rings', install: installSaturnPlanetRings },
+  { name: 'high-fidelity-planet-features', install: installHighFidelityPlanetFeatures },
+  { name: 'reference-surface-tuning', install: installReferenceSurfaceTuning },
+  { name: 'kid-artwork-component-surface', install: installKidArtworkComponentSurface },
+  { name: 'reference-finish', install: installReferenceFinish },
+  { name: 'ring-color-fidelity', install: installRingColorFidelity },
+  { name: 'sculpted-artwork-runtime-compat', install: installSculptedArtworkRuntimeCompat },
+  { name: 'sculpted-artwork-geometry', install: installSculptedArtworkGeometry },
+  { name: 'artwork-coverage-projection', install: installArtworkCoverageProjection },
+  { name: 'sculpted-geometry-finish', install: installSculptedGeometryFinish },
+  { name: 'sculpted-artwork-rounded-slab', install: installSculptedArtworkRoundedSlab },
+  { name: 'dominant-ribbon-finish', install: installDominantRibbonFinish },
+  { name: 'reference-planet-upgrade', install: installReferencePlanetUpgrade },
+  { name: 'themed-galaxy-environment', install: installThemedGalaxyEnvironment },
+  // Outermost for the final body material. No colour inference happens here:
+  // the core sculptor has already separated body pixels from authored traits.
+  { name: 'explicit-body-color', install: installExplicitBodyColor },
+  // Deliberately last: reshapes authoritative sculpted art, deepens installed
+  // crater geometry, and replaces the astronaut companion.
+  { name: 'visual-refinement', install: installVisualRefinement },
+]);
+
+const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
@@ -115,6 +125,7 @@ window.kidsGalaxy = {
   renderer: galaxyScene.renderer,
   kidPlanets: planetLoader.kidPlanets,
   GALLERY_SIZE,
+  renderPipeline: installedPlanetRenderStages,
   engine: {
     galaxyScene,
     environment,

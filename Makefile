@@ -13,7 +13,7 @@ help:
 	@echo "  make test-android     - JVM unit tests for the Android app"
 	@echo "  make build-android    - assemble the debug APK"
 	@echo "  make verify           - lint + arch + all tests (what CI runs)"
-	@echo "  make check-projector  - drive static/galaxy.js in headless Chromium"
+	@echo "  make check-projector  - drive the projector in headless Chromium"
 	@echo "  make dev-up           - full debug environment: server + emulator"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make pi-up            - deploy on the Pi, discoverable over mDNS"
@@ -39,7 +39,8 @@ lint-shell:
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
-	cd android && ktlint --relative --editorconfig=.editorconfig "app/src/**/*.kt" "manager/src/**/*.kt"
+	cd android && ktlint --relative --editorconfig=.editorconfig \
+		"app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
 
 # -------------------- architecture --------------------
 
@@ -56,7 +57,10 @@ arch:
 	@! grep -rn "^\(import\|from\) \(fastapi\|starlette\|PIL\)" pi-server/app/domain/ pi-server/app/application/ \
 		|| { echo "FAIL: domain/application depends on a framework"; exit 1; }
 	@echo "==> Projector assets must not reference the public internet"
-	@! grep -rnE "https?://" pi-server/static/index.html pi-server/static/galaxy.js \
+	@! grep -rnE "https?://" \
+		pi-server/static/index.html \
+		pi-server/static/galaxy.js \
+		pi-server/static/projector/ \
 		|| { echo "FAIL: static assets reference remote resources"; exit 1; }
 	@echo "All architecture boundaries hold."
 
@@ -78,10 +82,9 @@ build-android:
 
 verify: lint arch test test-android
 
-# static/galaxy.js is the one part of the project with no unit tests - it
-# needs WebGL, a live server and a real EventSource, so there is nothing to
-# fake it with. This drives the real page instead. Not a CI gate: CI has no
-# browser installed, and adding one to lint a projector is a poor trade.
+# The projector needs WebGL, a live server and a real EventSource. This target
+# drives that real page locally; Projector CI runs the same core smoke contract
+# in Chromium so projector regressions are a required gate as well.
 check-projector:
 	@command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
 	python3 scripts/check_projector.py

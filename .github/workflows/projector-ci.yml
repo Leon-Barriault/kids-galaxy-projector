@@ -52,6 +52,8 @@ jobs:
           pip install -r pi-server/requirements-dev.txt \
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
+      - name: Exercise core projector smoke contract
+        run: python scripts/check_projector.py
       - name: Exercise true kid geometry and Saturn rings in the real projector
         run: python scripts/check_sculpted_renderer.py
       - name: Verify kid traits cover the planet
