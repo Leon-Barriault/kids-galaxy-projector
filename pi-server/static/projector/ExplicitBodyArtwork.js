@@ -130,6 +130,10 @@ function analyseAuthoredPixels(source, bodyRgb) {
     authored,
     authoredCount,
     usedCounts,
+    usedPaletteIndexes: usedCounts
+      .map((count, index) => ({ count, index }))
+      .filter(({ count }) => count > 0)
+      .map(({ index }) => index),
     bounds:
       authoredCount > 0
         ? {
@@ -145,12 +149,45 @@ function analyseAuthoredPixels(source, bodyRgb) {
 }
 
 function chooseSentinel(usedCounts) {
-  let candidate = -1;
-  for (let index = 0; index < usedCounts.length; index += 1) {
-    if (usedCounts[index] === 0) return ANALYSIS_PALETTE[index];
-    if (candidate < 0 || usedCounts[index] < usedCounts[candidate]) candidate = index;
+  const usedIndexes = usedCounts
+    .map((count, index) => ({ count, index }))
+    .filter(({ count }) => count > 0)
+    .map(({ index }) => index);
+
+  const unusedIndexes = ANALYSIS_PALETTE
+    .map((_colour, index) => index)
+    .filter((index) => usedCounts[index] === 0);
+
+  if (unusedIndexes.length) {
+    // Pick the unused colour whose closest authored colour is still as far
+    // away as possible. This prevents a red trait from ever being confused
+    // with an orange sentinel after the molded-material light/dark treatment.
+    let bestIndex = unusedIndexes[0];
+    let bestSeparation = -1;
+    unusedIndexes.forEach((index) => {
+      const separation = usedIndexes.length
+        ? Math.min(
+            ...usedIndexes.map((usedIndex) =>
+              rgbDistance(ANALYSIS_PALETTE[index], ANALYSIS_PALETTE[usedIndex]),
+            ),
+          )
+        : 441.673;
+      if (separation > bestSeparation) {
+        bestIndex = index;
+        bestSeparation = separation;
+      }
+    });
+    return { index: bestIndex, rgb: ANALYSIS_PALETTE[bestIndex] };
   }
-  return ANALYSIS_PALETTE[Math.max(0, candidate)];
+
+  // All palette families were used. Fall back to the least-used one; cleanup
+  // receives the complete used-index set and will require a strong distance
+  // margin before removing any generated mesh.
+  let leastUsed = 0;
+  for (let index = 1; index < usedCounts.length; index += 1) {
+    if (usedCounts[index] < usedCounts[leastUsed]) leastUsed = index;
+  }
+  return { index: leastUsed, rgb: ANALYSIS_PALETTE[leastUsed] };
 }
 
 function preparedTexture(texture, bodyHex) {
@@ -165,7 +202,7 @@ function preparedTexture(texture, bodyHex) {
   const output = makeCanvas(WORK_SIZE, WORK_SIZE);
   const outputContext = output.getContext('2d', { alpha: false });
   if (!outputContext) return null;
-  outputContext.fillStyle = `rgb(${sentinel[0]}, ${sentinel[1]}, ${sentinel[2]})`;
+  outputContext.fillStyle = `rgb(${sentinel.rgb[0]}, ${sentinel.rgb[1]}, ${sentinel.rgb[2]})`;
   outputContext.fillRect(0, 0, WORK_SIZE, WORK_SIZE);
 
   if (analysis.bounds) {
@@ -200,9 +237,11 @@ function preparedTexture(texture, bodyHex) {
   const result = new THREE.CanvasTexture(output);
   result.needsUpdate = true;
   result.userData.kidsGalaxyExplicitBodyAnalysis = true;
-  result.userData.kidsGalaxyExplicitBodySentinel = `#${sentinel
+  result.userData.kidsGalaxyExplicitBodySentinelIndex = sentinel.index;
+  result.userData.kidsGalaxyExplicitBodySentinel = `#${sentinel.rgb
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')}`;
+  result.userData.kidsGalaxyExplicitBodyUsedPaletteIndexes = analysis.usedPaletteIndexes;
   result.userData.kidsGalaxyExplicitBodyTargetFill = TARGET_FILL;
   result.userData.kidsGalaxyExplicitBodyAuthoredCells = analysis.authoredCount;
   return result;
@@ -214,6 +253,11 @@ function markExplicitArtwork(entity, analysisTexture) {
     group.userData.kidsGalaxyExplicitBodyArtwork = true;
     group.userData.kidsGalaxyBodyColor = entity.bodyColor;
     group.userData.kidsGalaxyArtworkTargetFill = TARGET_FILL;
+    group.userData.kidsGalaxyExplicitBodySentinelIndex =
+      analysisTexture.userData.kidsGalaxyExplicitBodySentinelIndex;
+    group.userData.kidsGalaxyExplicitBodyUsedPaletteIndexes = [
+      ...(analysisTexture.userData.kidsGalaxyExplicitBodyUsedPaletteIndexes || []),
+    ];
     group.userData.kidsGalaxyAuthoredCellCount =
       analysisTexture.userData.kidsGalaxyExplicitBodyAuthoredCells || 0;
     group.children.forEach((child) => {
@@ -235,6 +279,11 @@ function markExplicitArtwork(entity, analysisTexture) {
   data.kidsGalaxyArtworkTargetFill = TARGET_FILL;
   data.kidsGalaxyExplicitBodySentinel =
     analysisTexture.userData.kidsGalaxyExplicitBodySentinel;
+  data.kidsGalaxyExplicitBodySentinelIndex =
+    analysisTexture.userData.kidsGalaxyExplicitBodySentinelIndex;
+  data.kidsGalaxyExplicitBodyUsedPaletteIndexes = [
+    ...(analysisTexture.userData.kidsGalaxyExplicitBodyUsedPaletteIndexes || []),
+  ];
   data.designProjection = 'explicit-body-preserved-kid-traits-across-planet';
 }
 
