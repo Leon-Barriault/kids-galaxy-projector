@@ -11,7 +11,6 @@ import * as THREE from 'three';
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
-import { installDominantGestureRelief } from './projector/DominantGestureRelief.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -36,10 +35,12 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Valid kid drawings preserve their authored colour/shape language. Ringed
-// planets keep the accepted Saturn particle composition, while the tablet's
-// selected ring colour now remains the dominant hue across ice, dust and rock
-// variants instead of being neutralised toward grey/white.
+// Valid kid drawings preserve their authored colour/shape language. The dominant
+// paint owns the clean planet body; deliberate partial strokes in that same hue
+// become lower-profile molded ribbons instead of disappearing into the body.
+// Secondary colours remain broader raised pieces. Ringed planets keep the
+// accepted Saturn particle composition while the tablet-selected ring colour is
+// preserved as the dominant hue across ice, dust and rock variants.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -54,7 +55,6 @@ installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
 installSculptedArtworkRoundedSlab();
-installDominantGestureRelief();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
