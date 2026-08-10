@@ -41,6 +41,8 @@
     <string name="name_your_planet">Nomme ta planète</string>
     <string name="name_placeholder">ex. Monde étincelant</string>
     <string name="pick_a_color">Choisis une couleur</string>
+    <string name="fill_background">🪣 Remplir le fond de la planète</string>
+    <string name="fill_background_hint">Utilise la couleur choisie comme couleur principale. Les traits déjà dessinés restent par-dessus.</string>
     <string name="brush_size">Taille du pinceau</string>
     <string name="brush_small">Petit</string>
     <string name="brush_medium">Moyen</string>
