@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
+import { installDominantGestureRelief } from './projector/DominantGestureRelief.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
@@ -34,11 +35,11 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Older artwork interpreters remain installed as fallbacks for malformed legacy
-// images. Valid kid drawings end as broad physical pieces: the dominant paint
-// owns the body, each secondary gesture becomes a separate beveled mesh, and the
-// final five-ring slab pass rounds only the perimeter while preserving a broad
-// plateau like the supplied molded clay/plastic references.
+// Valid kid drawings now preserve both kinds of authorship: dominant paint owns
+// the body, meaningful secondary gestures become separate rounded physical slabs,
+// and a partial dominant-colour stroke pattern remains as a subtle same-hue body
+// emboss instead of disappearing. A dominant colour that fills most of the disc
+// remains a clean solid body rather than becoming a redundant giant motif.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -52,6 +53,7 @@ installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
 installSculptedArtworkRoundedSlab();
+installDominantGestureRelief();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
