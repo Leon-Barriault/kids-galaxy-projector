@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="print_named">Imprimer %1$s</string>
+    <string name="export_stl_named">Exporter %1$s en STL de 80 mm</string>
+    <string name="export_failed">Impossible d’exporter cette planète. Vérifiez la connexion à la galaxie et réessayez.</string>
+</resources>
