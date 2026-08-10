@@ -46,6 +46,7 @@ class RetrofitPlanetRepository(
                         .sortedBy { it.ordinal }
                         .joinToString(",") { it.wireValue }
                         .toTextPart()
+                val bodyColorPart = drawing.backgroundColorArgb.toRgbHex().toTextPart()
                 val ringColorPart = design.ringColorArgb.toRgbHex().toTextPart()
                 val craterColorPart = design.craterColorArgb.toRgbHex().toTextPart()
                 val mountainColorPart = design.mountainColorArgb.toRgbHex().toTextPart()
@@ -56,6 +57,7 @@ class RetrofitPlanetRepository(
                         namePart,
                         stylePart,
                         companionPart,
+                        bodyColorPart,
                         ringColorPart,
                         craterColorPart,
                         mountainColorPart,
