@@ -99,11 +99,7 @@ fun PlanetExportScreen(
                                 .onSuccess { bytes ->
                                     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                                     if (bitmap == null) {
-                                        Toast.makeText(
-                                            context,
-                                            R.string.export_failed,
-                                            Toast.LENGTH_LONG,
-                                        ).show()
+                                        showExportError(context)
                                     } else {
                                         PrintHelper(context)
                                             .apply {
@@ -112,13 +108,7 @@ fun PlanetExportScreen(
                                             }.printBitmap("${planet.name} - Kids Galaxy", bitmap)
                                     }
                                 }
-                                .onFailure {
-                                    Toast.makeText(
-                                        context,
-                                        R.string.export_failed,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
+                                .onFailure { showExportError(context) }
                         }
                     },
                     onExportStl = {
@@ -128,13 +118,7 @@ fun PlanetExportScreen(
                                     pendingStl = planet to bytes
                                     stlLauncher.launch(stlFilename(planet))
                                 }
-                                .onFailure {
-                                    Toast.makeText(
-                                        context,
-                                        R.string.export_failed,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
+                                .onFailure { showExportError(context) }
                         }
                     },
                 )
@@ -178,6 +162,10 @@ private fun ExportPlanetRow(
             }
         }
     }
+}
+
+private fun showExportError(context: android.content.Context) {
+    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
 }
 
 private fun stlFilename(planet: PlanetDto): String {
