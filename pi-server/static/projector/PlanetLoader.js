@@ -3,13 +3,9 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 
 const DEFAULT_POLL_INTERVAL_MS = 2500;
+const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
 
-/**
- * Owns the projector's planet collection and all server synchronization.
- *
- * Entities are registered synchronously before texture loading starts. That
- * preserves deduplication, deletion-during-load, and deterministic eviction.
- */
+/** Owns the projector's planet collection and all server synchronization. */
 export class PlanetLoader {
   constructor({
     scene,
@@ -65,6 +61,10 @@ export class PlanetLoader {
       animator: this.animator,
       celebrate,
     });
+    entity.bodyColor =
+      typeof payload.body_color === 'string' && RGB_HEX.test(payload.body_color)
+        ? payload.body_color.toLowerCase()
+        : null;
     this.kidPlanets.set(payload.id, entity);
 
     this.textureLoader.load(
@@ -200,17 +200,12 @@ export class PlanetLoader {
 
     connect();
     setTimeout(() => {
-      if (this.pollTimer === null && this.kidPlanets.size === 0) {
-        this.startPolling();
-      }
+      if (this.pollTimer === null && this.kidPlanets.size === 0) this.startPolling();
     }, this.pollIntervalMs * 2);
   }
 
   bootstrap() {
-    return Promise.allSettled([
-      this.syncGallery(false),
-      this.behaviorController?.refresh(),
-    ]).finally(() => {
+    return Promise.allSettled([this.syncGallery(false), this.behaviorController?.refresh()]).finally(() => {
       this.galleryReady = true;
       this.connectLiveUpdates();
     });
