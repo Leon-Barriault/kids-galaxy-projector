@@ -20,9 +20,7 @@ internal fun colorNameResource(colorArgb: Int): Int =
         0xFFFFEB3B.toInt() -> R.string.color_yellow
         0xFF4CAF50.toInt() -> R.string.color_green
         0xFF2196F3.toInt() -> R.string.color_blue
-        0xFF9C27B0.toInt(),
-        0xFFAB47BC.toInt(),
-        -> R.string.color_purple
+        0xFF9C27B0.toInt(), 0xFFAB47BC.toInt() -> R.string.color_purple
         0xFFE91E63.toInt() -> R.string.color_pink
         0xFF000000.toInt() -> R.string.color_black
         0xFFFFFFFF.toInt() -> R.string.color_white
