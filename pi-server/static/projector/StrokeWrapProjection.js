@@ -184,7 +184,6 @@ function wrapExplicitStrokes(entity) {
   data.kidsGalaxySuppressedLegacyBackEchoCount = legacyBackEchoes.length;
   data.kidsGalaxyStrokeWrapReliefTaper = EXTRA_WRAP_TAPER;
   data.kidsGalaxyDesignProjectionMode = group.userData.kidsGalaxyDesignProjectionMode;
-  data.designProjection = 'explicit-background-body-with-stroke-only-480-degree-wrap';
   return true;
 }
 
