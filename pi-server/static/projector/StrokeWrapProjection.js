@@ -8,6 +8,11 @@ const HALF_WRAP_RADIANS = THREE.MathUtils.degToRad(STROKE_WRAP_DEGREES / 2);
 const FIRST_REVOLUTION_LIMIT = Math.PI;
 const EXTRA_WRAP_TAPER = 0.68;
 const MAX_ABS_Y = 0.94;
+const WHITE_RIM_MIN_CHANNEL = 0.82;
+const WHITE_RIM_MAX_CHROMA = 0.08;
+const WHITE_RIM_COLOUR_FRACTION = 0.8;
+const WHITE_RIM_MIN_RADIAL = 0.84;
+const WHITE_RIM_RADIAL_FRACTION = 0.8;
 
 function hasExplicitBodyColor(entity) {
   return typeof entity?.bodyColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(entity.bodyColor);
@@ -19,6 +24,41 @@ function patchMeshes(group, backEcho) {
     child.geometry?.userData?.kidsGalaxySculptedKidPatch &&
     Boolean(child.userData?.kidsGalaxyBackDesignEcho) === backEcho,
   );
+}
+
+function isNearWhitePatch(mesh) {
+  const colours = mesh.geometry?.getAttribute?.('color');
+  if (!colours?.count) return false;
+  let nearWhite = 0;
+  for (let index = 0; index < colours.count; index += 1) {
+    const r = colours.getX(index);
+    const g = colours.getY(index);
+    const b = colours.getZ(index);
+    const minimum = Math.min(r, g, b);
+    const maximum = Math.max(r, g, b);
+    if (minimum >= WHITE_RIM_MIN_CHANNEL && maximum - minimum <= WHITE_RIM_MAX_CHROMA) {
+      nearWhite += 1;
+    }
+  }
+  return nearWhite / colours.count >= WHITE_RIM_COLOUR_FRACTION;
+}
+
+function hugsDiscPerimeter(mesh) {
+  const position = mesh.geometry?.getAttribute?.('position');
+  if (!position?.count) return false;
+  const vertex = new THREE.Vector3();
+  let perimeterVertices = 0;
+  for (let index = 0; index < position.count; index += 1) {
+    vertex.fromBufferAttribute(position, index).normalize();
+    if (Math.hypot(vertex.x, vertex.y) >= WHITE_RIM_MIN_RADIAL) perimeterVertices += 1;
+  }
+  return perimeterVertices / position.count >= WHITE_RIM_RADIAL_FRACTION;
+}
+
+function isLegacyWhiteDiscRim(mesh) {
+  return Boolean(mesh?.userData?.kidsGalaxyExplicitBodyPatch) &&
+    isNearWhitePatch(mesh) &&
+    hugsDiscPerimeter(mesh);
 }
 
 function sourceBounds(meshes) {
@@ -139,6 +179,11 @@ function prepareStrokeMaterial(mesh) {
   material.needsUpdate = true;
 }
 
+function suppressMesh(mesh, marker) {
+  mesh.visible = false;
+  mesh.userData[marker] = true;
+}
+
 function wrapExplicitStrokes(entity) {
   if (!hasExplicitBodyColor(entity)) return false;
   enforceBodyColor(entity);
@@ -151,30 +196,41 @@ function wrapExplicitStrokes(entity) {
   const group = entity.sculptedArtworkGroup;
   if (!group?.userData?.kidsGalaxySculptedArtworkGroup) return true;
 
-  const front = patchMeshes(group, false);
+  const allFront = patchMeshes(group, false);
+  const whitePerimeterArtifacts = allFront.filter(isLegacyWhiteDiscRim);
+  const front = allFront.filter((mesh) => !whitePerimeterArtifacts.includes(mesh));
   const legacyBackEchoes = patchMeshes(group, true);
-  const bounds = sourceBounds(front);
-  if (!bounds || !front.length) return true;
 
-  let wrappedCount = 0;
-  front.forEach((mesh) => {
-    prepareStrokeMaterial(mesh);
-    if (wrapGeometry(mesh.geometry, bounds)) wrappedCount += 1;
+  // Older tablet PNGs used an opaque white square behind the coloured planet
+  // disc. Anti-aliasing at the circular clip edge can turn that backing canvas
+  // into a connected near-white perimeter component. It is transport/rendering
+  // residue, not child-authored paint, so keep it out of the 480-degree winding.
+  whitePerimeterArtifacts.forEach((mesh) => {
+    suppressMesh(mesh, 'kidsGalaxySuppressedWhiteDiscRim');
   });
 
   // A 480-degree winding already reaches the far hemisphere and overlaps by
   // another 120 degrees. Keeping the old mirrored back copies would double the
   // artwork and recreate the separated side patches this stage replaces.
   legacyBackEchoes.forEach((mesh) => {
-    mesh.visible = false;
-    mesh.userData.kidsGalaxySuppressedLegacyBackEcho = true;
+    suppressMesh(mesh, 'kidsGalaxySuppressedLegacyBackEcho');
   });
+
+  const bounds = sourceBounds(front);
+  let wrappedCount = 0;
+  if (bounds && front.length) {
+    front.forEach((mesh) => {
+      prepareStrokeMaterial(mesh);
+      if (wrapGeometry(mesh.geometry, bounds)) wrappedCount += 1;
+    });
+  }
 
   group.userData.kidsGalaxyStrokeOnlyProjection = true;
   group.userData.kidsGalaxyAngularStrokeWrap = true;
   group.userData.kidsGalaxyStrokeWrapDegrees = STROKE_WRAP_DEGREES;
   group.userData.kidsGalaxyStrokeWrapPrimaryPatchCount = wrappedCount;
   group.userData.kidsGalaxySuppressedLegacyBackEchoCount = legacyBackEchoes.length;
+  group.userData.kidsGalaxySuppressedWhiteDiscRimCount = whitePerimeterArtifacts.length;
   group.userData.kidsGalaxyStrokeWrapReliefTaper = EXTRA_WRAP_TAPER;
   group.userData.kidsGalaxyDesignProjectionMode = 'explicit-background-body-strokes-wrapped-480-degrees';
 
@@ -182,6 +238,7 @@ function wrapExplicitStrokes(entity) {
   data.kidsGalaxyAngularStrokeWrap = true;
   data.kidsGalaxyStrokeWrapPrimaryPatchCount = wrappedCount;
   data.kidsGalaxySuppressedLegacyBackEchoCount = legacyBackEchoes.length;
+  data.kidsGalaxySuppressedWhiteDiscRimCount = whitePerimeterArtifacts.length;
   data.kidsGalaxyStrokeWrapReliefTaper = EXTRA_WRAP_TAPER;
   data.kidsGalaxyDesignProjectionMode = group.userData.kidsGalaxyDesignProjectionMode;
   return true;
