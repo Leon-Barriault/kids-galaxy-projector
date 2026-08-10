@@ -54,6 +54,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Exercise true kid geometry and Saturn rings in the real projector
         run: python scripts/check_sculpted_renderer.py
+      - name: Verify tablet-selected Saturn ring colors
+        run: python scripts/check_ring_color_fidelity.py
       - name: Upload rendered comparison frames
         if: always()
         uses: actions/upload-artifact@v4
