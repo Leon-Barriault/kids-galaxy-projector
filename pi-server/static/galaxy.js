@@ -26,6 +26,7 @@ import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
+import { installSculptedArtworkDomeFinish } from './projector/SculptedArtworkDomeFinish.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
 import { installSculptedArtworkReferenceFinish } from './projector/SculptedArtworkReferenceFinish.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
@@ -36,9 +37,9 @@ const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
 // images. Valid kid drawings end as true curved/beveled geometry: dominant paint
-// owns the body, secondary gestures become physical pieces, the geometry pass
-// smooths their normals, then the final reference pass adds the rounded relief
-// and soft toy/clay clearcoat seen in the supplied planet references.
+// owns the body, secondary gestures become physical pieces, then the final
+// geometry pass turns their flat caps into rounded multi-ring domes so the kid's
+// shapes live in the same molded toy/clay visual language as the references.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -52,6 +53,7 @@ installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
 installSculptedArtworkReferenceFinish();
+installSculptedArtworkDomeFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
