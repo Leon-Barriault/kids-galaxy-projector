@@ -16,6 +16,8 @@ data class StrokePath(
     val points: List<Point>,
     val colorArgb: Int,
     val strokeWidth: Float,
+    /** True only for the synthetic stroke used to paint the planet background. */
+    val isBackgroundFill: Boolean = false,
 ) {
     /** A stroke needs at least two points to draw a line. */
     val isRenderable: Boolean get() = points.size >= 2
@@ -41,10 +43,10 @@ data class CanvasSize(
  * The child's drawing: an immutable stroke history, an explicit planet-body
  * background colour, and the size of the surface it was drawn on.
  *
- * The background is deliberately separate from the strokes. Bucket filling
- * changes only [backgroundColorArgb], so artwork already drawn is never
- * rewritten. A stroke that happens to use the same colour simply blends into
- * the background visually, exactly like painting the same colour twice.
+ * The background is deliberately separate metadata from the child's authored
+ * brush strokes. For immediate tablet preview/export we also keep one synthetic
+ * fill stroke at the start of [strokes]. It is always underneath authored
+ * strokes, so changing the bucket never rewrites or covers their history.
  */
 data class Drawing(
     val strokes: List<StrokePath> = emptyList(),
@@ -53,21 +55,44 @@ data class Drawing(
     val hasExplicitBackgroundFill: Boolean = false,
 ) {
     /** A deliberate bucket fill is a valid planet even before brush strokes are added. */
-    val isEmpty: Boolean get() = strokes.isEmpty() && !hasExplicitBackgroundFill
+    val isEmpty: Boolean
+        get() = strokes.none { !it.isBackgroundFill } && !hasExplicitBackgroundFill
 
-    fun withCanvasSize(size: CanvasSize): Drawing = if (size == canvasSize) this else copy(canvasSize = size)
+    fun withCanvasSize(size: CanvasSize): Drawing {
+        if (size == canvasSize) return this
+        val resized = copy(canvasSize = size)
+        return if (hasExplicitBackgroundFill) resized.withBackgroundStroke() else resized
+    }
 
-    /** Adds a stroke, ignoring taps and empty paths that would render nothing. */
-    fun addStroke(stroke: StrokePath): Drawing = if (stroke.isRenderable) copy(strokes = strokes + stroke) else this
+    /** Adds a child-authored stroke, ignoring taps and empty paths. */
+    fun addStroke(stroke: StrokePath): Drawing =
+        if (stroke.isRenderable) copy(strokes = strokes + stroke.copy(isBackgroundFill = false)) else this
 
-    /** Change only the planet background; existing strokes are preserved byte-for-byte. */
+    /**
+     * Change only the planet background. Existing child strokes are preserved
+     * exactly and remain above the generated fill stroke.
+     */
     fun fillBackground(colorArgb: Int): Drawing =
         copy(
             backgroundColorArgb = colorArgb or 0xFF000000.toInt(),
             hasExplicitBackgroundFill = true,
-        )
+        ).withBackgroundStroke()
 
-    fun undo(): Drawing = if (strokes.isEmpty()) this else copy(strokes = strokes.dropLast(1))
+    fun undo(): Drawing {
+        val authoredIndex = strokes.indexOfLast { !it.isBackgroundFill }
+        if (authoredIndex >= 0) {
+            return copy(strokes = strokes.filterIndexed { index, _ -> index != authoredIndex })
+        }
+        return if (hasExplicitBackgroundFill) {
+            copy(
+                strokes = strokes.filterNot { it.isBackgroundFill },
+                backgroundColorArgb = DEFAULT_BACKGROUND_COLOR_ARGB,
+                hasExplicitBackgroundFill = false,
+            )
+        } else {
+            this
+        }
+    }
 
     /** Reset the complete artwork to the default white planet background. */
     fun clear(): Drawing =
@@ -76,6 +101,19 @@ data class Drawing(
             backgroundColorArgb = DEFAULT_BACKGROUND_COLOR_ARGB,
             hasExplicitBackgroundFill = false,
         )
+
+    private fun withBackgroundStroke(): Drawing {
+        if (!canvasSize.isMeasured) return copy(strokes = strokes.filterNot { it.isBackgroundFill })
+        val centreY = canvasSize.height / 2f
+        val fill =
+            StrokePath(
+                points = listOf(Point(0f, centreY), Point(canvasSize.width, centreY)),
+                colorArgb = backgroundColorArgb,
+                strokeWidth = maxOf(canvasSize.width, canvasSize.height) * 2.2f,
+                isBackgroundFill = true,
+            )
+        return copy(strokes = listOf(fill) + strokes.filterNot { it.isBackgroundFill })
+    }
 
     companion object {
         const val DEFAULT_BACKGROUND_COLOR_ARGB: Int = 0xFFFFFFFF.toInt()
