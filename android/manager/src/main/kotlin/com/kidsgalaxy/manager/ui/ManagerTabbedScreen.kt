@@ -62,11 +62,6 @@ fun ManagerTabbedScreen(
                 onClick = { selectedTab = 1 },
                 text = { Text(stringResource(R.string.tab_galaxy)) },
             )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = { Text(stringResource(R.string.tab_export)) },
-            )
         }
 
         if (selectedTab == 0) {
@@ -82,7 +77,7 @@ fun ManagerTabbedScreen(
                 onClearAll = onClearAll,
                 onClearError = onClearError,
             )
-        } else if (selectedTab == 1) {
+        } else {
             GalaxyAdminScreen(
                 state = state,
                 galaxy = galaxy,
@@ -100,8 +95,6 @@ fun ManagerTabbedScreen(
                 onThemeEnabledChange = onThemeEnabledChange,
                 onAmbientEffectsChange = onAmbientEffectsChange,
             )
-        } else {
-            PlanetExportScreen(state = state, galaxy = galaxy)
         }
     }
 }
