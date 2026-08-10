@@ -313,7 +313,10 @@ def main() -> int:
         check(state["minRelief"] > 0, "kid patches carry physical relief")
         check(state["legacyShellsHidden"], "superseded alpha-shell accents stay hidden")
         check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline exposes its first stage")
-        check(state["pipeline"][-1] == "visual-refinement", "visual refinement remains the final stage")
+        check(
+            state["pipeline"][-2:] == ["visual-refinement", "stroke-wrap-projection"],
+            "visual refinement is followed only by the final stroke-wrap projection",
+        )
         check(state["shadows"] and state["sunCastsShadow"], "renderer keeps real shadows")
         check(state["internalWidth"] <= 3840, "internal width stays within the 4K ceiling")
         check(state["internalHeight"] <= 2160, "internal height stays within the 4K ceiling")
