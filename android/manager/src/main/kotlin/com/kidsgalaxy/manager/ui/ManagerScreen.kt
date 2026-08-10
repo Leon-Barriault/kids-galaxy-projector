@@ -200,7 +200,7 @@ fun ManagerScreen(
                     items(state.planets, key = { it.id }) { planet ->
                         PlanetRow(
                             planet = planet,
-                            baseUrl = galaxy.baseUrl,
+                            galaxy = galaxy,
                             isDeleting = planet.id in state.deletingIds,
                             onDeleteClick = { pendingDelete = planet },
                         )
@@ -388,7 +388,7 @@ private fun managerErrorText(error: ManagerError): String =
 @Composable
 private fun PlanetRow(
     planet: PlanetDto,
-    baseUrl: String,
+    galaxy: GalaxyTarget,
     isDeleting: Boolean,
     onDeleteClick: () -> Unit,
 ) {
@@ -396,7 +396,7 @@ private fun PlanetRow(
         if (planet.url.startsWith("http")) {
             planet.url
         } else {
-            baseUrl.trimEnd('/') + planet.url
+            galaxy.baseUrl.trimEnd('/') + planet.url
         }
     val shape = stringResource(shapeLabelResource(planet.style))
 
@@ -442,6 +442,10 @@ private fun PlanetRow(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        PlanetExportActions(
+            planet = planet,
+            galaxy = galaxy,
+        )
         if (isDeleting) {
             CircularProgressIndicator(
                 modifier = Modifier.size(28.dp),
