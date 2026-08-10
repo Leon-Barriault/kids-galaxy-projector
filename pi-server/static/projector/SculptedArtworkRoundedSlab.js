@@ -2,13 +2,20 @@ import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
 
-const BODY_RADIUS = 1.056;
-const RINGS = [
+const BODY_RADIUS = 1.05;
+const SECONDARY_RINGS = [
   { inset: 0.0, radius: 1.058, lightness: -0.08 },
   { inset: 0.04, radius: 1.075, lightness: -0.045 },
   { inset: 0.08, radius: 1.096, lightness: -0.02 },
   { inset: 0.12, radius: 1.114, lightness: 0.0 },
   { inset: 0.15, radius: 1.124, lightness: 0.012 },
+];
+const DOMINANT_RINGS = [
+  { inset: 0.0, radius: 1.0525, lightness: -0.022 },
+  { inset: 0.035, radius: 1.0575, lightness: -0.012 },
+  { inset: 0.07, radius: 1.064, lightness: -0.002 },
+  { inset: 0.105, radius: 1.071, lightness: 0.006 },
+  { inset: 0.135, radius: 1.0765, lightness: 0.012 },
 ];
 
 function averageColour(colours, start, count) {
@@ -148,7 +155,7 @@ function appendOutwardTriangle(indices, positions, a, b, c) {
   else indices.push(a, c, b);
 }
 
-function blendGeometryNormals(geometry, ringSize) {
+function blendGeometryNormals(geometry, ringSize, rings, dominantGesture) {
   geometry.computeVertexNormals();
   const position = geometry.getAttribute('position');
   const normals = geometry.getAttribute('normal');
@@ -156,12 +163,11 @@ function blendGeometryNormals(geometry, ringSize) {
   const geometric = new THREE.Vector3();
   const radial = new THREE.Vector3();
   const blended = new THREE.Vector3();
-  // The first three rings show the real rounded shoulder; the broad top becomes
-  // progressively sphere-following so it reads like molded clay/plastic rather
-  // than a faceted button.
-  const radialWeights = [0.14, 0.1, 0.2, 0.45, 0.8];
+  const radialWeights = dominantGesture
+    ? [0.34, 0.28, 0.42, 0.68, 0.9]
+    : [0.14, 0.1, 0.2, 0.45, 0.8];
 
-  for (let ring = 0; ring < RINGS.length; ring += 1) {
+  for (let ring = 0; ring < rings.length; ring += 1) {
     const radialWeight = radialWeights[ring];
     for (let index = 0; index < ringSize; index += 1) {
       const vertex = ring * ringSize + index;
@@ -185,25 +191,29 @@ function rebuildRoundedSlab(sourceGeometry) {
     return null;
   }
 
+  const dominantGesture = Boolean(
+    sourceGeometry.userData?.kidsGalaxyDominantGesturePatch,
+  );
+  const rings = dominantGesture ? DOMINANT_RINGS : SECONDARY_RINGS;
   const sourceRingSize = position.count / 3;
   const sourceTopStart = sourceRingSize * 2;
   const topColour = averageColour(colours, sourceTopStart, sourceRingSize);
 
   let outerDirections = sourceDirections(position, 0, sourceRingSize);
   outerDirections = resampleClosedDirections(outerDirections);
-  outerDirections = smoothDirections(outerDirections);
+  outerDirections = smoothDirections(outerDirections, dominantGesture ? 4 : 3);
   const ringSize = outerDirections.length;
   const centre = centreDirection(outerDirections);
-  const directionsByRing = RINGS.map((ring) =>
+  const directionsByRing = rings.map((ring) =>
     insetRing(outerDirections, centre, ring.inset),
   );
 
   const positions = [];
   const vertexColours = [];
-  RINGS.forEach((ring, ringIndex) => {
+  rings.forEach((ring, ringIndex) => {
     const colour = topColour.clone().offsetHSL(
       0,
-      ringIndex < 2 ? -0.003 : 0.001,
+      dominantGesture ? 0.008 : ringIndex < 2 ? -0.003 : 0.001,
       ring.lightness,
     );
     appendRing(
@@ -216,7 +226,7 @@ function rebuildRoundedSlab(sourceGeometry) {
   });
 
   const indices = [];
-  for (let ring = 0; ring < RINGS.length - 1; ring += 1) {
+  for (let ring = 0; ring < rings.length - 1; ring += 1) {
     const start = ring * ringSize;
     const nextStart = (ring + 1) * ringSize;
     for (let index = 0; index < ringSize; index += 1) {
@@ -238,10 +248,8 @@ function rebuildRoundedSlab(sourceGeometry) {
     }
   }
 
-  // Keep concave child strokes as concave strokes. A centre fan creates false
-  // radial wedges; ShapeUtils triangulates the actual smoothed kid contour.
   const topDirections = directionsByRing[directionsByRing.length - 1];
-  const topStart = (RINGS.length - 1) * ringSize;
+  const topStart = (rings.length - 1) * ringSize;
   const projected = projectedContour(topDirections, centre);
   const triangles = THREE.ShapeUtils.triangulateShape(projected, []);
   triangles.forEach(([a, b, c]) => {
@@ -264,7 +272,7 @@ function rebuildRoundedSlab(sourceGeometry) {
     new THREE.Float32BufferAttribute(vertexColours, 3),
   );
   geometry.setIndex(indices);
-  blendGeometryNormals(geometry, ringSize);
+  blendGeometryNormals(geometry, ringSize, rings, dominantGesture);
   geometry.computeBoundingSphere();
   geometry.userData = {
     ...sourceGeometry.userData,
@@ -277,22 +285,23 @@ function rebuildRoundedSlab(sourceGeometry) {
     kidsGalaxyConcaveTopTriangulation: true,
     kidsGalaxyVisibleRoundedBevel: true,
     kidsGalaxyHybridSlabNormals: true,
-    kidsGalaxyRoundedSlabRingCount: RINGS.length,
+    kidsGalaxyRoundedSlabRingCount: rings.length,
     kidsGalaxyRaisedPatchContourVertices: ringSize,
     kidsGalaxyPatchVertexCount: positions.length / 3,
-    kidsGalaxyPatchRelief: RINGS[RINGS.length - 1].radius - BODY_RADIUS,
+    kidsGalaxyPatchRelief: rings[rings.length - 1].radius - BODY_RADIUS,
+    kidsGalaxyDominantRibbonProfile: dominantGesture,
   };
   return geometry;
 }
 
-function tuneMaterial(material) {
+function tuneMaterial(material, dominantGesture) {
   if (!material?.isMeshPhysicalMaterial) return;
   material.side = THREE.FrontSide;
   material.shadowSide = THREE.FrontSide;
-  material.roughness = 0.23;
+  material.roughness = dominantGesture ? 0.31 : 0.23;
   material.metalness = 0.001;
-  material.clearcoat = 0.24;
-  material.clearcoatRoughness = 0.29;
+  material.clearcoat = dominantGesture ? 0.13 : 0.24;
+  material.clearcoatRoughness = dominantGesture ? 0.42 : 0.29;
   material.flatShading = false;
   material.dithering = true;
   material.polygonOffset = false;
@@ -301,6 +310,7 @@ function tuneMaterial(material) {
   material.needsUpdate = true;
   material.userData.kidsGalaxyRoundedSlabFinish = true;
   material.userData.kidsGalaxyVisibleRoundedBevel = true;
+  material.userData.kidsGalaxyDominantRibbonProfile = dominantGesture;
 }
 
 function roundSculptedPieces(entity) {
@@ -308,18 +318,23 @@ function roundSculptedPieces(entity) {
   if (!group?.userData?.kidsGalaxySculptedArtworkGroup) return false;
   let converted = 0;
   let minimumContourVertices = Number.POSITIVE_INFINITY;
+  let dominantRibbonCount = 0;
   group.children.forEach((mesh) => {
     if (!mesh.isMesh || !mesh.geometry?.userData?.kidsGalaxySculptedKidPatch) {
       return;
     }
     const replacement = rebuildRoundedSlab(mesh.geometry);
     if (!replacement) return;
+    const dominantGesture = Boolean(
+      replacement.userData.kidsGalaxyDominantGesturePatch,
+    );
     mesh.geometry.dispose();
     mesh.geometry = replacement;
-    tuneMaterial(mesh.material);
+    tuneMaterial(mesh.material, dominantGesture);
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     converted += 1;
+    if (dominantGesture) dominantRibbonCount += 1;
     minimumContourVertices = Math.min(
       minimumContourVertices,
       replacement.userData.kidsGalaxyRaisedPatchContourVertices,
@@ -336,18 +351,21 @@ function roundSculptedPieces(entity) {
 
   group.userData.kidsGalaxyRoundedSlabFinish = true;
   group.userData.kidsGalaxyRoundedSlabCount = converted;
+  group.userData.kidsGalaxyDominantRibbonCount = dominantRibbonCount;
   group.userData.kidsGalaxyVisibleRoundedBevel = true;
   group.userData.kidsGalaxyUniformContourResampling = true;
   group.userData.kidsGalaxyRoundedSlabMinimumContourVertices = minimumContourVertices;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabFinish = true;
   entity.mesh.material.userData.kidsGalaxyRoundedSlabCount = converted;
+  entity.mesh.material.userData.kidsGalaxyDominantRibbonCount = dominantRibbonCount;
   entity.mesh.material.userData.kidsGalaxyVisibleRoundedBevel = true;
   return true;
 }
 
 /**
- * Final production finish: smooth, broad, same-hue raised slabs with a rounded
- * bevel and a sphere-following top, driven directly by the child's contours.
+ * Final production finish: secondary kid colours remain broad rounded slabs;
+ * deliberate partial strokes in the dominant body hue use a shallower five-ring
+ * profile so they read as molded ribbons integrated into the planet body.
  */
 export function installSculptedArtworkRoundedSlab() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyRoundedSlab) return;
