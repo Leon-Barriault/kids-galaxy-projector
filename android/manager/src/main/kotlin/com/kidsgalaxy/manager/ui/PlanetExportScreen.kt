@@ -63,12 +63,15 @@ fun PlanetExportScreen(
         ) { uri ->
             val pending = pendingStl
             if (uri != null && pending != null) {
-                runCatching {
-                    context.contentResolver.openOutputStream(uri)?.use { output ->
-                        output.write(pending.second)
-                    } ?: error("Could not open export document")
+                try {
+                    val output = context.contentResolver.openOutputStream(uri)
+                    if (output == null) {
+                        error("Could not open export document")
+                    }
+                    output.use { stream -> stream.write(pending.second) }
+                } catch (_: Exception) {
+                    showExportError(context)
                 }
-                    .onFailure { showExportError(context) }
             }
             pendingStl = null
         }
@@ -95,31 +98,31 @@ fun PlanetExportScreen(
                     planet = planet,
                     onPrint = {
                         scope.launch {
-                            runCatching { client.printSheet(planet.id) }
-                                .onSuccess { bytes ->
-                                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                    if (bitmap == null) {
-                                        showExportError(context)
-                                    } else {
-                                        PrintHelper(context)
-                                            .apply {
-                                                scaleMode = PrintHelper.SCALE_MODE_FIT
-                                                colorMode = PrintHelper.COLOR_MODE_COLOR
-                                            }
-                                            .printBitmap("${planet.name} - Kids Galaxy", bitmap)
-                                    }
+                            try {
+                                val bytes = client.printSheet(planet.id)
+                                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                if (bitmap == null) {
+                                    showExportError(context)
+                                } else {
+                                    val printHelper = PrintHelper(context)
+                                    printHelper.scaleMode = PrintHelper.SCALE_MODE_FIT
+                                    printHelper.colorMode = PrintHelper.COLOR_MODE_COLOR
+                                    printHelper.printBitmap("${planet.name} - Kids Galaxy", bitmap)
                                 }
-                                .onFailure { showExportError(context) }
+                            } catch (_: Exception) {
+                                showExportError(context)
+                            }
                         }
                     },
                     onExportStl = {
                         scope.launch {
-                            runCatching { client.stl(planet.id) }
-                                .onSuccess { bytes ->
-                                    pendingStl = planet to bytes
-                                    stlLauncher.launch(stlFilename(planet))
-                                }
-                                .onFailure { showExportError(context) }
+                            try {
+                                val bytes = client.stl(planet.id)
+                                pendingStl = planet to bytes
+                                stlLauncher.launch(stlFilename(planet))
+                            } catch (_: Exception) {
+                                showExportError(context)
+                            }
                         }
                     },
                 )
