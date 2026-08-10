@@ -26,6 +26,7 @@ import { ProjectorBehaviorController } from './projector/ProjectorBehaviorContro
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
+import { installRingColorFidelity } from './projector/RingColorFidelity.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
 import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
@@ -35,11 +36,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 
 const GALLERY_SIZE = 12;
 
-// Valid kid drawings now preserve both kinds of authorship: dominant paint owns
-// the body, meaningful secondary gestures become separate rounded physical slabs,
-// and a partial dominant-colour stroke pattern remains as a subtle same-hue body
-// emboss instead of disappearing. A dominant colour that fills most of the disc
-// remains a clean solid body rather than becoming a redundant giant motif.
+// Valid kid drawings preserve their authored colour/shape language. Ringed
+// planets keep the accepted Saturn particle composition, while the tablet's
+// selected ring colour now remains the dominant hue across ice, dust and rock
+// variants instead of being neutralised toward grey/white.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -49,6 +49,7 @@ installHighFidelityPlanetFeatures();
 installReferenceSurfaceTuning();
 installKidArtworkComponentSurface();
 installReferenceFinish();
+installRingColorFidelity();
 installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
