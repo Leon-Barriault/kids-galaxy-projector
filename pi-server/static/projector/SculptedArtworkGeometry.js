@@ -5,11 +5,18 @@ import { PlanetEntity } from './PlanetEntity.js';
 const DISC_SIZE = 256;
 const GRID = 128;
 const MAX_COLORS = 3;
-const MAX_COMPONENTS = 7;
+const MAX_SECONDARY_COMPONENTS = 7;
+const MAX_DOMINANT_COMPONENTS = 2;
 const MIN_COMPONENT_CELLS = 14;
+const MIN_DOMINANT_GESTURE_COVERAGE = 0.035;
+const MAX_DOMINANT_GESTURE_COVERAGE = 0.48;
+const BODY_RADIUS = 1.05;
 const BASE_RADIUS = 1.056;
 const SHOULDER_RADIUS = 1.079;
 const TOP_RADIUS = 1.107;
+const DOMINANT_BASE_RADIUS = 1.053;
+const DOMINANT_SHOULDER_RADIUS = 1.064;
+const DOMINANT_TOP_RADIUS = 1.08;
 
 const PALETTE = [
   [0xe5, 0x39, 0x35],
@@ -125,6 +132,16 @@ function indexOf(x, y) {
   return y * GRID + x;
 }
 
+function sampledColour(sums, counts, colour) {
+  const count = Math.max(1, counts[colour]);
+  return new THREE.Color().setRGB(
+    sums[colour][0] / count / 255,
+    sums[colour][1] / count / 255,
+    sums[colour][2] / count / 255,
+    THREE.SRGBColorSpace,
+  );
+}
+
 function analyse(texture) {
   const disc = recoverDisc(texture);
   if (!disc) return null;
@@ -166,29 +183,40 @@ function analyse(texture) {
   counts.forEach((count, index) => {
     if (count > counts[dominant]) dominant = index;
   });
-  let accentColours = counts
+  const dominantCoverage = counts[dominant] / Math.max(1, inside);
+  const preserveDominantGesture =
+    dominantCoverage >= MIN_DOMINANT_GESTURE_COVERAGE &&
+    dominantCoverage <= MAX_DOMINANT_GESTURE_COVERAGE;
+
+  const secondaryColours = counts
     .map((count, index) => ({ count, index }))
     .filter(({ count, index }) => count >= Math.max(10, inside * 0.002) && index !== dominant)
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_COLORS)
     .map(({ index }) => index);
-  if (!accentColours.length && counts[dominant]) accentColours = [dominant];
+  const accentColours = preserveDominantGesture
+    ? [dominant, ...secondaryColours]
+    : secondaryColours;
 
   const colours = new Map();
   accentColours.forEach((colour) => {
-    const count = Math.max(1, counts[colour]);
-    colours.set(
-      colour,
-      new THREE.Color().setRGB(
-        sums[colour][0] / count / 255,
-        sums[colour][1] / count / 255,
-        sums[colour][2] / count / 255,
-        THREE.SRGBColorSpace,
-      ),
-    );
+    const sampled = sampledColour(sums, counts, colour);
+    if (colour === dominant && preserveDominantGesture) {
+      // Same hue as the body, just enough lift to read like a molded ribbon.
+      sampled.offsetHSL(0, 0.012, 0.045);
+    }
+    colours.set(colour, sampled);
   });
 
-  return { labels, accentColours, colours, inside };
+  return {
+    labels,
+    accentColours,
+    colours,
+    inside,
+    dominant,
+    dominantCoverage,
+    preserveDominantGesture,
+  };
 }
 
 function componentsFor(analysis) {
@@ -224,11 +252,26 @@ function componentsFor(analysis) {
           queue.push(next);
         });
       }
-      if (cells.length >= MIN_COMPONENT_CELLS) components.push({ colour, cells });
+      if (cells.length >= MIN_COMPONENT_CELLS) {
+        components.push({
+          colour,
+          cells,
+          isDominantGesture:
+            analysis.preserveDominantGesture && colour === analysis.dominant,
+        });
+      }
     }
   }
 
-  return components.sort((a, b) => b.cells.length - a.cells.length).slice(0, MAX_COMPONENTS);
+  const secondary = components
+    .filter((component) => !component.isDominantGesture)
+    .sort((a, b) => b.cells.length - a.cells.length)
+    .slice(0, MAX_SECONDARY_COMPONENTS);
+  const dominant = components
+    .filter((component) => component.isDominantGesture)
+    .sort((a, b) => b.cells.length - a.cells.length)
+    .slice(0, MAX_DOMINANT_COMPONENTS);
+  return [...secondary, ...dominant].sort((a, b) => b.cells.length - a.cells.length);
 }
 
 function contourEdges(component) {
@@ -360,15 +403,34 @@ function rgbTriplet(colour) {
   return [colour.r, colour.g, colour.b];
 }
 
-function createPatchGeometry(contour, colour, { back = false, backRotation = 0, scale = 1 } = {}) {
+function createPatchGeometry(
+  contour,
+  colour,
+  { back = false, backRotation = 0, scale = 1, dominantGesture = false } = {},
+) {
   const centre = centroid(contour);
   const outer = scaledContour(contour, 1.035 * scale, centre);
   const shoulder = scaledContour(contour, 0.985 * scale, centre);
   const top = scaledContour(contour, 0.92 * scale, centre);
+  const baseRadius = dominantGesture ? DOMINANT_BASE_RADIUS : BASE_RADIUS;
+  const shoulderRadius = dominantGesture ? DOMINANT_SHOULDER_RADIUS : SHOULDER_RADIUS;
+  const topRadius = dominantGesture ? DOMINANT_TOP_RADIUS : TOP_RADIUS;
   const rings = [
-    { points: outer, radius: BASE_RADIUS, colour: colour.clone().offsetHSL(0, -0.01, -0.13) },
-    { points: shoulder, radius: SHOULDER_RADIUS, colour: colour.clone().offsetHSL(0, -0.005, -0.055) },
-    { points: top, radius: TOP_RADIUS, colour: colour.clone().offsetHSL(0, 0.012, 0.045) },
+    {
+      points: outer,
+      radius: baseRadius,
+      colour: colour.clone().offsetHSL(0, -0.006, dominantGesture ? -0.035 : -0.13),
+    },
+    {
+      points: shoulder,
+      radius: shoulderRadius,
+      colour: colour.clone().offsetHSL(0, -0.003, dominantGesture ? -0.012 : -0.055),
+    },
+    {
+      points: top,
+      radius: topRadius,
+      colour: colour.clone().offsetHSL(0, 0.012, dominantGesture ? 0.018 : 0.045),
+    },
   ];
 
   const positions = [];
@@ -406,8 +468,9 @@ function createPatchGeometry(contour, colour, { back = false, backRotation = 0, 
   geometry.computeVertexNormals();
   geometry.userData.kidsGalaxySculptedKidPatch = true;
   geometry.userData.kidsGalaxyBeveledKidPatch = true;
+  geometry.userData.kidsGalaxyDominantGesturePatch = dominantGesture;
   geometry.userData.kidsGalaxyPatchVertexCount = positions.length / 3;
-  geometry.userData.kidsGalaxyPatchRelief = TOP_RADIUS - BODY_RADIUS;
+  geometry.userData.kidsGalaxyPatchRelief = topRadius - BODY_RADIUS;
   geometry.userData.kidsGalaxyPatchBackEcho = back;
   return geometry;
 }
@@ -433,33 +496,65 @@ function disposeGroup(group) {
   });
 }
 
+function markCleanBody(entity, analysis) {
+  entity.accentEdgeMesh.visible = false;
+  entity.accentMesh.visible = false;
+  entity.mesh.material.userData.kidsGalaxyTrueSculptedArtwork = true;
+  entity.mesh.material.userData.kidsGalaxySculptedPatchCount = 0;
+  entity.mesh.material.userData.kidsGalaxyDominantGesturePatchCount = 0;
+  entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
+  entity.mesh.material.userData.designProjection = 'clean-dominant-body-no-redundant-patch';
+}
+
 function buildSculptedArtwork(entity, texture) {
   const analysis = analyse(texture);
   if (!analysis) return false;
   const components = componentsFor(analysis)
     .map((component) => ({ ...component, contour: componentContour(component) }))
     .filter((component) => component.contour?.length >= 6);
-  if (!components.length) return false;
 
   disposeGroup(entity.sculptedArtworkGroup);
+  if (!components.length) {
+    markCleanBody(entity, analysis);
+    return true;
+  }
+
   const group = new THREE.Group();
   group.userData.kidsGalaxySculptedArtworkGroup = true;
   group.userData.componentCount = components.length;
 
   const seed = entity.animator.hashId(`${entity.id}-sculpted-back-echo`);
   const backRotation = 0.18 + entity.seededUnit(seed, 5) * 0.28;
+  let dominantGestureCount = 0;
+  let secondaryCount = 0;
+  let backEchoCount = 0;
+
   components.forEach((component, index) => {
     const colour = analysis.colours.get(component.colour) || new THREE.Color(0xffffff);
-    const mesh = new THREE.Mesh(createPatchGeometry(component.contour, colour), patchMaterial());
+    const mesh = new THREE.Mesh(
+      createPatchGeometry(component.contour, colour, {
+        dominantGesture: component.isDominantGesture,
+      }),
+      patchMaterial(),
+    );
     mesh.userData.kidsGalaxySculptedKidPatch = true;
     mesh.userData.kidsGalaxyKidPatchIndex = index;
+    mesh.userData.kidsGalaxyDominantGesturePatch = component.isDominantGesture;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
 
+    if (component.isDominantGesture) {
+      dominantGestureCount += 1;
+      return;
+    }
+    secondaryCount += 1;
+
     // A smaller opposite-side echo gives a complete designed planet without
-    // asking a child to paint invisible faces of the sphere.
-    if (index < 4) {
+    // asking a child to paint invisible faces of the sphere. Dominant ribbons
+    // already belong to the body language, so they stay authored only on the
+    // visible hemisphere rather than being redundantly echoed.
+    if (backEchoCount < 4) {
       const back = new THREE.Mesh(
         createPatchGeometry(component.contour, colour, {
           back: true,
@@ -470,9 +565,11 @@ function buildSculptedArtwork(entity, texture) {
       );
       back.userData.kidsGalaxySculptedKidPatch = true;
       back.userData.kidsGalaxyBackDesignEcho = true;
+      back.userData.kidsGalaxyDominantGesturePatch = false;
       back.castShadow = true;
       back.receiveShadow = true;
       group.add(back);
+      backEchoCount += 1;
     }
   });
 
@@ -482,8 +579,13 @@ function buildSculptedArtwork(entity, texture) {
   entity.accentMesh.visible = false;
   entity.mesh.material.userData.kidsGalaxyTrueSculptedArtwork = true;
   entity.mesh.material.userData.kidsGalaxySculptedPatchCount = components.length;
-  entity.mesh.material.userData.kidsGalaxySculptedBackEchoCount = Math.min(4, components.length);
-  entity.mesh.material.userData.designProjection = 'true-beveled-kid-components-with-back-echo';
+  entity.mesh.material.userData.kidsGalaxySecondaryPatchCount = secondaryCount;
+  entity.mesh.material.userData.kidsGalaxyDominantGesturePatchCount = dominantGestureCount;
+  entity.mesh.material.userData.kidsGalaxyDominantGestureCoverage = analysis.dominantCoverage;
+  entity.mesh.material.userData.kidsGalaxyDominantGestureStyle = 'same-hue-sculpted-ribbons';
+  entity.mesh.material.userData.kidsGalaxySculptedBackEchoCount = backEchoCount;
+  entity.mesh.material.userData.designProjection =
+    'true-beveled-kid-components-with-dominant-ribbons-and-back-echo';
   return true;
 }
 
