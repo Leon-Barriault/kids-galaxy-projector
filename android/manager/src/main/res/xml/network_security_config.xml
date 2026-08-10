@@ -1,21 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The manager app is an event-floor tool: a volunteer's phone on the closed Pi
-  hotspot, used to take a drawing down without restarting the kiosk. It has no
-  mTLS yet - unlike the drawing app, which pins the project CA in ApiClient -
-  so cleartext to the local network is permitted in both variants and stated
-  here rather than left to be discovered.
+  Release policy: HTTPS only.
 
-  Two consequences worth being explicit about. This app must never be pointed
-  at anything outside the event network. And until it gains mTLS, its release
-  variant is not a "field" build in the sense the drawing app's release is.
+  The manager release build presents manager.p12 through MutualTls and pins
+  trust to the project CA programmatically. There is deliberately no cleartext
+  exemption here: a misconfigured manager endpoint must fail loudly instead of
+  silently downgrading a destructive administration surface to plaintext.
 
-  Note that a "${serverHost}" placeholder cannot be used in this file:
-  manifestPlaceholders are substituted into AndroidManifest.xml only, never
-  into resource XML, so it would remain literal text and match no host.
+  The debug variant overrides this file from src/debug/res/xml and permits
+  cleartext for local bench work.
 -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
