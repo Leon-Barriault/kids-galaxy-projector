@@ -26,9 +26,7 @@ import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
-import { installSculptedArtworkDomeFinish } from './projector/SculptedArtworkDomeFinish.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
-import { installSculptedArtworkReferenceFinish } from './projector/SculptedArtworkReferenceFinish.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
@@ -36,10 +34,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
-// images. Valid kid drawings end as true curved/beveled geometry: dominant paint
-// owns the body, secondary gestures become physical pieces, then the final
-// geometry pass turns their flat caps into rounded multi-ring domes so the kid's
-// shapes live in the same molded toy/clay visual language as the references.
+// images. Valid kid drawings end as broad curved/beveled pieces: the dominant
+// paint owns the body and every meaningful secondary gesture becomes a separate
+// softly rounded raised slab. This intentionally avoids centre-pinched domes;
+// the supplied clay/toy references keep broad top surfaces and rounded shoulders.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -52,8 +50,6 @@ installReferenceFinish();
 installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
-installSculptedArtworkReferenceFinish();
-installSculptedArtworkDomeFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
