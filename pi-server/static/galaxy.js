@@ -27,6 +27,7 @@ import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrad
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
+import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
@@ -34,10 +35,10 @@ import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironm
 const GALLERY_SIZE = 12;
 
 // Older artwork interpreters remain installed as fallbacks for malformed legacy
-// images. Valid kid drawings end as broad curved/beveled pieces: the dominant
-// paint owns the body and every meaningful secondary gesture becomes a separate
-// softly rounded raised slab. This intentionally avoids centre-pinched domes;
-// the supplied clay/toy references keep broad top surfaces and rounded shoulders.
+// images. Valid kid drawings end as broad physical pieces: the dominant paint
+// owns the body, each secondary gesture becomes a separate beveled mesh, and the
+// final five-ring slab pass rounds only the perimeter while preserving a broad
+// plateau like the supplied molded clay/plastic references.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -50,6 +51,7 @@ installReferenceFinish();
 installSculptedArtworkRuntimeCompat();
 installSculptedArtworkGeometry();
 installSculptedGeometryFinish();
+installSculptedArtworkRoundedSlab();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
 
