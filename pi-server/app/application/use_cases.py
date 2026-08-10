@@ -20,6 +20,7 @@ from app.domain.image_rules import (
 from app.domain.naming import normalize_display_name
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
 from app.domain.planet_customization import (
+    normalize_body_color,
     normalize_companions,
     normalize_crater_color,
     normalize_mountain_color,
@@ -72,6 +73,7 @@ class SubmitPlanetUseCase:
         raw_ring_color: str | None = None,
         raw_crater_color: str | None = None,
         raw_mountain_color: str | None = None,
+        raw_body_color: str | None = None,
         max_size: int = DEFAULT_MAX_SIZE,
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
@@ -85,6 +87,7 @@ class SubmitPlanetUseCase:
 
         style = normalize_planet_style(raw_style)
         companions = normalize_companions(raw_companions)
+        body_color = normalize_body_color(raw_body_color)
         ring_color = normalize_ring_color(raw_ring_color)
         crater_color = normalize_crater_color(raw_crater_color)
         mountain_color = normalize_mountain_color(raw_mountain_color)
@@ -98,7 +101,7 @@ class SubmitPlanetUseCase:
 
         display_name = normalize_display_name(raw_name)
         planet_id = uuid.uuid4().hex[:10]
-        if style == "classic" and not companions:
+        if style == "classic" and not companions and body_color is None:
             planet = self._repository.save(
                 planet_id=planet_id,
                 display_name=display_name,
@@ -114,6 +117,7 @@ class SubmitPlanetUseCase:
                 ring_color=ring_color,
                 crater_color=crater_color,
                 mountain_color=mountain_color,
+                body_color=body_color,
             )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
