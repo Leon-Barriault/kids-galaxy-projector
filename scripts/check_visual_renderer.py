@@ -145,7 +145,8 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
     page.wait_for_timeout(500)
 
 
-def main() -> int:
+def main(isolate_planet_fn=isolate_planet) -> int:
+    """Run the visual contract with an explicitly supplied comparison setup."""
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     drawing = kid_disc_image()
     drawing.save(ARTIFACT_DIR / "kid-drawing.png")
@@ -283,9 +284,9 @@ def main() -> int:
         page.add_style_tag(
             content="#ui, #status, #celebration, #planet-name, #hint, #badge-label, #sparkles { display:none !important; } body { margin:0 !important; }"
         )
-        isolate_planet(page, classic, include_ring=False)
+        isolate_planet_fn(page, classic, include_ring=False)
         page.locator("canvas").screenshot(path=str(ARTIFACT_DIR / "planet-classic.png"))
-        isolate_planet(page, ringed, include_ring=True)
+        isolate_planet_fn(page, ringed, include_ring=True)
         page.locator("canvas").screenshot(path=str(ARTIFACT_DIR / "planet-ringed.png"))
         check((ARTIFACT_DIR / "planet-classic.png").exists(), "classic visual comparison PNG was rendered")
         check((ARTIFACT_DIR / "planet-ringed.png").exists(), "ringed visual comparison PNG was rendered")
