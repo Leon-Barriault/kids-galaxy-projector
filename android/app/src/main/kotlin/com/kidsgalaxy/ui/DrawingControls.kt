@@ -48,6 +48,7 @@ val kidColorsArgb: List<Int> =
         0xFF9C27B0.toInt(),
         0xFFE91E63.toInt(),
         0xFF000000.toInt(),
+        0xFFFFFFFF.toInt(),
     )
 
 private val brushSizes = listOf(16f, 28f, 48f)
@@ -87,6 +88,7 @@ fun DrawingControls(
         ) {
             kidColorsArgb.forEach { colorArgb ->
                 val selected = colorArgb == selectedColorArgb
+                val isWhite = colorArgb == 0xFFFFFFFF.toInt()
                 Box(
                     modifier =
                         Modifier
@@ -94,10 +96,10 @@ fun DrawingControls(
                             .clip(CircleShape)
                             .background(Color(colorArgb))
                             .then(
-                                if (selected) {
-                                    Modifier.border(4.dp, Color.White, CircleShape)
-                                } else {
-                                    Modifier
+                                when {
+                                    selected -> Modifier.border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                    isWhite -> Modifier.border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    else -> Modifier
                                 },
                             ).selectable(
                                 selected = selected,
@@ -107,6 +109,25 @@ fun DrawingControls(
                 )
             }
         }
+
+        OutlinedButton(
+            onClick = {
+                // Alpha=0 is reserved by DrawingViewModel as a bucket-fill
+                // command. The selected RGB remains unchanged.
+                onColorChange(selectedColorArgb and 0x00FFFFFF)
+            },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = TOUCH_TARGET),
+        ) {
+            Text(stringResource(R.string.fill_background))
+        }
+        Text(
+            stringResource(R.string.fill_background_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Text(stringResource(R.string.brush_size), style = MaterialTheme.typography.titleMedium)
         Row(
