@@ -13,6 +13,7 @@ import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
 import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
+import { installExplicitBodyArtwork } from './projector/ExplicitBodyArtwork.js';
 import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
@@ -40,8 +41,9 @@ const GALLERY_SIZE = 12;
 
 // Kid drawings keep their authored shapes/colours as molded planet-wide traits.
 // New tablets explicitly send the bucket/background colour as the planet body,
-// so the final renderer does not have to infer that body colour from stroke area.
-// Older stored planets without body_color remain on the legacy inference path.
+// so their final artwork path extracts every trait relative to that colour
+// instead of guessing a dominant paint colour. Older stored planets without
+// body_color remain on the legacy inference path.
 installKidArtworkUpgrade();
 installKidArtworkFaithfulMask();
 installKidArtworkMotifProjection();
@@ -60,8 +62,10 @@ installSculptedArtworkRoundedSlab();
 installDominantRibbonFinish();
 installReferencePlanetUpgrade();
 installThemedGalaxyEnvironment();
-// Must be outermost: sculpt the drawing first, then make the tablet-selected
-// background/body colour authoritative over every inference/tuning layer.
+// These two wrappers are intentionally outermost. First rebuild new-tablet
+// artwork relative to the explicit bucket colour; then lock that colour onto
+// the clean planet body after every older inference/tuning stage has run.
+installExplicitBodyArtwork();
 installExplicitBodyColor();
 
 const container = document.getElementById('canvas-container');
