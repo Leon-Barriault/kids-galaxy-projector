@@ -15,4 +15,6 @@
     <string name="print_invalid_image">Android n’a pas pu décoder l’image d’impression retournée par le serveur de la galaxie.</string>
     <string name="print_unavailable">L’impression Android n’est pas disponible sur cette tablette. Activez ou installez un service d’impression et réessayez.</string>
     <string name="print_start_failed">Android n’a pas pu ouvrir la boîte de dialogue d’impression : %1$s</string>
+    <string name="print_start_failed_saving">Android n’a pas pu ouvrir la boîte de dialogue d’impression (%1$s). Une boîte d’enregistrement du PNG va s’ouvrir à la place.</string>
+    <string name="print_fallback_saved">La feuille d’impression est enregistrée. Ouvrez le PNG depuis Fichiers ou une autre application d’impression.</string>
 </resources>
