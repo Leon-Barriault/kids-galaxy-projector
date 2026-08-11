@@ -82,8 +82,15 @@ function markHighlight(mesh) {
 function astronautMaterials(accent) {
   return {
     outline: standardMaterial(0x24272b),
-    suit: physicalMaterial(0xf4f5f2),
-    white: standardMaterial(0xffffff, { roughness: 0.42 }),
+    suit: physicalMaterial(0xf4f5f2, {
+      emissive: 0x171817,
+      emissiveIntensity: 0.22,
+    }),
+    white: standardMaterial(0xffffff, {
+      roughness: 0.42,
+      emissive: 0x202020,
+      emissiveIntensity: 0.18,
+    }),
     shadow: standardMaterial(0xbec3c5),
     visor: physicalMaterial(0x111417, {
       roughness: 0.28,
@@ -96,7 +103,9 @@ function astronautMaterials(accent) {
 }
 
 function addPixelVisorHighlights(group, white) {
-  const z = 0.198;
+  // These sit just in front of the visor surface so the white pixel glints stay
+  // readable even when the companion is only a few dozen projector pixels tall.
+  const z = 0.272;
   markHighlight(addBlock(group, [0.035, 0.012, 0.012], white, [-0.055, 0.247, z]));
   markHighlight(addBlock(group, [0.012, 0.035, 0.012], white, [-0.055, 0.247, z + 0.001]));
   markHighlight(addBlock(group, [0.016, 0.016, 0.012], white, [0.063, 0.237, z]));
@@ -105,14 +114,18 @@ function addPixelVisorHighlights(group, white) {
 
 function addHelmet(group, materials, accentOnHelmet) {
   const { outline, suit, visor, white, accent } = materials;
+
+  // The dark shell is slightly larger but sits behind the forward-shifted white
+  // helmet. Their intersection leaves a thin pixel-like charcoal silhouette
+  // instead of covering the whole helmet with black.
   addMesh(group, new THREE.SphereGeometry(0.195, 10, 7), outline, [0, 0.213, 0]);
-  addMesh(group, new THREE.SphereGeometry(0.178, 10, 7), suit, [0, 0.214, 0.008]);
+  addMesh(group, new THREE.SphereGeometry(0.178, 10, 7), suit, [0, 0.214, 0.035]);
 
   const visorMesh = addMesh(
     group,
     new THREE.SphereGeometry(0.146, 10, 7),
     visor,
-    [0, 0.217, 0.121],
+    [0, 0.217, 0.195],
     [1.09, 0.79, 0.47],
   );
   markVisor(visorMesh);
@@ -163,8 +176,20 @@ function addArms(group, materials, pose = 'down') {
     const outward = pose === 'float' ? side * 0.12 : 0;
     const upperY = pose === 'float' ? 0.03 : -0.01;
     const rotation = pose === 'float' ? [0, 0, side * -0.32] : null;
-    addBlock(group, [0.066, 0.148, 0.09], outline, [side * 0.145 + outward * 0.1, upperY, 0], rotation);
-    addBlock(group, [0.048, 0.13, 0.096], suit, [side * 0.145 + outward * 0.1, upperY, 0.008], rotation);
+    addBlock(
+      group,
+      [0.066, 0.148, 0.09],
+      outline,
+      [side * 0.145 + outward * 0.1, upperY, 0],
+      rotation,
+    );
+    addBlock(
+      group,
+      [0.048, 0.13, 0.096],
+      suit,
+      [side * 0.145 + outward * 0.1, upperY, 0.008],
+      rotation,
+    );
     addBlock(group, [0.05, 0.028, 0.1], accent, [side * 0.145, upperY - 0.041, 0.011], rotation);
     addBlock(group, [0.063, 0.054, 0.094], outline, [side * 0.147, upperY - 0.101, 0.006], rotation);
     addBlock(group, [0.047, 0.04, 0.1], shadow, [side * 0.147, upperY - 0.101, 0.014], rotation);
