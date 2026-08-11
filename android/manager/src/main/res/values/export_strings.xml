@@ -15,4 +15,6 @@
     <string name="print_invalid_image">Android could not decode the print image returned by the galaxy server.</string>
     <string name="print_unavailable">Android printing is not available on this tablet. Enable or install a print service and try again.</string>
     <string name="print_start_failed">Android could not open the print dialog: %1$s</string>
+    <string name="print_start_failed_saving">Android could not open the print dialog (%1$s). A save dialog will open for the PNG instead.</string>
+    <string name="print_fallback_saved">Print sheet saved. Open the PNG from Files or another printing app to print it.</string>
 </resources>
