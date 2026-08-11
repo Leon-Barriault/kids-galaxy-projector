@@ -7,5 +7,7 @@
     <string name="download_stl">STL</string>
     <string name="print_named">Print %1$s</string>
     <string name="export_stl_named">Export %1$s as an 80 mm STL</string>
-    <string name="export_failed">Could not export this planet. Check the galaxy connection and try again.</string>
+    <string name="export_failed">Could not prepare this export. Please try again.</string>
+    <string name="export_network_failed">Could not reach the galaxy server while preparing this export.</string>
+    <string name="export_server_failed">The galaxy server could not prepare this export (HTTP %1$d).</string>
 </resources>

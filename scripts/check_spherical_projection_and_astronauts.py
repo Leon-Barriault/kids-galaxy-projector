@@ -61,7 +61,9 @@ def render_state(page, planet_id: str) -> dict:
           let visorTone = null;
           let visorBrightness = null;
           let visorCount = 0;
+          let highlightCount = 0;
           astronaut?.traverse((child) => {
+            if (child.userData?.kidsGalaxyAstronautVisorHighlight) highlightCount += 1;
             if (!child.userData?.kidsGalaxyAstronautVisor || !child.material?.color) return;
             visorCount += 1;
             visorTone = child.userData.kidsGalaxyAstronautVisorTone;
@@ -81,16 +83,39 @@ def render_state(page, planet_id: str) -> dict:
             astronautVariant: astronaut?.userData?.kidsGalaxyAstronautVariantNumber || 0,
             astronautKey: astronaut?.userData?.kidsGalaxyAstronautVariant || null,
             astronautLabel: astronaut?.userData?.kidsGalaxyAstronautVariantLabel || null,
+            astronautAccent: astronaut?.userData?.kidsGalaxyAstronautAccent || null,
             friendly: Boolean(astronaut?.userData?.kidsGalaxyFriendlyAstronaut),
+            approvedPixel: Boolean(astronaut?.userData?.kidsGalaxyApprovedPixelAstronaut),
             childCount: astronaut?.children?.length || 0,
             visorCount,
             visorTone,
             visorBrightness,
+            highlightCount,
           };
         }
         """,
         planet_id,
     )
+
+
+def open_variant(browser, server, planet_id: str, query: str) -> tuple[dict, list[str]]:
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
+    errors: list[str] = []
+    page.on(
+        "console",
+        lambda message: errors.append(message.text) if message.type == "error" else None,
+    )
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    suffix = f"?{query}" if query else ""
+    page.goto(f"{server.base}/{suffix}", wait_until="load")
+    wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 1", 12_000)
+    wait_for(
+        page,
+        f"window.kidsGalaxy.kidPlanets.get('{planet_id}')?.sculptedArtworkGroup?.userData?.kidsGalaxyStrokeLatitudeProjection === true",
+        12_000,
+    )
+    state = render_state(page, planet_id)
+    return state, errors, page
 
 
 def main() -> int:
@@ -112,31 +137,27 @@ def main() -> int:
 
         states: list[dict] = []
         for variant in (1, 2, 3):
-            page = browser.new_page(viewport={"width": 1920, "height": 1080})
-            errors: list[str] = []
-            page.on(
-                "console",
-                lambda message: errors.append(message.text) if message.type == "error" else None,
+            state, errors, page = open_variant(
+                browser,
+                server,
+                planet_id,
+                f"astronaut={variant}",
             )
-            page.on("pageerror", lambda error: errors.append(str(error)))
-            page.goto(f"{server.base}/?astronaut={variant}", wait_until="load")
-            wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 1", 12_000)
-            wait_for(
-                page,
-                f"window.kidsGalaxy.kidPlanets.get('{planet_id}')?.sculptedArtworkGroup?.userData?.kidsGalaxyStrokeLatitudeProjection === true",
-                12_000,
-            )
-            state = render_state(page, planet_id)
             states.append(state)
             page.screenshot(path=str(ARTIFACTS / f"astronaut-option-{variant}.png"))
 
             check(state["astronautVariant"] == variant, f"astronaut query selects WebGL option #{variant}")
             check(state["friendly"], f"astronaut option #{variant} carries the kid-friendly model contract")
-            check(state["childCount"] >= 10, f"astronaut option #{variant} is a composed 3D model")
+            check(state["approvedPixel"], f"astronaut option #{variant} uses the approved pixel/chibi treatment")
+            check(state["childCount"] >= 18, f"astronaut option #{variant} is a composed blocky 3D model")
             check(state["visorCount"] == 1, f"astronaut option #{variant} exposes one explicit visor")
             check(
-                state["visorBrightness"] is not None and state["visorBrightness"] >= 0.55,
-                f"astronaut option #{variant} uses a bright rather than near-black visor",
+                state["visorBrightness"] is not None and state["visorBrightness"] <= 0.18,
+                f"astronaut option #{variant} uses the approved dark charcoal visor",
+            )
+            check(
+                state["highlightCount"] >= 4,
+                f"astronaut option #{variant} carries white pixel-like visor reflections",
             )
             check(not errors, f"astronaut option #{variant} renders without browser errors")
             page.close()
@@ -155,22 +176,40 @@ def main() -> int:
         check(projection["maxLatitude"] >= 63, "geometry records near-target northern latitude")
 
         print("\nastronaut WebGL comparison")
-        check(states[0]["variantCount"] == 3, "projector advertises exactly three astronaut preview options")
+        check(states[0]["variantCount"] == 3, "projector advertises exactly three astronaut options")
         check(
             len({state["astronautKey"] for state in states}) == 3,
             "the three astronaut choices are distinct model variants",
         )
         check(
-            len({state["visorTone"] for state in states}) == 3,
-            "the three models use visibly distinct bright visor treatments",
+            len({state["astronautAccent"] for state in states}) == 3,
+            "plain, orange-accent, and blue-jetpack treatments remain distinct",
         )
+        check(
+            {state["visorTone"] for state in states} == {"charcoal-pixel"},
+            "all approved variants share the friendly pixel-art visor treatment",
+        )
+
+        random_state, random_errors, random_page = open_variant(browser, server, planet_id, "")
+        random_page.close()
+        reload_state, reload_errors, reload_page = open_variant(browser, server, planet_id, "")
+        reload_page.close()
+        check(
+            random_state["astronautVariant"] in (1, 2, 3),
+            "normal kid flow chooses one of the three approved astronauts",
+        )
+        check(
+            reload_state["astronautVariant"] == random_state["astronautVariant"],
+            "per-planet randomized astronaut remains stable across projector reloads",
+        )
+        check(not random_errors and not reload_errors, "randomized astronaut flow has no browser errors")
 
         browser.close()
 
     if FAILURES:
         print(f"\n{len(FAILURES)} spherical/astronaut acceptance check(s) failed")
         return 1
-    print("\nSpherical stroke projection and astronaut WebGL options passed")
+    print("\nSpherical stroke projection and pixel astronaut WebGL options passed")
     return 0
 
 

@@ -3,21 +3,30 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 
 export const ASTRONAUT_VARIANTS = Object.freeze([
-  Object.freeze({ id: 1, key: 'bubble-buddy', label: 'Bubble Buddy' }),
-  Object.freeze({ id: 2, key: 'star-hopper', label: 'Star Hopper' }),
-  Object.freeze({ id: 3, key: 'cozy-dreamer', label: 'Cozy Dreamer' }),
+  Object.freeze({ id: 1, key: 'pixel-explorer', label: 'Pixel Explorer' }),
+  Object.freeze({ id: 2, key: 'solar-scout', label: 'Solar Scout' }),
+  Object.freeze({ id: 3, key: 'jetpack-jumper', label: 'Jetpack Jumper' }),
 ]);
 
 const VARIANT_ALIASES = new Map([
   ['1', 1],
+  ['pixel', 1],
+  ['explorer', 1],
+  ['pixel-explorer', 1],
   ['bubble', 1],
   ['buddy', 1],
   ['bubble-buddy', 1],
   ['2', 2],
+  ['solar', 2],
+  ['scout', 2],
+  ['solar-scout', 2],
   ['star', 2],
   ['hopper', 2],
   ['star-hopper', 2],
   ['3', 3],
+  ['jetpack', 3],
+  ['jumper', 3],
+  ['jetpack-jumper', 3],
   ['cozy', 3],
   ['dreamer', 3],
   ['cozy-dreamer', 3],
@@ -26,10 +35,10 @@ const VARIANT_ALIASES = new Map([
 function physicalMaterial(color, overrides = {}) {
   return new THREE.MeshPhysicalMaterial({
     color,
-    roughness: 0.54,
-    metalness: 0.015,
-    clearcoat: 0.08,
-    clearcoatRoughness: 0.72,
+    roughness: 0.68,
+    metalness: 0.01,
+    clearcoat: 0.035,
+    clearcoatRoughness: 0.84,
     ...overrides,
   });
 }
@@ -37,8 +46,8 @@ function physicalMaterial(color, overrides = {}) {
 function standardMaterial(color, overrides = {}) {
   return new THREE.MeshStandardMaterial({
     color,
-    roughness: 0.58,
-    metalness: 0.025,
+    roughness: 0.72,
+    metalness: 0.01,
     ...overrides,
   });
 }
@@ -54,276 +63,239 @@ function addMesh(group, geometry, material, position, scale = null, rotation = n
   return mesh;
 }
 
-function starGeometry(outerRadius = 0.04, innerRadius = outerRadius * 0.48) {
-  const shape = new THREE.Shape();
-  for (let index = 0; index < 10; index += 1) {
-    const radius = index % 2 === 0 ? outerRadius : innerRadius;
-    const angle = -Math.PI / 2 + (index * Math.PI) / 5;
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
-    if (index === 0) shape.moveTo(x, y);
-    else shape.lineTo(x, y);
-  }
-  shape.closePath();
-  return new THREE.ShapeGeometry(shape);
+function addBlock(group, size, material, position, rotation = null) {
+  return addMesh(group, new THREE.BoxGeometry(...size), material, position, null, rotation);
 }
 
-function markVisor(mesh, tone) {
+function markVisor(mesh) {
   mesh.userData.kidsGalaxyAstronautVisor = true;
-  mesh.userData.kidsGalaxyAstronautVisorTone = tone;
-  mesh.userData.kidsGalaxyBrightKidFriendlyVisor = true;
+  mesh.userData.kidsGalaxyAstronautVisorTone = 'charcoal-pixel';
+  mesh.userData.kidsGalaxyApprovedDarkPixelVisor = true;
   return mesh;
 }
 
-function addFriendlyFace(group, y, z, color = 0x31546f, eyeSpacing = 0.034, scale = 1) {
-  const face = standardMaterial(color, { roughness: 0.5, metalness: 0 });
-  addMesh(
-    group,
-    new THREE.SphereGeometry(0.012 * scale, 12, 10),
-    face,
-    [-eyeSpacing, y + 0.014 * scale, z],
-    [1, 1.15, 0.42],
-  );
-  addMesh(
-    group,
-    new THREE.SphereGeometry(0.012 * scale, 12, 10),
-    face,
-    [eyeSpacing, y + 0.014 * scale, z],
-    [1, 1.15, 0.42],
-  );
-  const smile = addMesh(
-    group,
-    new THREE.TorusGeometry(0.03 * scale, 0.0055 * scale, 8, 20, Math.PI),
-    face,
-    [0, y - 0.014 * scale, z + 0.001],
-  );
-  smile.rotation.z = Math.PI;
-  return smile;
+function markHighlight(mesh) {
+  mesh.userData.kidsGalaxyAstronautVisorHighlight = true;
+  return mesh;
 }
 
-function finishVariant(group, variant, scale = 1) {
+function astronautMaterials(accent) {
+  return {
+    outline: standardMaterial(0x24272b),
+    suit: physicalMaterial(0xf4f5f2, {
+      emissive: 0x171817,
+      emissiveIntensity: 0.22,
+    }),
+    white: standardMaterial(0xffffff, {
+      roughness: 0.42,
+      emissive: 0x202020,
+      emissiveIntensity: 0.18,
+    }),
+    shadow: standardMaterial(0xbec3c5),
+    visor: physicalMaterial(0x111417, {
+      roughness: 0.28,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.22,
+    }),
+    panel: standardMaterial(0x596167),
+    accent: standardMaterial(accent),
+  };
+}
+
+function addPixelVisorHighlights(group, white) {
+  // These sit just in front of the visor surface so the white pixel glints stay
+  // readable even when the companion is only a few dozen projector pixels tall.
+  const z = 0.272;
+  markHighlight(addBlock(group, [0.035, 0.012, 0.012], white, [-0.055, 0.247, z]));
+  markHighlight(addBlock(group, [0.012, 0.035, 0.012], white, [-0.055, 0.247, z + 0.001]));
+  markHighlight(addBlock(group, [0.016, 0.016, 0.012], white, [0.063, 0.237, z]));
+  markHighlight(addBlock(group, [0.011, 0.017, 0.012], white, [-0.073, 0.166, z]));
+}
+
+function addHelmet(group, materials, accentOnHelmet) {
+  const { outline, suit, visor, white, accent } = materials;
+
+  // The dark shell is slightly larger but sits behind the forward-shifted white
+  // helmet. Their intersection leaves a thin pixel-like charcoal silhouette
+  // instead of covering the whole helmet with black.
+  addMesh(group, new THREE.SphereGeometry(0.195, 10, 7), outline, [0, 0.213, 0]);
+  addMesh(group, new THREE.SphereGeometry(0.178, 10, 7), suit, [0, 0.214, 0.035]);
+
+  const visorMesh = addMesh(
+    group,
+    new THREE.SphereGeometry(0.146, 10, 7),
+    visor,
+    [0, 0.217, 0.195],
+    [1.09, 0.79, 0.47],
+  );
+  markVisor(visorMesh);
+  addPixelVisorHighlights(group, white);
+
+  [-1, 1].forEach((side) => {
+    addBlock(group, [0.043, 0.077, 0.058], outline, [side * 0.181, 0.21, 0]);
+    addBlock(
+      group,
+      [0.029, 0.059, 0.064],
+      accentOnHelmet ? accent : suit,
+      [side * 0.181, 0.21, 0.008],
+    );
+  });
+
+  addBlock(group, [0.178, 0.03, 0.034], outline, [0, 0.36, 0.015]);
+  addBlock(
+    group,
+    [0.154, 0.019, 0.038],
+    accentOnHelmet ? accent : suit,
+    [0, 0.361, 0.026],
+  );
+}
+
+function addTorso(group, materials, accentMode) {
+  const { outline, suit, shadow, panel, accent } = materials;
+  addBlock(group, [0.23, 0.214, 0.142], outline, [0, -0.004, 0]);
+  addBlock(group, [0.202, 0.188, 0.148], suit, [0, 0, 0.011]);
+
+  addBlock(group, [0.112, 0.068, 0.02], outline, [0, 0.025, 0.09]);
+  addBlock(group, [0.096, 0.052, 0.022], shadow, [0, 0.025, 0.101]);
+  addBlock(group, [0.025, 0.028, 0.012], panel, [-0.025, 0.025, 0.116]);
+  addBlock(group, [0.013, 0.013, 0.012], accent, [0.025, 0.034, 0.117]);
+  addBlock(group, [0.013, 0.013, 0.012], panel, [0.025, 0.014, 0.117]);
+
+  if (accentMode === 'orange') {
+    addBlock(group, [0.032, 0.046, 0.018], accent, [-0.07, -0.067, 0.095]);
+    addBlock(group, [0.032, 0.046, 0.018], accent, [0.07, -0.067, 0.095]);
+  } else if (accentMode === 'blue') {
+    addBlock(group, [0.036, 0.024, 0.018], accent, [-0.086, 0.04, 0.096]);
+    addBlock(group, [0.036, 0.024, 0.018], accent, [0.086, 0.04, 0.096]);
+  }
+}
+
+function addArms(group, materials, pose = 'down') {
+  const { outline, suit, shadow, accent } = materials;
+  [-1, 1].forEach((side) => {
+    const outward = pose === 'float' ? side * 0.12 : 0;
+    const upperY = pose === 'float' ? 0.03 : -0.01;
+    const rotation = pose === 'float' ? [0, 0, side * -0.32] : null;
+    addBlock(
+      group,
+      [0.066, 0.148, 0.09],
+      outline,
+      [side * 0.145 + outward * 0.1, upperY, 0],
+      rotation,
+    );
+    addBlock(
+      group,
+      [0.048, 0.13, 0.096],
+      suit,
+      [side * 0.145 + outward * 0.1, upperY, 0.008],
+      rotation,
+    );
+    addBlock(group, [0.05, 0.028, 0.1], accent, [side * 0.145, upperY - 0.041, 0.011], rotation);
+    addBlock(group, [0.063, 0.054, 0.094], outline, [side * 0.147, upperY - 0.101, 0.006], rotation);
+    addBlock(group, [0.047, 0.04, 0.1], shadow, [side * 0.147, upperY - 0.101, 0.014], rotation);
+  });
+}
+
+function addLegs(group, materials, accentMode) {
+  const { outline, suit, shadow, accent } = materials;
+  [-1, 1].forEach((side) => {
+    addBlock(group, [0.082, 0.122, 0.105], outline, [side * 0.063, -0.178, 0.006]);
+    addBlock(group, [0.064, 0.105, 0.111], suit, [side * 0.063, -0.174, 0.014]);
+    if (accentMode !== 'none') {
+      addBlock(group, [0.067, 0.026, 0.115], accent, [side * 0.063, -0.196, 0.018]);
+    }
+    addBlock(group, [0.09, 0.058, 0.135], outline, [side * 0.066, -0.263, 0.028]);
+    addBlock(group, [0.072, 0.042, 0.141], shadow, [side * 0.066, -0.258, 0.038]);
+  });
+}
+
+function addBackpack(group, materials, withFlame) {
+  const { outline, shadow, accent } = materials;
+  addBlock(group, [0.13, 0.18, 0.08], outline, [0, -0.005, -0.11]);
+  addBlock(group, [0.108, 0.158, 0.072], shadow, [0, -0.005, -0.122]);
+  addBlock(group, [0.035, 0.125, 0.08], accent, [0.048, -0.005, -0.165]);
+
+  if (!withFlame) return;
+  const orange = standardMaterial(0xff6a1a, { emissive: 0x7a1600, emissiveIntensity: 0.5 });
+  const yellow = standardMaterial(0xffdc32, { emissive: 0x8a5b00, emissiveIntensity: 0.55 });
+  addBlock(group, [0.046, 0.09, 0.045], orange, [0.06, -0.112, -0.165], [0, 0, -0.18]);
+  addBlock(group, [0.032, 0.074, 0.035], yellow, [0.068, -0.175, -0.165], [0, 0, -0.18]);
+  addBlock(group, [0.02, 0.05, 0.025], yellow, [0.074, -0.225, -0.165], [0, 0, -0.18]);
+}
+
+function finishVariant(group, variant, accentName, scale = 0.88) {
   group.scale.setScalar(scale);
   group.userData.kidsGalaxyFriendlyAstronaut = true;
+  group.userData.kidsGalaxyApprovedPixelAstronaut = true;
   group.userData.kidsGalaxyAstronautVariantNumber = variant.id;
   group.userData.kidsGalaxyAstronautVariant = variant.key;
   group.userData.kidsGalaxyAstronautVariantLabel = variant.label;
+  group.userData.kidsGalaxyAstronautAccent = accentName;
   group.userData.kidsGalaxyAstronautPreviewQuery = `astronaut=${variant.id}`;
   return group;
 }
 
-function bubbleBuddy() {
+function pixelExplorer() {
   const group = new THREE.Group();
-  const suit = physicalMaterial(0xfffbef);
-  const trim = standardMaterial(0x70cde6);
-  const warm = standardMaterial(0xffc85c);
-  const visor = physicalMaterial(0xbdefff, {
-    roughness: 0.22,
-    clearcoat: 0.42,
-    clearcoatRoughness: 0.2,
-  });
-  const sole = standardMaterial(0x8cb7c9);
-
-  addMesh(group, new THREE.SphereGeometry(0.178, 32, 24), suit, [0, 0.205, 0]);
-  const visorMesh = addMesh(
-    group,
-    new THREE.SphereGeometry(0.137, 28, 22),
-    visor,
-    [0, 0.208, 0.103],
-    [1.03, 0.82, 0.52],
-  );
-  markVisor(visorMesh, 'sky-blue');
-  addMesh(
-    group,
-    new THREE.TorusGeometry(0.139, 0.008, 10, 32),
-    trim,
-    [0, 0.205, 0.105],
-    [1.02, 0.84, 1],
-    [Math.PI / 2, 0, 0],
-  );
-  addFriendlyFace(group, 0.205, 0.171, 0x36566b, 0.034, 1.02);
-
-  addMesh(group, new THREE.CapsuleGeometry(0.094, 0.112, 7, 16), suit, [0, 0.005, 0]);
-  addMesh(group, new THREE.TorusGeometry(0.09, 0.011, 8, 24), trim, [0, 0.083, 0.012], [1, 1, 0.72], [Math.PI / 2, 0, 0]);
-  addMesh(group, starGeometry(0.039), warm, [0, 0.026, 0.099]);
-
-  const wavingArm = addMesh(
-    group,
-    new THREE.CapsuleGeometry(0.032, 0.105, 6, 12),
-    suit,
-    [-0.142, 0.073, 0.004],
-  );
-  wavingArm.rotation.z = 0.72;
-  addMesh(group, new THREE.SphereGeometry(0.038, 14, 12), suit, [-0.187, 0.135, 0.008]);
-  const calmArm = addMesh(
-    group,
-    new THREE.CapsuleGeometry(0.031, 0.095, 6, 12),
-    suit,
-    [0.137, 0.02, 0.005],
-  );
-  calmArm.rotation.z = -0.2;
-  addMesh(group, new THREE.SphereGeometry(0.036, 14, 12), suit, [0.148, -0.045, 0.01]);
-
-  [-1, 1].forEach((side) => {
-    addMesh(group, new THREE.CapsuleGeometry(0.035, 0.07, 5, 12), suit, [side * 0.054, -0.13, 0]);
-    addMesh(group, new THREE.BoxGeometry(0.072, 0.042, 0.09), sole, [side * 0.057, -0.205, 0.025]);
-  });
-  addMesh(group, new THREE.BoxGeometry(0.105, 0.1, 0.055), trim, [0, 0.025, -0.087]);
-
-  group.rotation.z = -0.04;
-  return finishVariant(group, ASTRONAUT_VARIANTS[0], 0.88);
+  const materials = astronautMaterials(0x4c86cf);
+  addHelmet(group, materials, false);
+  addTorso(group, materials, 'none');
+  addArms(group, materials, 'down');
+  addLegs(group, materials, 'none');
+  addBackpack(group, materials, false);
+  return finishVariant(group, ASTRONAUT_VARIANTS[0], 'blue-control');
 }
 
-function starHopper() {
+function solarScout() {
   const group = new THREE.Group();
-  const suit = physicalMaterial(0xfff8f3);
-  const trim = standardMaterial(0xa999e8);
-  const teal = standardMaterial(0x55c9bd);
-  const warm = standardMaterial(0xffd368);
-  const visor = physicalMaterial(0xe1d8ff, {
-    roughness: 0.24,
-    clearcoat: 0.38,
-    clearcoatRoughness: 0.22,
-  });
-
-  addMesh(group, new THREE.SphereGeometry(0.182, 32, 24), suit, [0, 0.208, 0]);
-  const visorMesh = addMesh(
-    group,
-    new THREE.SphereGeometry(0.141, 28, 22),
-    visor,
-    [0, 0.211, 0.104],
-    [1.05, 0.83, 0.5],
-  );
-  markVisor(visorMesh, 'soft-lavender');
-  addMesh(
-    group,
-    new THREE.TorusGeometry(0.143, 0.009, 10, 32),
-    trim,
-    [0, 0.208, 0.107],
-    [1.03, 0.85, 1],
-    [Math.PI / 2, 0, 0],
-  );
-  addFriendlyFace(group, 0.208, 0.174, 0x514c72, 0.036, 1.04);
-
-  addMesh(group, new THREE.SphereGeometry(0.112, 24, 18), suit, [0, -0.004, 0], [1, 1.08, 0.9]);
-  addMesh(group, new THREE.TorusGeometry(0.105, 0.012, 8, 24), trim, [0, 0.035, 0.002], [1, 1, 0.76], [Math.PI / 2, 0, 0]);
-  addMesh(group, starGeometry(0.043), teal, [0, 0.006, 0.105]);
-
-  [-1, 1].forEach((side) => {
-    const arm = addMesh(
-      group,
-      new THREE.CapsuleGeometry(0.031, 0.105, 6, 12),
-      suit,
-      [side * 0.143, 0.055, 0.006],
-    );
-    arm.rotation.z = side * -0.62;
-    addMesh(group, new THREE.SphereGeometry(0.037, 14, 12), suit, [side * 0.188, 0.12, 0.012]);
-    addMesh(group, new THREE.SphereGeometry(0.014, 10, 8), warm, [side * 0.201, 0.14, 0.038]);
-  });
-
-  [-1, 1].forEach((side) => {
-    const leg = addMesh(
-      group,
-      new THREE.CapsuleGeometry(0.034, 0.07, 5, 12),
-      suit,
-      [side * 0.057, -0.132, 0.005],
-    );
-    leg.rotation.z = side * -0.13;
-    const boot = addMesh(
-      group,
-      new THREE.BoxGeometry(0.071, 0.042, 0.09),
-      teal,
-      [side * 0.063, -0.204, 0.033],
-    );
-    boot.rotation.z = side * -0.08;
-  });
-  addMesh(group, new THREE.BoxGeometry(0.12, 0.105, 0.06), trim, [0, 0.012, -0.09]);
-
-  group.rotation.z = 0.035;
-  return finishVariant(group, ASTRONAUT_VARIANTS[1], 0.87);
+  const materials = astronautMaterials(0xffa126);
+  addHelmet(group, materials, true);
+  addTorso(group, materials, 'orange');
+  addArms(group, materials, 'down');
+  addLegs(group, materials, 'orange');
+  addBackpack(group, materials, false);
+  return finishVariant(group, ASTRONAUT_VARIANTS[1], 'orange');
 }
 
-function cozyDreamer() {
+function jetpackJumper() {
   const group = new THREE.Group();
-  const suit = physicalMaterial(0xf5fff8);
-  const trim = standardMaterial(0x79c9aa);
-  const warm = standardMaterial(0xf1c76b);
-  const visor = physicalMaterial(0xffe7ad, {
-    roughness: 0.3,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.28,
-  });
-  const boot = standardMaterial(0x91b8a7);
+  const materials = astronautMaterials(0x4c86cf);
+  addHelmet(group, materials, false);
+  addTorso(group, materials, 'blue');
+  addArms(group, materials, 'float');
+  addLegs(group, materials, 'blue');
+  addBackpack(group, materials, true);
+  group.rotation.z = -0.045;
+  return finishVariant(group, ASTRONAUT_VARIANTS[2], 'blue-jetpack', 0.9);
+}
 
-  addMesh(group, new THREE.SphereGeometry(0.184, 32, 24), suit, [0, 0.205, 0]);
-  const visorMesh = addMesh(
-    group,
-    new THREE.SphereGeometry(0.143, 28, 22),
-    visor,
-    [0, 0.207, 0.103],
-    [1.05, 0.84, 0.5],
-  );
-  markVisor(visorMesh, 'warm-gold');
-  addMesh(
-    group,
-    new THREE.TorusGeometry(0.145, 0.009, 10, 32),
-    trim,
-    [0, 0.205, 0.106],
-    [1.03, 0.86, 1],
-    [Math.PI / 2, 0, 0],
-  );
-  addFriendlyFace(group, 0.204, 0.173, 0x6a5b42, 0.035, 0.98);
-
-  addMesh(group, new THREE.CapsuleGeometry(0.098, 0.095, 7, 16), suit, [0, 0.008, 0]);
-  addMesh(group, starGeometry(0.038), warm, [0, 0.022, 0.101]);
-  addMesh(group, new THREE.BoxGeometry(0.11, 0.09, 0.055), trim, [0, 0.025, -0.087]);
-
-  [-1, 1].forEach((side) => {
-    const arm = addMesh(
-      group,
-      new THREE.CapsuleGeometry(0.03, 0.082, 6, 12),
-      suit,
-      [side * 0.115, 0.01, 0.036],
-    );
-    arm.rotation.z = side * -0.48;
-    addMesh(group, new THREE.SphereGeometry(0.034, 14, 12), suit, [side * 0.082, -0.058, 0.06]);
-  });
-
-  [-1, 1].forEach((side) => {
-    const thigh = addMesh(
-      group,
-      new THREE.CapsuleGeometry(0.034, 0.064, 5, 12),
-      suit,
-      [side * 0.055, -0.125, 0.035],
-    );
-    thigh.rotation.x = -0.72;
-    thigh.rotation.z = side * 0.16;
-    const foot = addMesh(
-      group,
-      new THREE.BoxGeometry(0.072, 0.047, 0.092),
-      boot,
-      [side * 0.065, -0.17, 0.105],
-    );
-    foot.rotation.x = -0.22;
-  });
-
-  group.rotation.z = -0.085;
-  return finishVariant(group, ASTRONAUT_VARIANTS[2], 0.86);
+function stableVariantFromPlanet(entity) {
+  const seed = String(entity?.id || entity?.order || 'astronaut');
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (Math.abs(hash) % ASTRONAUT_VARIANTS.length) + 1;
 }
 
 function variantNumberFor(entity) {
-  if (typeof window === 'undefined') return 1;
+  if (typeof window === 'undefined') return stableVariantFromPlanet(entity);
   const requested = new URLSearchParams(window.location.search).get('astronaut')?.trim().toLowerCase();
   if (requested === 'preview') return (Math.abs(Number(entity?.order) || 0) % 3) + 1;
-  return VARIANT_ALIASES.get(requested || '') || 1;
+  if (requested && VARIANT_ALIASES.has(requested)) return VARIANT_ALIASES.get(requested);
+  // Planet ids are generated independently for kid submissions, so hashing the id
+  // gives each astronaut an effectively random but reload-stable model choice.
+  return stableVariantFromPlanet(entity);
 }
 
 function createAstronautVariant(number) {
-  if (number === 2) return starHopper();
-  if (number === 3) return cozyDreamer();
-  return bubbleBuddy();
+  if (number === 2) return solarScout();
+  if (number === 3) return jetpackJumper();
+  return pixelExplorer();
 }
 
-/** Replace the detailed dark-visor astronaut with selectable kid-friendly models. */
+/** Replace the old companion with selectable, kid-friendly pixel/chibi astronauts. */
 export function installFriendlyAstronautOptions() {
   if (PlanetEntity.prototype.createAstronaut?.kidsGalaxyFriendlyAstronautOptions) return;
 

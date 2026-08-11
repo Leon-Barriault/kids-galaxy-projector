@@ -25,7 +25,9 @@ import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
 import com.kidsgalaxy.manager.data.PlanetExportClient
+import com.kidsgalaxy.manager.data.PlanetExportHttpException
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 @Composable
 fun PlanetExportActions(
@@ -48,8 +50,8 @@ fun PlanetExportActions(
                         error("Could not open export document")
                     }
                     output.use { stream -> stream.write(bytes) }
-                } catch (_: Exception) {
-                    showExportError(context)
+                } catch (error: Exception) {
+                    showExportError(context, error)
                 }
             }
             pendingStl = null
@@ -63,7 +65,7 @@ fun PlanetExportActions(
                         val bytes = client.printSheet(planet.id)
                         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         if (bitmap == null) {
-                            showExportError(context)
+                            showExportError(context, IllegalStateException("Invalid print image"))
                         } else {
                             PrintHelper(context).apply {
                                 scaleMode = PrintHelper.SCALE_MODE_FIT
@@ -71,8 +73,8 @@ fun PlanetExportActions(
                                 printBitmap("${planet.name} - Kids Galaxy", bitmap)
                             }
                         }
-                    } catch (_: Exception) {
-                        showExportError(context)
+                    } catch (error: Exception) {
+                        showExportError(context, error)
                     }
                 }
             },
@@ -88,9 +90,9 @@ fun PlanetExportActions(
                     try {
                         pendingStl = client.stl(planet.id)
                         stlLauncher.launch(stlFilename(planet))
-                    } catch (_: Exception) {
+                    } catch (error: Exception) {
                         pendingStl = null
-                        showExportError(context)
+                        showExportError(context, error)
                     }
                 }
             },
@@ -103,8 +105,20 @@ fun PlanetExportActions(
     }
 }
 
-private fun showExportError(context: Context) {
-    Toast.makeText(context, R.string.export_failed, Toast.LENGTH_LONG).show()
+private fun showExportError(
+    context: Context,
+    error: Exception,
+) {
+    val message =
+        when (error) {
+            is PlanetExportHttpException ->
+                context.getString(R.string.export_server_failed, error.statusCode)
+            is IOException ->
+                context.getString(R.string.export_network_failed)
+            else ->
+                context.getString(R.string.export_failed)
+        }
+    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 }
 
 private fun stlFilename(planet: PlanetDto): String {

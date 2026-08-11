@@ -26,6 +26,18 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
     LAT_SEGMENTS = 72
     LON_SEGMENTS = 120
 
+    @staticmethod
+    def _font(size: int):
+        """Use a readable bundled/system font, with old-Pillow-safe fallback."""
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size=size)
+        except OSError:
+            try:
+                return ImageFont.load_default(size=size)
+            except TypeError:
+                # Pillow before load_default(size=...) still exists on older Pi images.
+                return ImageFont.load_default()
+
     def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
         source = Image.open(image_path).convert("RGB")
         sphere = self._render_sphere(source, planet)
@@ -34,8 +46,8 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
 
         canvas = Image.new("RGB", (self.PRINT_WIDTH, self.PRINT_HEIGHT), "white")
         draw = ImageDraw.Draw(canvas)
-        font = ImageFont.load_default(size=32)
-        label_font = ImageFont.load_default(size=22)
+        font = self._font(32)
+        label_font = self._font(22)
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
         draw.text((70, 92), "3D rendered planet", fill="#4b5563", font=label_font)
         draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
@@ -57,7 +69,10 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             font=label_font,
         )
         output = io.BytesIO()
-        canvas.save(output, format="PNG", optimize=True)
+        # PNG optimize=True performs an expensive second compression search and
+        # can exceed the Android read timeout on a Raspberry Pi. A modest fixed
+        # compression level keeps the file compact while returning promptly.
+        canvas.save(output, format="PNG", compress_level=4)
         return output.getvalue()
 
     def export_stl(self, planet: Planet, image_path: Path, diameter_mm: float) -> bytes:
