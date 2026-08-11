@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.kidsgalaxy.domain.model.CanvasSize
@@ -50,9 +51,12 @@ private fun pathThrough(points: List<Point>): Path =
 
 /** Soft blue outline so the planet edge is visible without looking like a stroke. */
 private val GUIDE_OUTLINE_COLOR = Color(0xFF64B5F6)
+private val LIGHT_PLANET_OUTLINE_COLOR = Color(0xFF37474F)
 private val FEATURE_OUTLINE_COLOR = Color(0xFF455A64)
 private val CRATER_GUIDE_COLOR = Color(0xFF4B4F58)
 private const val GUIDE_STROKE_WIDTH = 5f
+private const val LIGHT_GUIDE_STROKE_WIDTH = 7f
+private const val LIGHT_PLANET_LUMINANCE = 0.86f
 
 private fun ringArcPath(
     guide: PlanetGuide,
@@ -97,10 +101,6 @@ private fun DrawScope.drawRingPreview(
     val startAngle = if (front) -1f else 179f
     val path = ringArcPath(guide, startAngle, 182f)
 
-    // The upper half is drawn before the opaque planet and therefore appears
-    // behind it. The lower half is drawn after the child's painting and sits
-    // in front. The same subtle multi-harmonic wobble used by the projector
-    // keeps this preview organic without making the ring look distorted.
     rotate(degrees = -14f, pivot = centre) {
         drawPath(
             path = path,
@@ -237,9 +237,9 @@ fun DrawingCanvas(
     ringColorArgb: Int = DEFAULT_RING_COLOR_ARGB,
     craterColorArgb: Int = DEFAULT_CRATER_COLOR_ARGB,
     mountainColorArgb: Int = DEFAULT_MOUNTAIN_COLOR_ARGB,
+    backgroundColorArgb: Int = strokes.firstOrNull { it.isBackgroundFill }?.colorArgb ?: -1,
     modifier: Modifier = Modifier,
 ) {
-    // Only the in-flight stroke lives here; the ViewModel owns committed strokes.
     val livePoints = remember { mutableStateListOf<Point>() }
     var measured by remember { mutableStateOf(0f to 0f) }
 
@@ -288,16 +288,14 @@ fun DrawingCanvas(
 
         if (guide != null && guide.isValid) {
             val centre = Offset(guide.centreX, guide.centreY)
+            val planetColor = Color(backgroundColorArgb)
 
             if (planetStyle == PlanetStyle.RINGED) {
                 drawRingPreview(guide, ringColorArgb, front = false)
             }
 
-            // The tablet texture has a white base. Drawing that opaque disc
-            // here hides the back half of a ring exactly where the planet is
-            // in front, then the child strokes are painted on top of it.
             drawCircle(
-                color = Color.White,
+                color = planetColor,
                 radius = guide.radius,
                 center = centre,
             )
@@ -315,7 +313,7 @@ fun DrawingCanvas(
                 }
             clipPath(clip, clipOp = ClipOp.Intersect) {
                 for (stroke in strokes) {
-                    if (!stroke.isRenderable) continue
+                    if (!stroke.isRenderable || stroke.isBackgroundFill) continue
                     drawPath(
                         path = pathThrough(stroke.points),
                         color = Color(stroke.colorArgb),
@@ -341,11 +339,15 @@ fun DrawingCanvas(
                 }
             }
 
+            val lightPlanet = planetColor.luminance() >= LIGHT_PLANET_LUMINANCE
             drawCircle(
-                color = GUIDE_OUTLINE_COLOR,
+                color = if (lightPlanet) LIGHT_PLANET_OUTLINE_COLOR else GUIDE_OUTLINE_COLOR,
                 radius = guide.radius,
                 center = centre,
-                style = Stroke(width = GUIDE_STROKE_WIDTH),
+                style =
+                    Stroke(
+                        width = if (lightPlanet) LIGHT_GUIDE_STROKE_WIDTH else GUIDE_STROKE_WIDTH,
+                    ),
             )
 
             when (planetStyle) {
@@ -356,7 +358,7 @@ fun DrawingCanvas(
             }
         } else {
             for (stroke in strokes) {
-                if (!stroke.isRenderable) continue
+                if (!stroke.isRenderable || stroke.isBackgroundFill) continue
                 drawPath(
                     path = pathThrough(stroke.points),
                     color = Color(stroke.colorArgb),

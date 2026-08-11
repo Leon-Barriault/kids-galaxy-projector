@@ -59,8 +59,8 @@ interface ManagerApi {
         @Query("limit") limit: Int = 30,
     ): Response<PlanetListResponse>
 
-    @GET("api/admin/planets/{id}/print.png")
-    suspend fun printSheet(
+    @GET("api/admin/planets/{id}/print.pdf")
+    suspend fun printPdf(
         @Path("id") id: String,
     ): Response<ResponseBody>
 

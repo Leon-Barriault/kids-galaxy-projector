@@ -73,11 +73,19 @@ class PlanetRepository(ABC):
 
 
 class PlanetExportRenderer(ABC):
-    """Create volunteer-only printable representations of a stored planet."""
+    """Create authoritative Pi-side previews and printable planet exports."""
+
+    @abstractmethod
+    def render_preview(self, planet: Planet, image_path: Path) -> bytes:
+        """Return a PNG preview using the projector artwork projection contract."""
 
     @abstractmethod
     def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
-        """Return a PNG containing a rendered planet view and the kid drawing."""
+        """Return a PNG print sheet containing the Pi-rendered planet and kid drawing."""
+
+    @abstractmethod
+    def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
+        """Return the same Pi-rendered print sheet as a one-page PDF."""
 
     @abstractmethod
     def export_stl(
@@ -86,7 +94,7 @@ class PlanetExportRenderer(ABC):
         image_path: Path,
         diameter_mm: float,
     ) -> bytes:
-        """Return a watertight binary STL with kid artwork encoded as relief."""
+        """Return a manifold spherical lithophane matching the projector mapping."""
 
 
 class BehaviorRepository(ABC):
@@ -126,7 +134,7 @@ class RateLimiter(ABC):
 
     @abstractmethod
     def check(self, key: str) -> None:
-        """Raise when `key` is still within its cooldown."""
+        """Raise when `key` is still within this client's cooldown."""
 
     @abstractmethod
     def record(self, key: str) -> None:

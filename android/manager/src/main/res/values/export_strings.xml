@@ -2,19 +2,18 @@
 <resources>
     <string name="tab_export">Export</string>
     <string name="export_title">Print and 3D export</string>
-    <string name="export_hint">Print a kid planet or save an 80 mm STL for a 3D printer.</string>
+    <string name="export_hint">Print the Pi-rendered planet or save an 80 mm spherical lithophane STL.</string>
     <string name="print_planet">Print</string>
     <string name="download_stl">STL</string>
     <string name="print_named">Print %1$s</string>
-    <string name="export_stl_named">Export %1$s as an 80 mm STL</string>
+    <string name="export_stl_named">Export %1$s as an 80 mm spherical lithophane STL</string>
     <string name="export_failed">Could not prepare this export. Please try again.</string>
     <string name="export_failed_diagnostic">Could not prepare this export (%1$s).</string>
     <string name="export_network_failed">Could not reach the galaxy server while preparing this export.</string>
     <string name="export_server_failed">The galaxy server could not prepare this export (HTTP %1$d).</string>
     <string name="export_payload_invalid">The galaxy server returned an invalid %1$s export.</string>
-    <string name="print_invalid_image">Android could not decode the print image returned by the galaxy server.</string>
     <string name="print_unavailable">Android printing is not available on this tablet. Enable or install a print service and try again.</string>
     <string name="print_start_failed">Android could not open the print dialog: %1$s</string>
-    <string name="print_start_failed_saving">Android could not open the print dialog (%1$s). A save dialog will open for the PNG instead.</string>
-    <string name="print_fallback_saved">Print sheet saved. Open the PNG from Files or another printing app to print it.</string>
+    <string name="print_start_failed_saving">Android could not open the print dialog (%1$s). A save dialog will open for the server PDF instead.</string>
+    <string name="print_fallback_saved">Print PDF saved. Open it from Files or a PDF application to print it.</string>
 </resources>
