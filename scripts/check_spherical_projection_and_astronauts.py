@@ -41,13 +41,15 @@ def render_state(page, planet_id: str) -> dict:
           const ys = [];
           const latitudeMins = [];
           const latitudeMaxes = [];
-          const vertex = new THREE.Vector3();
           patches.forEach((mesh) => {
             const attr = mesh.geometry?.getAttribute?.('position');
             if (!attr) return;
             for (let i = 0; i < attr.count; i += 1) {
-              vertex.fromBufferAttribute(attr, i).normalize();
-              ys.push(vertex.y);
+              const x = attr.getX(i);
+              const y = attr.getY(i);
+              const z = attr.getZ(i);
+              const length = Math.hypot(x, y, z);
+              if (length > 0.000001) ys.push(y / length);
             }
             const minLat = mesh.geometry?.userData?.kidsGalaxyStrokeLatitudeMin;
             const maxLat = mesh.geometry?.userData?.kidsGalaxyStrokeLatitudeMax;
