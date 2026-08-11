@@ -72,22 +72,22 @@ fun PlanetExportActions(
             if (uri != null && bytes != null) {
                 try {
                     writeExportDocument(context, uri, bytes)
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.print_fallback_saved),
-                        Toast.LENGTH_LONG,
-                    )
-                        .show()
+                    Toast
+                        .makeText(
+                            context,
+                            context.getString(R.string.print_fallback_saved),
+                            Toast.LENGTH_LONG,
+                        ).show()
                 } catch (error: Exception) {
                     showExportError(context, error)
                 }
             } else if (failureDetail != null) {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.print_start_failed, failureDetail),
-                    Toast.LENGTH_LONG,
-                )
-                    .show()
+                Toast
+                    .makeText(
+                        context,
+                        context.getString(R.string.print_start_failed, failureDetail),
+                        Toast.LENGTH_LONG,
+                    ).show()
             }
             pendingPrintSheet = null
             pendingPrintFailureDetail = null
@@ -135,12 +135,12 @@ fun PlanetExportActions(
                             Log.e(EXPORT_LOG_TAG, "Android print dialog failed", error)
                             pendingPrintSheet = bytes
                             pendingPrintFailureDetail = detail
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.print_start_failed_saving, detail),
-                                Toast.LENGTH_LONG,
-                            )
-                                .show()
+                            Toast
+                                .makeText(
+                                    context,
+                                    context.getString(R.string.print_start_failed_saving, detail),
+                                    Toast.LENGTH_LONG,
+                                ).show()
                             try {
                                 printFallbackLauncher.launch(printSheetFilename(planet))
                             } catch (fallbackError: RuntimeException) {
