@@ -12,16 +12,18 @@ import java.util.concurrent.TimeUnit
 /** HTTP client for whichever galaxy the volunteer selected. */
 object ApiFactory {
     private const val MANAGER_CERT_ASSET = "manager.p12"
+    private const val DEFAULT_READ_TIMEOUT_SECONDS = 15L
 
     fun httpClient(
         context: Context,
         useMutualTls: Boolean = BuildConfig.USE_MTLS,
+        readTimeoutSeconds: Long = DEFAULT_READ_TIMEOUT_SECONDS,
     ): OkHttpClient {
         val builder =
             OkHttpClient
                 .Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
 
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(
@@ -47,11 +49,12 @@ object ApiFactory {
         context: Context,
         baseUrl: String = BuildConfig.SERVER_BASE_URL,
         useMutualTls: Boolean = BuildConfig.USE_MTLS,
+        readTimeoutSeconds: Long = DEFAULT_READ_TIMEOUT_SECONDS,
     ): ManagerApi =
         Retrofit
             .Builder()
             .baseUrl(baseUrl.trimEnd('/') + "/")
-            .client(httpClient(context, useMutualTls))
+            .client(httpClient(context, useMutualTls, readTimeoutSeconds))
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ManagerApi::class.java)
