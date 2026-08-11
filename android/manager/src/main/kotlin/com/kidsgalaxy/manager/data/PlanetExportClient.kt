@@ -7,6 +7,11 @@ class PlanetExportHttpException(
     exportName: String,
 ) : IllegalStateException("$exportName export failed (HTTP $statusCode)")
 
+class PlanetExportPayloadException(
+    val exportName: String,
+    detail: String,
+) : IllegalStateException("$exportName export returned invalid data: $detail")
+
 class PlanetExportClient(
     context: Context,
     baseUrl: String,
@@ -15,6 +20,17 @@ class PlanetExportClient(
         // Rendering a print sheet or a watertight STL is intentionally more CPU
         // intensive than the manager's normal JSON API calls, especially on a Pi.
         private const val EXPORT_READ_TIMEOUT_SECONDS = 60L
+        private val PNG_SIGNATURE =
+            byteArrayOf(
+                0x89.toByte(),
+                0x50,
+                0x4E,
+                0x47,
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
+            )
     }
 
     private val api =
@@ -29,7 +45,13 @@ class PlanetExportClient(
         if (!response.isSuccessful) {
             throw PlanetExportHttpException(response.code(), "Print")
         }
-        return requireNotNull(response.body()) { "Galaxy server returned an empty print export" }.bytes()
+        val bytes =
+            requireNotNull(response.body()) { "Galaxy server returned an empty print export" }
+                .bytes()
+        if (!bytes.hasPrefix(PNG_SIGNATURE)) {
+            throw PlanetExportPayloadException("Print", "PNG signature is missing")
+        }
+        return bytes
     }
 
     suspend fun stl(
@@ -43,3 +65,6 @@ class PlanetExportClient(
         return requireNotNull(response.body()) { "Galaxy server returned an empty STL export" }.bytes()
     }
 }
+
+private fun ByteArray.hasPrefix(prefix: ByteArray): Boolean =
+    size >= prefix.size && prefix.indices.all { index -> this[index] == prefix[index] }
