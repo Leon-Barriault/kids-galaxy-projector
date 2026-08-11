@@ -9,6 +9,10 @@
 import * as THREE from 'three';
 
 import { installArtworkCoverageProjection } from './projector/ArtworkCoverageProjection.js';
+import {
+  ASTRONAUT_VARIANTS,
+  installFriendlyAstronautOptions,
+} from './projector/AstronautCompanionOptions.js';
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
@@ -35,6 +39,7 @@ import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeome
 import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
 import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
+import { installStrokeLatitudeProjection } from './projector/StrokeLatitudeProjection.js';
 import { installStrokeWrapProjection } from './projector/StrokeWrapProjection.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 import { installVisualRefinement } from './projector/VisualRefinement.js';
@@ -51,6 +56,16 @@ const GALLERY_SIZE = 12;
 // PlanetEntity at runtime, so every stage is declared here as data and installed
 // through one composition point. Move a stage only with projector acceptance
 // coverage proving the resulting behavior is intentional.
+function installVisualRefinementStage() {
+  installVisualRefinement();
+  installFriendlyAstronautOptions();
+}
+
+function installSphericalStrokeProjectionStage() {
+  installStrokeWrapProjection();
+  installStrokeLatitudeProjection();
+}
+
 const PLANET_RENDER_STAGES = Object.freeze([
   { name: 'kid-artwork-upgrade', install: installKidArtworkUpgrade },
   { name: 'kid-artwork-faithful-mask', install: installKidArtworkFaithfulMask },
@@ -74,11 +89,11 @@ const PLANET_RENDER_STAGES = Object.freeze([
   // the core sculptor has already separated body pixels from authored traits.
   { name: 'explicit-body-color', install: installExplicitBodyColor },
   // Reshapes authoritative sculpted art, deepens installed crater geometry,
-  // and replaces the astronaut companion.
-  { name: 'visual-refinement', install: installVisualRefinement },
-  // Deliberately last for new tablet planets: the selected background remains
-  // the sphere body while only extracted kid strokes wind around the globe.
-  { name: 'stroke-wrap-projection', install: installStrokeWrapProjection },
+  // then replaces the older dark-visor astronaut with selectable friendly models.
+  { name: 'visual-refinement', install: installVisualRefinementStage },
+  // Deliberately last for new tablet planets: X becomes a 480-degree longitude
+  // winding while Y is normalized into a controlled 130-degree latitude span.
+  { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
@@ -130,6 +145,7 @@ window.kidsGalaxy = {
   kidPlanets: planetLoader.kidPlanets,
   GALLERY_SIZE,
   renderPipeline: installedPlanetRenderStages,
+  astronautVariants: ASTRONAUT_VARIANTS,
   engine: {
     galaxyScene,
     environment,
