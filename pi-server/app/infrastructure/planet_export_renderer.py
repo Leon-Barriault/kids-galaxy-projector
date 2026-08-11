@@ -83,7 +83,7 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             (70, 870),
             (
                 f"Style: {planet.style}   Planet ID: {planet.id}   "
-                f"Projection: {int(self.STROKE_WRAP_DEGREES)}° × "
+                f"Projection: {int(self.STROKE_WRAP_DEGREES)}° x "
                 f"{int(self.STROKE_LATITUDE_DEGREES)}°"
             ),
             fill="#6b7280",
@@ -285,7 +285,7 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         half_width = max(2.0, (max_x - min_x) * 0.5)
         half_height = max(2.0, (max_y - min_y) * 0.5)
         authored_y = max(-1.0, min(1.0, latitude / self.HALF_LATITUDE_RADIANS))
-        sy = int(round(centre_y - authored_y * half_height))
+        sy = round(centre_y - authored_y * half_height)
         sy = min(strength.shape[0] - 1, max(0, sy))
 
         best = 0.0
@@ -293,7 +293,7 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             authored_x = (longitude + revolution * math.tau) / self.HALF_WRAP_RADIANS
             if abs(authored_x) > 1.0:
                 continue
-            sx = int(round(centre_x + authored_x * half_width))
+            sx = round(centre_x + authored_x * half_width)
             sx = min(strength.shape[1] - 1, max(0, sx))
             best = max(best, float(strength[sy, sx]))
         return best
@@ -329,8 +329,6 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
                     triangles.extend(((oa, ob, od), (od, ob, oc)))
                     triangles.extend(((ia, id_, ib), (id_, ic, ib)))
 
-        # Connect the outer and inner south boundary rings. This leaves a real
-        # opening through the globe while keeping the STL surface manifold.
         for lon in range(self.LON_SEGMENTS):
             nxt = (lon + 1) % self.LON_SEGMENTS
             oa = outer_rows[0][lon]
@@ -339,7 +337,6 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             inn = inner_rows[0][nxt]
             triangles.extend(((oa, on, ia), (on, inn, ia)))
 
-        # Cap the north pole with fans instead of degenerate duplicated-pole quads.
         outer_pole = outer_rows[-1][0]
         inner_pole = inner_rows[-1][0]
         ring_index = len(outer_rows) - 2
