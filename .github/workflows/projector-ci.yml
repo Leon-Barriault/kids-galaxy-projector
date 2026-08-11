@@ -64,6 +64,8 @@ jobs:
         run: python scripts/check_explicit_body_color.py
       - name: Verify explicit-body strokes wrap 480 degrees
         run: python scripts/check_stroke_wrap.py
+      - name: Verify spherical Y projection and astronaut WebGL options
+        run: python scripts/check_spherical_projection_and_astronauts.py
       - name: Upload rendered comparison frames
         if: always()
         uses: actions/upload-artifact@v4
