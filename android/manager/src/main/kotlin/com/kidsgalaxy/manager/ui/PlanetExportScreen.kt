@@ -245,11 +245,12 @@ private fun startAndroidPrint(
             "This Android build does not provide the print framework",
         )
     }
-    val printManager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
-        ?: throw PrintStageException(
-            PrintFailureStage.UNAVAILABLE,
-            "Android print service is unavailable",
-        )
+    val printManager =
+        activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+            ?: throw PrintStageException(
+                PrintFailureStage.UNAVAILABLE,
+                "Android print service is unavailable",
+            )
 
     try {
         val attributes =
