@@ -8,6 +8,11 @@
     <string name="print_named">Imprimer %1$s</string>
     <string name="export_stl_named">Exporter %1$s en STL de 80 mm</string>
     <string name="export_failed">Impossible de préparer cette exportation. Réessayez.</string>
+    <string name="export_failed_diagnostic">Impossible de préparer cette exportation (%1$s).</string>
     <string name="export_network_failed">Impossible de joindre le serveur de la galaxie pendant la préparation de l’exportation.</string>
     <string name="export_server_failed">Le serveur de la galaxie n’a pas pu préparer cette exportation (HTTP %1$d).</string>
+    <string name="export_payload_invalid">Le serveur de la galaxie a retourné une exportation %1$s invalide.</string>
+    <string name="print_invalid_image">Android n’a pas pu décoder l’image d’impression retournée par le serveur de la galaxie.</string>
+    <string name="print_unavailable">L’impression Android n’est pas disponible sur cette tablette. Activez ou installez un service d’impression et réessayez.</string>
+    <string name="print_start_failed">Android n’a pas pu ouvrir la boîte de dialogue d’impression : %1$s</string>
 </resources>
