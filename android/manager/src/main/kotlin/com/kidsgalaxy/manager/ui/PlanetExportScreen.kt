@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.print.PrintManager
 import android.util.Log
 import android.widget.Toast
@@ -58,7 +59,38 @@ fun PlanetExportActions(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val client = remember(galaxy.baseUrl) { PlanetExportClient(context, galaxy.baseUrl) }
+    var pendingPrintSheet by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingPrintFailureDetail by remember { mutableStateOf<String?>(null) }
     var pendingStl by remember { mutableStateOf<ByteArray?>(null) }
+
+    val printFallbackLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("image/png"),
+        ) { uri ->
+            val bytes = pendingPrintSheet
+            val failureDetail = pendingPrintFailureDetail
+            if (uri != null && bytes != null) {
+                try {
+                    writeExportDocument(context, uri, bytes)
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.print_fallback_saved),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } catch (error: Exception) {
+                    showExportError(context, error)
+                }
+            } else if (failureDetail != null) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.print_start_failed, failureDetail),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            pendingPrintSheet = null
+            pendingPrintFailureDetail = null
+        }
+
     val stlLauncher =
         rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("model/stl"),
@@ -66,11 +98,7 @@ fun PlanetExportActions(
             val bytes = pendingStl
             if (uri != null && bytes != null) {
                 try {
-                    val output = context.contentResolver.openOutputStream(uri)
-                    if (output == null) {
-                        error("Could not open export document")
-                    }
-                    output.use { stream -> stream.write(bytes) }
+                    writeExportDocument(context, uri, bytes)
                 } catch (error: Exception) {
                     showExportError(context, error)
                 }
@@ -90,11 +118,35 @@ fun PlanetExportActions(
                                     PrintFailureStage.INVALID_IMAGE,
                                     "Android could not decode the print PNG",
                                 )
-                        startAndroidPrint(
-                            context = context,
-                            jobName = "${planet.name} - Kids Galaxy",
-                            bitmap = bitmap,
-                        )
+                        try {
+                            startAndroidPrint(
+                                context = context,
+                                jobName = "${planet.name} - Kids Galaxy",
+                                bitmap = bitmap,
+                            )
+                        } catch (error: PrintStageException) {
+                            if (error.stage != PrintFailureStage.LAUNCH) {
+                                throw error
+                            }
+
+                            val detail = error.diagnosticDetail()
+                            Log.e(EXPORT_LOG_TAG, "Android print dialog failed", error)
+                            pendingPrintSheet = bytes
+                            pendingPrintFailureDetail = detail
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.print_start_failed_saving, detail),
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            try {
+                                printFallbackLauncher.launch(printSheetFilename(planet))
+                            } catch (fallbackError: RuntimeException) {
+                                pendingPrintSheet = null
+                                pendingPrintFailureDetail = null
+                                Log.e(EXPORT_LOG_TAG, "Print fallback picker failed", fallbackError)
+                                showExportError(context, error)
+                            }
+                        }
                     } catch (error: Exception) {
                         showExportError(context, error)
                     }
@@ -183,6 +235,28 @@ private fun Context.findActivity(): Activity? {
     return current as? Activity
 }
 
+private fun PrintStageException.diagnosticDetail(): String {
+    val source = cause ?: this
+    val message = source.message?.trim().orEmpty()
+    return if (message.isBlank()) {
+        source.javaClass.simpleName
+    } else {
+        "${source.javaClass.simpleName}: ${message.take(180)}"
+    }
+}
+
+private fun writeExportDocument(
+    context: Context,
+    uri: Uri,
+    bytes: ByteArray,
+) {
+    val output = context.contentResolver.openOutputStream(uri)
+    if (output == null) {
+        error("Could not open export document")
+    }
+    output.use { stream -> stream.write(bytes) }
+}
+
 private fun showExportError(
     context: Context,
     error: Exception,
@@ -203,7 +277,7 @@ private fun showExportError(
                     PrintFailureStage.LAUNCH ->
                         context.getString(
                             R.string.print_start_failed,
-                            error.message.orEmpty().take(160),
+                            error.diagnosticDetail(),
                         )
                 }
             is IOException ->
@@ -217,12 +291,15 @@ private fun showExportError(
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 }
 
-private fun stlFilename(planet: PlanetDto): String {
-    val safeName =
-        planet.name
-            .trim()
-            .replace(Regex("[^A-Za-z0-9._-]+"), "_")
-            .trim('_')
-            .ifBlank { "planet" }
-    return "${safeName}_${planet.id}.stl"
-}
+private fun printSheetFilename(planet: PlanetDto): String =
+    "${safePlanetName(planet)}_${planet.id}_print.png"
+
+private fun stlFilename(planet: PlanetDto): String =
+    "${safePlanetName(planet)}_${planet.id}.stl"
+
+private fun safePlanetName(planet: PlanetDto): String =
+    planet.name
+        .trim()
+        .replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        .trim('_')
+        .ifBlank { "planet" }
