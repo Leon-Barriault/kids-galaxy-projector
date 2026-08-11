@@ -237,7 +237,7 @@ fun DrawingCanvas(
     ringColorArgb: Int = DEFAULT_RING_COLOR_ARGB,
     craterColorArgb: Int = DEFAULT_CRATER_COLOR_ARGB,
     mountainColorArgb: Int = DEFAULT_MOUNTAIN_COLOR_ARGB,
-    backgroundColorArgb: Int = -1,
+    backgroundColorArgb: Int = strokes.firstOrNull { it.isBackgroundFill }?.colorArgb ?: -1,
     modifier: Modifier = Modifier,
 ) {
     val livePoints = remember { mutableStateListOf<Point>() }
