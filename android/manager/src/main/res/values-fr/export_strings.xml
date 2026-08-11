@@ -2,19 +2,18 @@
 <resources>
     <string name="tab_export">Export</string>
     <string name="export_title">Impression et export 3D</string>
-    <string name="export_hint">Imprimez une planète d’enfant ou enregistrez un STL de 80 mm pour une imprimante 3D.</string>
+    <string name="export_hint">Imprimez la planète rendue par le Pi ou enregistrez un STL lithophane sphérique de 80 mm.</string>
     <string name="print_planet">Imprimer</string>
     <string name="download_stl">STL</string>
     <string name="print_named">Imprimer %1$s</string>
-    <string name="export_stl_named">Exporter %1$s en STL de 80 mm</string>
+    <string name="export_stl_named">Exporter %1$s en STL lithophane sphérique de 80 mm</string>
     <string name="export_failed">Impossible de préparer cette exportation. Réessayez.</string>
     <string name="export_failed_diagnostic">Impossible de préparer cette exportation (%1$s).</string>
     <string name="export_network_failed">Impossible de joindre le serveur de la galaxie pendant la préparation de l’exportation.</string>
     <string name="export_server_failed">Le serveur de la galaxie n’a pas pu préparer cette exportation (HTTP %1$d).</string>
     <string name="export_payload_invalid">Le serveur de la galaxie a retourné une exportation %1$s invalide.</string>
-    <string name="print_invalid_image">Android n’a pas pu décoder l’image d’impression retournée par le serveur de la galaxie.</string>
     <string name="print_unavailable">L’impression Android n’est pas disponible sur cette tablette. Activez ou installez un service d’impression et réessayez.</string>
     <string name="print_start_failed">Android n’a pas pu ouvrir la boîte de dialogue d’impression : %1$s</string>
-    <string name="print_start_failed_saving">Android n’a pas pu ouvrir la boîte de dialogue d’impression (%1$s). Une boîte d’enregistrement du PNG va s’ouvrir à la place.</string>
-    <string name="print_fallback_saved">La feuille d’impression est enregistrée. Ouvrez le PNG depuis Fichiers ou une autre application d’impression.</string>
+    <string name="print_start_failed_saving">Android n’a pas pu ouvrir la boîte de dialogue d’impression (%1$s). Une boîte d’enregistrement du PDF du serveur va s’ouvrir à la place.</string>
+    <string name="print_fallback_saved">Le PDF d’impression est enregistré. Ouvrez-le depuis Fichiers ou une application PDF pour l’imprimer.</string>
 </resources>
