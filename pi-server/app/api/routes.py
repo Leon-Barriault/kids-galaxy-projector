@@ -100,6 +100,16 @@ def build_router(
     kid_only = authorizer.dependency(ClientRole.KID)
     manager_only = authorizer.dependency(ClientRole.MANAGER)
 
+    def export_target(planet_id: str):
+        try:
+            planet = get_planet.execute(planet_id)
+        except DomainError as e:
+            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        image_path = repository.resolve_image(planet.filename)
+        if image_path is None:
+            raise HTTPException(status_code=404, detail="Planet drawing not found")
+        return planet, image_path
+
     @router.get("/", response_class=HTMLResponse, dependencies=[Depends(projector_only)])
     async def galaxy_page():
         index_path = settings.static_dir / "index.html"
@@ -136,17 +146,21 @@ def build_router(
     async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
         return list_recent_planets.execute(limit=limit)
 
-    # These export routes are deliberately not role-gated. The kid and manager
-    # tablets are separate applications; only the manager APK exposes export UI.
+    # The Pi is authoritative for all visual exports. The manager only consumes
+    # these results and never maintains a second planet renderer.
+    @router.get("/api/admin/planets/{planet_id}/preview.png")
+    async def preview_planet(planet_id: str):
+        planet, image_path = export_target(planet_id)
+        content = export_renderer.render_preview(planet, image_path)
+        return Response(
+            content=content,
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
+        )
+
     @router.get("/api/admin/planets/{planet_id}/print.png")
-    async def print_planet(planet_id: str):
-        try:
-            planet = get_planet.execute(planet_id)
-        except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
-        image_path = repository.resolve_image(planet.filename)
-        if image_path is None:
-            raise HTTPException(status_code=404, detail="Planet drawing not found")
+    async def print_planet_png(planet_id: str):
+        planet, image_path = export_target(planet_id)
         content = export_renderer.render_print_sheet(planet, image_path)
         return Response(
             content=content,
@@ -156,18 +170,24 @@ def build_router(
             },
         )
 
+    @router.get("/api/admin/planets/{planet_id}/print.pdf")
+    async def print_planet_pdf(planet_id: str):
+        planet, image_path = export_target(planet_id)
+        content = export_renderer.render_print_pdf(planet, image_path)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.pdf"'
+            },
+        )
+
     @router.get("/api/admin/planets/{planet_id}/model.stl")
     async def export_planet_stl(
         planet_id: str,
         diameter_mm: float = Query(default=80.0, ge=40.0, le=200.0),
     ):
-        try:
-            planet = get_planet.execute(planet_id)
-        except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
-        image_path = repository.resolve_image(planet.filename)
-        if image_path is None:
-            raise HTTPException(status_code=404, detail="Planet drawing not found")
+        planet, image_path = export_target(planet_id)
         content = export_renderer.export_stl(planet, image_path, diameter_mm)
         return Response(
             content=content,
