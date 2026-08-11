@@ -1,0 +1,37 @@
+<!--
+  Manager launcher foreground: the same Kids Galaxy planet/ring used by the
+  kid tablet, with a small gear badge in the lower-right corner.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M54,32 A22,22 0 1,1 53.9,32 Z" />
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-20">
+        <path
+            android:pathData="M28,54 A26,9 0 1,1 80,54 A26,9 0 1,1 28,54 Z"
+            android:strokeColor="#FFD54F"
+            android:strokeWidth="4" />
+    </group>
+
+    <!-- Dark badge keeps the gear readable over the planet/ring artwork. -->
+    <path
+        android:fillColor="#263238"
+        android:pathData="M78,61 A18,18 0 1,1 77.9,61 Z" />
+
+    <!-- Compact eight-tooth gear. -->
+    <path
+        android:fillColor="#ECEFF1"
+        android:pathData="M76,64 H80 L81,69 L84,70 L88,67 L91,70 L88,74 L89,77 L94,78 V82 L89,83 L88,86 L91,90 L88,93 L84,90 L81,91 L80,96 H76 L75,91 L72,90 L68,93 L65,90 L68,86 L67,83 L62,82 V78 L67,77 L68,74 L65,70 L68,67 L72,70 L75,69 Z" />
+    <path
+        android:fillColor="#263238"
+        android:pathData="M78,74 A6,6 0 1,1 77.9,74 Z" />
+</vector>
