@@ -30,6 +30,13 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
     HALF_WRAP_RADIANS = math.radians(STROKE_WRAP_DEGREES / 2.0)
     HALF_LATITUDE_RADIANS = math.radians(STROKE_LATITUDE_DEGREES / 2.0)
 
+    STANDARD_SPHERE_RADIUS_RATIO = 0.44
+    RINGED_SPHERE_RADIUS_RATIO = 0.34
+    RING_MAJOR_RADIUS_FACTOR = 1.34
+    RING_MINOR_RADIUS_FACTOR = 0.52
+    RING_ROLL_DEGREES = -14.0
+    RING_STROKE_WIDTH = 20
+
     ARTWORK_DISTANCE_START = 20.0
     ARTWORK_DISTANCE_FULL = 92.0
     WHITE_RIM_MIN_CHANNEL = 210.0
@@ -156,9 +163,17 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             output.write(struct.pack("<12fH", *normal, *a, *b, *c, 0))
         return output.getvalue()
 
+    def _preview_radius(self, planet: Planet) -> float:
+        ratio = (
+            self.RINGED_SPHERE_RADIUS_RATIO
+            if planet.style == "ringed"
+            else self.STANDARD_SPHERE_RADIUS_RATIO
+        )
+        return self.PREVIEW_SIZE * ratio
+
     def _render_projector_mapped_sphere(self, source: Image.Image, planet: Planet) -> Image.Image:
         size = self.PREVIEW_SIZE
-        radius = size * 0.44
+        radius = self._preview_radius(planet)
         pixels, strength, bounds = self._artwork_analysis(source, planet)
         body = self._body_rgb(planet, pixels)
 
@@ -216,13 +231,50 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         return sphere
 
     def _add_ring_preview(self, sphere: Image.Image, planet: Planet) -> Image.Image:
+        """Compose a ringed planet as a readable three-quarter export hero view."""
         size = sphere.width
+        centre = size / 2.0
+        radius = self._preview_radius(planet)
+        major_radius = radius * self.RING_MAJOR_RADIUS_FACTOR
+        minor_radius = radius * self.RING_MINOR_RADIUS_FACTOR
         ring_color = planet.ring_color if planet.ring_color else "#F4C95D"
+        box = (
+            centre - major_radius,
+            centre - minor_radius,
+            centre + major_radius,
+            centre + minor_radius,
+        )
+
         back = Image.new("RGBA", sphere.size, (0, 0, 0, 0))
         front = Image.new("RGBA", sphere.size, (0, 0, 0, 0))
-        box = (76, 260, size - 76, 440)
-        ImageDraw.Draw(back).arc(box, 180, 360, fill=ring_color, width=18)
-        ImageDraw.Draw(front).arc(box, 0, 180, fill=ring_color, width=18)
+        ImageDraw.Draw(back).arc(
+            box,
+            180,
+            360,
+            fill=ring_color,
+            width=self.RING_STROKE_WIDTH,
+        )
+        ImageDraw.Draw(front).arc(
+            box,
+            0,
+            180,
+            fill=ring_color,
+            width=self.RING_STROKE_WIDTH,
+        )
+
+        rotation = self.RING_ROLL_DEGREES
+        rotation_centre = (centre, centre)
+        back = back.rotate(
+            rotation,
+            resample=Image.Resampling.BICUBIC,
+            center=rotation_centre,
+        )
+        front = front.rotate(
+            rotation,
+            resample=Image.Resampling.BICUBIC,
+            center=rotation_centre,
+        )
+
         back.alpha_composite(sphere)
         back.alpha_composite(front)
         return back
