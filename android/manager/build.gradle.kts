@@ -35,8 +35,8 @@ android {
         applicationId = "com.kidsgalaxy.manager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.2"
+        versionCode = 5
+        versionName = "1.1.3"
 
         buildConfigField("String", "CLIENT_CERT_PASSWORD", "\"$certPassword\"")
     }
@@ -87,7 +87,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.print:print:1.1.0")
 
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-gson:3.0.0")
