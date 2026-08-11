@@ -4,6 +4,7 @@ import io
 import math
 import struct
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -17,11 +18,21 @@ def _designed_planet_png() -> bytes:
     return output.getvalue()
 
 
-def _upload_designed_planet(client, name="Mapped Planet"):
+def _upload_designed_planet(
+    client,
+    name="Mapped Planet",
+    style="classic",
+    ring_color="#F4C95D",
+):
     response = client.post(
         "/api/upload",
         files={"file": ("planet.png", _designed_planet_png(), "image/png")},
-        data={"name": name, "body_color": "#4FC3F7"},
+        data={
+            "name": name,
+            "style": style,
+            "body_color": "#4FC3F7",
+            "ring_color": ring_color,
+        },
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -47,6 +58,35 @@ def test_print_sheet_is_public_png(client, upload_planet):
     assert response.headers["content-type"] == "image/png"
     assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
     assert len(response.content) > 1_000
+
+
+def test_ringed_print_uses_open_angled_hero_view(client):
+    ring_color = "#F4C95D"
+    planet = _upload_designed_planet(
+        client,
+        name="Ring Hero",
+        style="ringed",
+        ring_color=ring_color,
+    )
+
+    response = client.get(f"/api/admin/planets/{planet['planet_id']}/print.png")
+
+    assert response.status_code == 200
+    sheet = Image.open(io.BytesIO(response.content)).convert("RGBA")
+    pixels = np.asarray(sheet)
+    target = np.array([244, 201, 93], dtype=np.int16)
+    difference = np.max(
+        np.abs(pixels[:, :, :3].astype(np.int16) - target),
+        axis=2,
+    )
+    ring_pixels = (pixels[:, :, 3] > 220) & (difference <= 10)
+    ys, xs = np.nonzero(ring_pixels)
+
+    assert len(xs) > 5_000
+    # The export camera must frame the ring outside the planet and show a
+    # clearly open ellipse rather than the old side-on line.
+    assert int(xs.max() - xs.min()) > 580
+    assert int(ys.max() - ys.min()) > 250
 
 
 def test_print_sheet_is_available_as_server_pdf(client):
