@@ -3,9 +3,13 @@ package com.kidsgalaxy.manager.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.util.Log
 import android.widget.Toast
@@ -26,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.print.PrintHelper
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
@@ -34,13 +37,13 @@ import com.kidsgalaxy.manager.data.PlanetExportClient
 import com.kidsgalaxy.manager.data.PlanetExportHttpException
 import com.kidsgalaxy.manager.data.PlanetExportPayloadException
 import kotlinx.coroutines.launch
+import java.io.FileOutputStream
 import java.io.IOException
 
 private const val EXPORT_LOG_TAG = "KidsGalaxyExport"
 private const val ANDROID_PRINT_FEATURE = "android.software.print"
 
 private enum class PrintFailureStage {
-    INVALID_IMAGE,
     UNAVAILABLE,
     LAUNCH,
 }
@@ -51,6 +54,54 @@ private class PrintStageException(
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
 
+private class ServerPdfPrintAdapter(
+    private val jobName: String,
+    private val pdfBytes: ByteArray,
+) : PrintDocumentAdapter() {
+    override fun onLayout(
+        oldAttributes: PrintAttributes?,
+        newAttributes: PrintAttributes?,
+        cancellationSignal: CancellationSignal,
+        callback: LayoutResultCallback,
+        extras: android.os.Bundle?,
+    ) {
+        if (cancellationSignal.isCanceled) {
+            callback.onLayoutCancelled()
+            return
+        }
+        callback.onLayoutFinished(
+            PrintDocumentInfo
+                .Builder("$jobName.pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(1)
+                .build(),
+            true,
+        )
+    }
+
+    override fun onWrite(
+        pages: Array<out PageRange>,
+        destination: ParcelFileDescriptor,
+        cancellationSignal: CancellationSignal,
+        callback: WriteResultCallback,
+    ) {
+        if (cancellationSignal.isCanceled) {
+            callback.onWriteCancelled()
+            return
+        }
+        try {
+            FileOutputStream(destination.fileDescriptor).use { output ->
+                output.write(pdfBytes)
+                output.flush()
+            }
+            callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        } catch (error: IOException) {
+            Log.e(EXPORT_LOG_TAG, "Could not stream server PDF to Android printing", error)
+            callback.onWriteFailed(error.message ?: "Could not write print PDF")
+        }
+    }
+}
+
 @Composable
 fun PlanetExportActions(
     planet: PlanetDto,
@@ -59,15 +110,15 @@ fun PlanetExportActions(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val client = remember(galaxy.baseUrl) { PlanetExportClient(context, galaxy.baseUrl) }
-    var pendingPrintSheet by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingPrintPdf by remember { mutableStateOf<ByteArray?>(null) }
     var pendingPrintFailureDetail by remember { mutableStateOf<String?>(null) }
     var pendingStl by remember { mutableStateOf<ByteArray?>(null) }
 
     val printFallbackLauncher =
         rememberLauncherForActivityResult(
-            ActivityResultContracts.CreateDocument("image/png"),
+            ActivityResultContracts.CreateDocument("application/pdf"),
         ) { uri ->
-            val bytes = pendingPrintSheet
+            val bytes = pendingPrintPdf
             val failureDetail = pendingPrintFailureDetail
             if (uri != null && bytes != null) {
                 try {
@@ -89,7 +140,7 @@ fun PlanetExportActions(
                         Toast.LENGTH_LONG,
                     ).show()
             }
-            pendingPrintSheet = null
+            pendingPrintPdf = null
             pendingPrintFailureDetail = null
         }
 
@@ -113,18 +164,12 @@ fun PlanetExportActions(
             onClick = {
                 scope.launch {
                     try {
-                        val bytes = client.printSheet(planet.id)
-                        val bitmap =
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                ?: throw PrintStageException(
-                                    PrintFailureStage.INVALID_IMAGE,
-                                    "Android could not decode the print PNG",
-                                )
+                        val pdfBytes = client.printPdf(planet.id)
                         try {
                             startAndroidPrint(
                                 context = context,
                                 jobName = "${planet.name} - Kids Galaxy",
-                                bitmap = bitmap,
+                                pdfBytes = pdfBytes,
                             )
                         } catch (error: PrintStageException) {
                             if (error.stage != PrintFailureStage.LAUNCH) {
@@ -133,7 +178,7 @@ fun PlanetExportActions(
 
                             val detail = error.diagnosticDetail()
                             Log.e(EXPORT_LOG_TAG, "Android print dialog failed", error)
-                            pendingPrintSheet = bytes
+                            pendingPrintPdf = pdfBytes
                             pendingPrintFailureDetail = detail
                             Toast
                                 .makeText(
@@ -142,9 +187,9 @@ fun PlanetExportActions(
                                     Toast.LENGTH_LONG,
                                 ).show()
                             try {
-                                printFallbackLauncher.launch(printSheetFilename(planet))
+                                printFallbackLauncher.launch(printPdfFilename(planet))
                             } catch (fallbackError: RuntimeException) {
-                                pendingPrintSheet = null
+                                pendingPrintPdf = null
                                 pendingPrintFailureDetail = null
                                 Log.e(EXPORT_LOG_TAG, "Print fallback picker failed", fallbackError)
                                 showExportError(context, error)
@@ -182,15 +227,10 @@ fun PlanetExportActions(
     }
 }
 
-/**
- * Android's PrintManager rejects calls that were not created from an Activity
- * context. Compose's LocalContext may be a ContextWrapper, so always unwrap it
- * before constructing PrintHelper instead of relying on the current wrapper.
- */
 private fun startAndroidPrint(
     context: Context,
     jobName: String,
-    bitmap: Bitmap,
+    pdfBytes: ByteArray,
 ) {
     val activity =
         context.findActivity()
@@ -205,19 +245,24 @@ private fun startAndroidPrint(
             "This Android build does not provide the print framework",
         )
     }
-    if (activity.getSystemService(Context.PRINT_SERVICE) !is PrintManager) {
-        throw PrintStageException(
+    val printManager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+        ?: throw PrintStageException(
             PrintFailureStage.UNAVAILABLE,
             "Android print service is unavailable",
         )
-    }
 
     try {
-        PrintHelper(activity).apply {
-            scaleMode = PrintHelper.SCALE_MODE_FIT
-            colorMode = PrintHelper.COLOR_MODE_COLOR
-            printBitmap(jobName, bitmap)
-        }
+        val attributes =
+            PrintAttributes
+                .Builder()
+                .setMediaSize(PrintAttributes.MediaSize.NA_LETTER.asLandscape())
+                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                .build()
+        printManager.print(
+            jobName,
+            ServerPdfPrintAdapter(jobName, pdfBytes),
+            attributes,
+        )
     } catch (error: RuntimeException) {
         throw PrintStageException(
             PrintFailureStage.LAUNCH,
@@ -273,8 +318,6 @@ private fun showExportError(
                 context.getString(R.string.export_payload_invalid, error.exportName)
             is PrintStageException ->
                 when (error.stage) {
-                    PrintFailureStage.INVALID_IMAGE ->
-                        context.getString(R.string.print_invalid_image)
                     PrintFailureStage.UNAVAILABLE ->
                         context.getString(R.string.print_unavailable)
                     PrintFailureStage.LAUNCH ->
@@ -294,7 +337,7 @@ private fun showExportError(
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 }
 
-private fun printSheetFilename(planet: PlanetDto): String = "${safePlanetName(planet)}_${planet.id}_print.png"
+private fun printPdfFilename(planet: PlanetDto): String = "${safePlanetName(planet)}_${planet.id}_print.pdf"
 
 private fun stlFilename(planet: PlanetDto): String = "${safePlanetName(planet)}_${planet.id}.stl"
 
