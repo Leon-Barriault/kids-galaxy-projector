@@ -76,7 +76,8 @@ fun PlanetExportActions(
                         context,
                         context.getString(R.string.print_fallback_saved),
                         Toast.LENGTH_LONG,
-                    ).show()
+                    )
+                        .show()
                 } catch (error: Exception) {
                     showExportError(context, error)
                 }
@@ -85,7 +86,8 @@ fun PlanetExportActions(
                     context,
                     context.getString(R.string.print_start_failed, failureDetail),
                     Toast.LENGTH_LONG,
-                ).show()
+                )
+                    .show()
             }
             pendingPrintSheet = null
             pendingPrintFailureDetail = null
@@ -137,7 +139,8 @@ fun PlanetExportActions(
                                 context,
                                 context.getString(R.string.print_start_failed_saving, detail),
                                 Toast.LENGTH_LONG,
-                            ).show()
+                            )
+                                .show()
                             try {
                                 printFallbackLauncher.launch(printSheetFilename(planet))
                             } catch (fallbackError: RuntimeException) {
@@ -291,11 +294,9 @@ private fun showExportError(
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 }
 
-private fun printSheetFilename(planet: PlanetDto): String =
-    "${safePlanetName(planet)}_${planet.id}_print.png"
+private fun printSheetFilename(planet: PlanetDto): String = "${safePlanetName(planet)}_${planet.id}_print.png"
 
-private fun stlFilename(planet: PlanetDto): String =
-    "${safePlanetName(planet)}_${planet.id}.stl"
+private fun stlFilename(planet: PlanetDto): String = "${safePlanetName(planet)}_${planet.id}.stl"
 
 private fun safePlanetName(planet: PlanetDto): String =
     planet.name
