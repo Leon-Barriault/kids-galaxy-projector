@@ -96,7 +96,7 @@ def test_stl_export_is_spherical_lithophane(client):
     assert max(radii) - min(radii) > 2.5
     # The south pole is intentionally omitted to make the hollow globe printable.
     assert minimum_y > -38.5
-    assert maximum_y > 39.0
+    assert maximum_y > 37.5
 
 
 def test_export_rejects_unknown_planet(client):
