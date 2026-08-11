@@ -84,11 +84,12 @@ fun PlanetExportActions(
                 scope.launch {
                     try {
                         val bytes = client.printSheet(planet.id)
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                            ?: throw PrintStageException(
-                                PrintFailureStage.INVALID_IMAGE,
-                                "Android could not decode the print PNG",
-                            )
+                        val bitmap =
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                ?: throw PrintStageException(
+                                    PrintFailureStage.INVALID_IMAGE,
+                                    "Android could not decode the print PNG",
+                                )
                         startAndroidPrint(
                             context = context,
                             jobName = "${planet.name} - Kids Galaxy",
@@ -136,11 +137,12 @@ private fun startAndroidPrint(
     jobName: String,
     bitmap: Bitmap,
 ) {
-    val activity = context.findActivity()
-        ?: throw PrintStageException(
-            PrintFailureStage.UNAVAILABLE,
-            "No active Activity is available for Android printing",
-        )
+    val activity =
+        context.findActivity()
+            ?: throw PrintStageException(
+                PrintFailureStage.UNAVAILABLE,
+                "No active Activity is available for Android printing",
+            )
 
     if (!activity.packageManager.hasSystemFeature(ANDROID_PRINT_FEATURE)) {
         throw PrintStageException(
