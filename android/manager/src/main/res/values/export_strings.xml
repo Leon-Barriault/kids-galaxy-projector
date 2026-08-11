@@ -8,6 +8,11 @@
     <string name="print_named">Print %1$s</string>
     <string name="export_stl_named">Export %1$s as an 80 mm STL</string>
     <string name="export_failed">Could not prepare this export. Please try again.</string>
+    <string name="export_failed_diagnostic">Could not prepare this export (%1$s).</string>
     <string name="export_network_failed">Could not reach the galaxy server while preparing this export.</string>
     <string name="export_server_failed">The galaxy server could not prepare this export (HTTP %1$d).</string>
+    <string name="export_payload_invalid">The galaxy server returned an invalid %1$s export.</string>
+    <string name="print_invalid_image">Android could not decode the print image returned by the galaxy server.</string>
+    <string name="print_unavailable">Android printing is not available on this tablet. Enable or install a print service and try again.</string>
+    <string name="print_start_failed">Android could not open the print dialog: %1$s</string>
 </resources>
