@@ -75,6 +75,14 @@ class PlanetRepository(ABC):
 class PlanetExportRenderer(ABC):
     """Create authoritative Pi-side previews and printable planet exports."""
 
+    def store_projector_snapshot(self, planet: Planet, png_bytes: bytes) -> None:
+        """Persist a finalized WebGL hero image supplied by the projector browser."""
+        raise NotImplementedError
+
+    def has_projector_snapshot(self, planet: Planet) -> bool:
+        """Whether the finalized WebGL hero image is ready for print/PDF export."""
+        return False
+
     @abstractmethod
     def render_preview(self, planet: Planet, image_path: Path) -> bytes:
         """Return a PNG preview using the projector artwork projection contract."""
@@ -106,7 +114,7 @@ class BehaviorRepository(ABC):
 
     @abstractmethod
     def save(self, settings: GalaxyBehaviorSettings) -> None:
-        """Persist operator-selected behavior settings."""
+        """Persist operator-selected behavior settings or their defaults."""
 
 
 class Clock(ABC):

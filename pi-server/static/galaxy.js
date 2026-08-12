@@ -31,6 +31,7 @@ import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { installPlanetRenderPipeline } from './projector/PlanetRenderPipeline.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
+import { ProjectorSnapshotPublisher } from './projector/ProjectorSnapshotPublisher.js';
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
@@ -124,12 +125,14 @@ const behaviorController = new ProjectorBehaviorController({
   celebration,
   environment,
 });
+const snapshotPublisher = new ProjectorSnapshotPublisher({ galaxyScene });
 const planetLoader = new PlanetLoader({
   scene: galaxyScene,
   animator,
   celebration,
   gallerySize: GALLERY_SIZE,
   behaviorController,
+  snapshotPublisher,
 });
 
 const clock = new THREE.Clock();
@@ -160,6 +163,7 @@ window.kidsGalaxy = {
     cameraController,
     celebration,
     behaviorController,
+    snapshotPublisher,
   },
 };
 

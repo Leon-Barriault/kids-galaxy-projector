@@ -13,6 +13,7 @@ export class PlanetLoader {
     celebration,
     gallerySize,
     behaviorController = null,
+    snapshotPublisher = null,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   }) {
     this.scene = scene;
@@ -20,6 +21,7 @@ export class PlanetLoader {
     this.celebration = celebration;
     this.gallerySize = gallerySize;
     this.behaviorController = behaviorController;
+    this.snapshotPublisher = snapshotPublisher;
     this.pollIntervalMs = pollIntervalMs;
     this.kidPlanets = new Map();
     this.textureLoader = new THREE.TextureLoader();
@@ -75,6 +77,9 @@ export class PlanetLoader {
           return;
         }
         entity.applyTexture(texture);
+        // The complete prototype-based projector pipeline has now transformed
+        // this entity. Capture that final WebGL object graph for print/PDF use.
+        this.snapshotPublisher?.schedule(entity);
       },
       undefined,
       () => this.celebration.textureLoadFailed(),
