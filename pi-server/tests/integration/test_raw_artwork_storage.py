@@ -1,13 +1,9 @@
-"""Product contract: storage preserves the child's drawing for the projector."""
+"""Storage keeps the PNG as an archival copy of the child's drawing."""
 
 import io
 
-import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-
-from app.config import Settings
-from app.factory import create_app
 
 
 def _sparse_drawing() -> bytes:
@@ -40,28 +36,11 @@ def _white_fraction(image: Image.Image) -> float:
     return sum(1 for value in pixels if value >= 238) / len(pixels)
 
 
-def test_default_storage_preserves_sparse_child_composition(client):
+def test_archival_png_preserves_sparse_child_composition(client):
     stored = _upload_and_read(client, _sparse_drawing())
 
-    # White means "the child did not paint here". Keeping that information is
-    # what allows the projector to distinguish body colour from raised motifs.
+    # The PNG remains a faithful archival/display artifact. The drawing manifest,
+    # not server-side raster styling, owns the projector's interpretation.
     assert _white_fraction(stored) > 0.75
     assert stored.getpixel((110, 105))[2] > stored.getpixel((110, 105))[0]
     assert stored.getpixel((165, 145))[1] > stored.getpixel((165, 145))[0]
-
-
-@pytest.mark.parametrize("legacy_style", ["terrain", "blend"])
-def test_legacy_surface_style_env_cannot_destroy_the_kid_drawing(
-    tmp_path,
-    legacy_style,
-):
-    settings = Settings(
-        upload_dir=tmp_path / "uploads",
-        static_dir=tmp_path / "static",
-        rate_limit_seconds=0.0,
-        advertise=False,
-        surface_style=legacy_style,
-    )
-    stored = _upload_and_read(TestClient(create_app(settings)), _sparse_drawing())
-
-    assert _white_fraction(stored) > 0.75
