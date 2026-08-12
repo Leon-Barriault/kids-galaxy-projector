@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 from app.domain.planet import Planet
 from app.infrastructure.manifest_lithophane import (
     load_manifest_for_image,
-    manifest_relief_strength,
+    manifest_relief_sampler,
 )
 from app.infrastructure.planet_export_renderer import PillowPlanetExportRenderer
 
@@ -147,6 +147,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         manifest = load_manifest_for_image(image_path)
         if manifest is None:
             return super().export_stl(planet, image_path, diameter_mm)
+        relief_at = manifest_relief_sampler(manifest)
 
         max_outer_radius = diameter_mm / 2.0
         inner_radius = max_outer_radius - self.LITHOPHANE_MAX_WALL_MM
@@ -163,7 +164,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             inner_row = []
             for lon_index in range(self.LON_SEGMENTS):
                 longitude = -math.pi + math.tau * lon_index / self.LON_SEGMENTS
-                artwork = manifest_relief_strength(manifest, latitude, longitude)
+                artwork = relief_at(latitude, longitude)
                 wall = self.LITHOPHANE_MIN_WALL_MM + artwork * (
                     self.LITHOPHANE_MAX_WALL_MM - self.LITHOPHANE_MIN_WALL_MM
                 )
