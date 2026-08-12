@@ -54,7 +54,8 @@ class DrawingManifestTest {
                         colorArgb = color,
                         strokeWidth = 30f,
                     ),
-                ).addStroke(
+                )
+                .addStroke(
                     StrokePath(
                         points = listOf(Point(40f, 250f), Point(460f, 270f)),
                         colorArgb = color,
