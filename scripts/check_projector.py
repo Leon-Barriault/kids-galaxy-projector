@@ -25,6 +25,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SERVER_DIR = REPO_ROOT / "pi-server"
 
 
+def chromium_executable() -> str | None:
+    """
+    Launch whatever full Chromium this host actually has.
+
+    Playwright pins an exact browser revision and refuses to start anything
+    else, so this script dies on any machine whose installed build differs from
+    the pinned one - an environment mismatch reported as a test failure. It also
+    prefers the headless shell, which ships no GPU stack at all and therefore
+    cannot run the WebGL these contracts exist to check.
+    """
+    builds = sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome"))
+    return str(builds[-1]) if builds else None
+
+
 def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -176,6 +190,16 @@ def core_render_state(page, planet_id: str) -> dict:
             heightSegments: p.mesh.geometry.parameters.heightSegments,
             baseHasFlatTexture: Boolean(p.mesh.material.map),
             baseHasDisplacement: Boolean(p.mesh.material.displacementMap),
+            softToySurface: Boolean(p.mesh.material.userData.kidsGalaxySoftToySurface),
+            projectionMode: p.mesh.material.userData.kidsGalaxyDesignProjectionMode || '',
+            roughness: p.mesh.material.roughness,
+            metalness: p.mesh.material.metalness,
+            clearcoat: p.mesh.material.clearcoat || 0,
+            paintRelief: p.mesh.material.bumpScale || 0,
+            hasPaintMask: Boolean(p.mesh.material.bumpMap),
+            paintRoughnessMask: Boolean(p.mesh.material.roughnessMap),
+            environmentLit: Boolean(p.mesh.material.envMap),
+            sculptedPatchesVisible: patches.filter((m) => m.visible).length,
             trueSculpted: Boolean(p.mesh.material.userData.kidsGalaxyTrueSculptedArtwork),
             patchCount: p.mesh.material.userData.kidsGalaxySculptedPatchCount || 0,
             groupInstalled: Boolean(group?.userData?.kidsGalaxySculptedArtworkGroup),
@@ -275,7 +299,8 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
@@ -290,7 +315,7 @@ def main() -> int:
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3", 12_000)
         wait_for(
             page,
-            f"Boolean(window.kidsGalaxy.kidPlanets.get('{ringed}')?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)",
+            f"Boolean(window.kidsGalaxy.kidPlanets.get('{ringed}')?.mesh?.material?.userData?.kidsGalaxySoftToySurface)",
             12_000,
         )
         check(bool(page.evaluate("window.kidsGalaxy")), "projector initializes")
@@ -302,20 +327,39 @@ def main() -> int:
         print("\ncurrent sculpted renderer")
         state = core_render_state(page, ringed)
         check(state["qualityProfile"] == "laptop-high", "renderer uses laptop-high profile")
-        check(state["material"] == "MeshPhysicalMaterial", "planet body uses physical material")
         check(state["widthSegments"] >= 96, "planet sphere uses high-density geometry")
         check(state["heightSegments"] >= 72, "planet sphere has dense vertical tessellation")
-        check(not state["baseHasFlatTexture"], "child PNG is not flat-wrapped over the sphere")
+        # The drawing is painted onto the body now rather than rebuilt as
+        # extruded slabs. The slab pipeline scaled each region to fill 94% of
+        # the planet and wound it 480 degrees, so a blob a child painted came
+        # back as a ribbon lapping the planet, and the slabs stood proud of the
+        # sphere as lumps on the silhouette.
+        check(state["softToySurface"], "the child's drawing is painted onto the body")
+        check(
+            state["projectionMode"] == "orthographic-disc-mirrored-hemispheres",
+            "the disc is read as a front view rather than stretched over the sphere",
+        )
         check(not state["baseHasDisplacement"], "paint does not inflate the base sphere")
-        check(state["trueSculpted"] and state["groupInstalled"], "true sculpted kid artwork is active")
-        check(state["patchCount"] >= 1 and state["frontPatches"] >= 1, "authored gestures become 3D patches")
-        check(state["backPatches"] >= 1, "kid artwork has a back-hemisphere echo")
-        check(state["minRelief"] > 0, "kid patches carry physical relief")
+        check(state["sculptedPatchesVisible"] == 0, "superseded sculpted slabs stay hidden")
         check(state["legacyShellsHidden"], "superseded alpha-shell accents stay hidden")
+
+        print("\nsoft matte finish")
+        # A tight specular highlight is the single strongest cue that something
+        # is cheap plastic, which is what clearcoat on a near-mirror roughness
+        # was producing. These bounds are the look, not an implementation note.
+        check(state["roughness"] >= 0.8, f"planet body is matte (roughness {state['roughness']})")
+        check(state["metalness"] == 0, "planet body is not metallic")
+        check(state["clearcoat"] == 0, "planet body carries no gloss coat")
+        check(state["environmentLit"], "planet body picks up soft image-based light")
+        # Paint sitting on the body, not printed into it: the child's colours are
+        # raised and finished differently from the ball underneath.
+        check(state["hasPaintMask"] and state["paintRelief"] > 0, "painted areas stand off the body")
+        check(state["paintRoughnessMask"], "painted areas are finished differently from the body")
+
         check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline exposes its first stage")
         check(
-            state["pipeline"][-2:] == ["visual-refinement", "stroke-wrap-projection"],
-            "visual refinement is followed only by the final stroke-wrap projection",
+            state["pipeline"][-1] == "soft-toy-planet-surface",
+            "the painted surface is the last word on planet appearance",
         )
         check(state["shadows"] and state["sunCastsShadow"], "renderer keeps real shadows")
         check(state["internalWidth"] <= 3840, "internal width stays within the 4K ceiling")

@@ -37,6 +37,7 @@ import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrad
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installRingColorFidelity } from './projector/RingColorFidelity.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
+import { installSoftToyPlanetSurface } from './projector/SoftToyPlanetSurface.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
 import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
 import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
@@ -101,6 +102,9 @@ const PLANET_RENDER_STAGES = Object.freeze([
   // winding and controlled latitude treatment. Large filled regions instead
   // preserve source canvas Y all the way from north pole to south pole.
   { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
+  // Outermost. Everything above turns the drawing into extruded patch meshes;
+  // this paints it onto the body instead. Kept last so it sees the final entity.
+  { name: 'soft-toy-planet-surface', install: installSoftToyPlanetSurface },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
