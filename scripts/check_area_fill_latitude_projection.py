@@ -96,7 +96,10 @@ def main() -> int:
                 else if (v < 0.4) zones.orange += 1;
                 else if (v < 0.6) zones.yellow += 1;
                 else if (v < 0.81) zones.green += 1;
-                if (b > r * 1.1 && b > g * 1.1) blueDominant += 1;
+                // Purple (#9C27B0) legitimately has B slightly above R after
+                // sRGB-to-linear conversion. Require a much stronger blue hue
+                // so this assertion only catches an actually invented blue band.
+                if (b > 0.2 && b > r * 1.45 && b > g * 1.45) blueDominant += 1;
 
                 for (let offset = 0; offset < 4; offset += 1) {{
                   const vertex = index + offset;
