@@ -8,7 +8,9 @@ const POLE_CLAIM_THRESHOLD = 0.22;
 const VERTICAL_ASPECT_THRESHOLD = 1.55;
 const HORIZONTAL_BAND_ASPECT_THRESHOLD = 2.25;
 const HORIZONTAL_POLE_ASPECT_THRESHOLD = 1.1;
-const SHOULDER_TEXELS = 9;
+const DEFAULT_SHOULDER_TEXELS = 9;
+const MIN_SHOULDER_TEXELS = 7;
+const MAX_SHOULDER_TEXELS = 13;
 const SHOULDER_FLOOR = 0.28;
 const DISPLACEMENT_SCALE = 0.11;
 const BUMP_SCALE = 0.16;
@@ -16,6 +18,11 @@ const BODY_HEIGHT = 36;
 const EDGE_SHADE = 0.76;
 const MIN_LAYER_LEVEL = 0.6;
 const MAX_LAYER_LEVEL = 0.98;
+const ORDER_WEIGHT = 0.35;
+const WIDTH_WEIGHT = 0.25;
+const COVERAGE_WEIGHT = 0.2;
+const POLE_WEIGHT = 0.1;
+const JITTER_WEIGHT = 0.1;
 const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
 
 function rgbOf(value, fallback = '#ffffff') {
@@ -49,6 +56,23 @@ function normalizedPoints(stroke) {
     .map(([x, y]) => [THREE.MathUtils.clamp(x, 0, 1), THREE.MathUtils.clamp(y, 0, 1)]);
 }
 
+function stableStrokeId(stroke, strokeIndex) {
+  const value = typeof stroke?.stroke_id === 'string' ? stroke.stroke_id.trim() : '';
+  return value || `stroke-${String(strokeIndex).padStart(4, '0')}`;
+}
+
+function stableUnitHash(value) {
+  // FNV-1a keeps the tiny variation stable across reloads and independent of
+  // colour. The same authored stroke therefore receives the same relief every
+  // time, while separate same-colour strokes still retain their own identity.
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash / 0xffffffff;
+}
+
 function strokeProjection(stroke, strokeIndex) {
   const points = normalizedPoints(stroke);
   if (points.length < 2) return null;
@@ -58,12 +82,18 @@ function strokeProjection(stroke, strokeIndex) {
   let minY = 1;
   let maxY = 0;
   let sumY = 0;
-  for (const [x, y] of points) {
+  let pathLength = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const [x, y] = points[index];
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     sumY += y;
+    if (index > 0) {
+      const [previousX, previousY] = points[index - 1];
+      pathLength += Math.hypot(x - previousX, y - previousY);
+    }
   }
 
   const spanX = Math.max(0.0001, maxX - minX);
@@ -86,9 +116,18 @@ function strokeProjection(stroke, strokeIndex) {
     0.35,
   );
   const halfWidth = widthNormalized * 0.5;
+  const colourHex = RGB_HEX.test(stroke?.color || '') ? stroke.color.toLowerCase() : '#ffffff';
+  const order = Number.isFinite(Number(stroke?.order)) ? Number(stroke.order) : strokeIndex;
+  const coverageMetric = THREE.MathUtils.clamp(
+    spanX * 0.55 + spanY * 0.25 + Math.min(1, pathLength) * 0.2,
+    0,
+    1,
+  );
 
   return {
     strokeIndex,
+    strokeId: stableStrokeId(stroke, strokeIndex),
+    order,
     points: projected,
     minY,
     maxY,
@@ -99,7 +138,9 @@ function strokeProjection(stroke, strokeIndex) {
     horizontalBand,
     horizontalPoleCandidate,
     widthNormalized,
-    colour: rgbOf(stroke.color, '#ffffff'),
+    coverageMetric,
+    colourHex,
+    colour: rgbOf(colourHex, '#ffffff'),
   };
 }
 
@@ -189,25 +230,93 @@ function closePole(owner, colourBuffer, projection, poleOwners) {
   }
 }
 
-function layerLevels(projections) {
-  const levels = [];
-  const ranked = [...projections].sort(
-    (a, b) => a.centerY - b.centerY || a.strokeIndex - b.strokeIndex,
-  );
-  ranked.forEach((projection, rank) => {
-    const t = ranked.length <= 1 ? 0 : rank / (ranked.length - 1);
-    // North-to-south terraces deliberately sit at different heights. This makes
-    // neighbouring painted layers read as separate pieces of soft moulded clay
-    // even when their colours touch with no background gap between them.
-    levels[projection.strokeIndex] = THREE.MathUtils.lerp(MAX_LAYER_LEVEL, MIN_LAYER_LEVEL, t);
+function normalizedMetricScores(projections, selector) {
+  const scores = [];
+  if (!projections.length) return scores;
+  const values = projections.map(selector);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  projections.forEach((projection, index) => {
+    scores[projection.strokeIndex] =
+      maximum - minimum < 1e-6 ? 0.5 : (values[index] - minimum) / (maximum - minimum);
   });
-  return levels;
+  return scores;
 }
 
-function roundedRelief(owner, levels) {
+function strokeProfiles(projections, poleOwners) {
+  const orderScores = normalizedMetricScores(projections, (projection) => projection.order);
+  const widthScores = normalizedMetricScores(
+    projections,
+    (projection) => projection.widthNormalized,
+  );
+  const coverageScores = normalizedMetricScores(
+    projections,
+    (projection) => projection.coverageMetric,
+  );
+
+  return projections.map((projection) => {
+    const orderScore = orderScores[projection.strokeIndex] ?? 0.5;
+    const widthScore = widthScores[projection.strokeIndex] ?? 0.5;
+    const coverageScore = coverageScores[projection.strokeIndex] ?? 0.5;
+    let poleScore = 0;
+    if (
+      projection.strokeIndex === poleOwners.north ||
+      projection.strokeIndex === poleOwners.south
+    ) {
+      poleScore = 1;
+    } else if (
+      projection.horizontalPoleCandidate &&
+      (projection.bandFrom <= POLE_CLAIM_THRESHOLD * 1.35 ||
+        projection.bandTo >= 1 - POLE_CLAIM_THRESHOLD * 1.35)
+    ) {
+      poleScore = 0.5;
+    }
+    const jitterScore = stableUnitHash(projection.strokeId);
+    const score = THREE.MathUtils.clamp(
+      ORDER_WEIGHT * orderScore +
+        WIDTH_WEIGHT * widthScore +
+        COVERAGE_WEIGHT * coverageScore +
+        POLE_WEIGHT * poleScore +
+        JITTER_WEIGHT * jitterScore,
+      0,
+      1,
+    );
+    const shoulderScore = THREE.MathUtils.clamp(
+      widthScore * 0.65 + coverageScore * 0.25 + jitterScore * 0.1,
+      0,
+      1,
+    );
+
+    return {
+      strokeIndex: projection.strokeIndex,
+      strokeId: projection.strokeId,
+      colour: projection.colourHex,
+      level: THREE.MathUtils.lerp(MIN_LAYER_LEVEL, MAX_LAYER_LEVEL, score),
+      shoulderTexels: THREE.MathUtils.lerp(
+        MIN_SHOULDER_TEXELS,
+        MAX_SHOULDER_TEXELS,
+        shoulderScore,
+      ),
+      score,
+      components: {
+        order: orderScore,
+        width: widthScore,
+        coverage: coverageScore,
+        pole: poleScore,
+        jitter: jitterScore,
+      },
+    };
+  });
+}
+
+function roundedRelief(owner, profiles) {
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const far = TEXTURE_WIDTH + TEXTURE_HEIGHT;
   const distance = new Float32Array(texels);
+  const profileByStroke = [];
+  profiles.forEach((profile) => {
+    profileByStroke[profile.strokeIndex] = profile;
+  });
 
   const ownerAt = (v, u) => {
     if (v < 0 || v >= TEXTURE_HEIGHT) return null;
@@ -223,7 +332,12 @@ function roundedRelief(owner, levels) {
         distance[texel] = 0;
         continue;
       }
-      const neighbours = [ownerAt(v - 1, u), ownerAt(v + 1, u), ownerAt(v, u - 1), ownerAt(v, u + 1)];
+      const neighbours = [
+        ownerAt(v - 1, u),
+        ownerAt(v + 1, u),
+        ownerAt(v, u - 1),
+        ownerAt(v, u + 1),
+      ];
       const boundary = neighbours.some(
         (neighbour) => neighbour !== null && neighbour !== strokeIndex,
       );
@@ -266,10 +380,12 @@ function roundedRelief(owner, levels) {
   for (let i = 0; i < texels; i += 1) {
     const strokeIndex = owner[i];
     if (strokeIndex < 0) continue;
-    const t = Math.min(1, distance[i] / SHOULDER_TEXELS);
+    const profile = profileByStroke[strokeIndex];
+    const shoulderTexels = profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS;
+    const t = Math.min(1, distance[i] / shoulderTexels);
     const eased = t * t * (3 - 2 * t);
     const rounded = SHOULDER_FLOOR + (1 - SHOULDER_FLOOR) * eased;
-    height[i] = (levels[strokeIndex] || 0.8) * rounded;
+    height[i] = (profile?.level || 0.8) * rounded;
     shade[i] = EDGE_SHADE + (1 - EDGE_SHADE) * eased;
   }
   return { height, shade };
@@ -289,8 +405,8 @@ function buildManifestMaps(manifest) {
   const projections = manifest.strokes
     .map((stroke, strokeIndex) => strokeProjection(stroke, strokeIndex))
     .filter(Boolean);
-  const levels = layerLevels(projections);
   const poleOwners = choosePoleOwners(projections);
+  const profiles = strokeProfiles(projections, poleOwners);
 
   const mask = document.createElement('canvas');
   mask.width = TEXTURE_WIDTH;
@@ -315,7 +431,7 @@ function buildManifestMaps(manifest) {
     renderedStrokeCount += 1;
   });
 
-  const { height, shade } = roundedRelief(owner, levels);
+  const { height, shade } = roundedRelief(owner, profiles);
   const colourCanvas = document.createElement('canvas');
   colourCanvas.width = TEXTURE_WIDTH;
   colourCanvas.height = TEXTURE_HEIGHT;
@@ -348,12 +464,23 @@ function buildManifestMaps(manifest) {
     return canvas;
   };
 
+  const diagnostics = profiles.map((profile) => ({
+    strokeId: profile.strokeId,
+    strokeIndex: profile.strokeIndex,
+    colour: profile.colour,
+    level: profile.level,
+    score: profile.score,
+    shoulderTexels: profile.shoulderTexels,
+    components: { ...profile.components },
+  }));
+
   return {
     colour: colourCanvas,
     height: scalarCanvas((relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
     roughness: scalarCanvas((relief) => 244 - relief * 58),
     strokeCount: renderedStrokeCount,
-    layerLevels: levels.filter((level) => Number.isFinite(level)),
+    layerLevels: diagnostics.map((profile) => profile.level),
+    strokeProfiles: diagnostics,
     northPoleStroke: poleOwners.north,
     southPoleStroke: poleOwners.south,
   };
@@ -394,6 +521,8 @@ function applyManifestSurface(entity) {
   material.userData.kidsGalaxyManifestStrokeSurface = true;
   material.userData.kidsGalaxyEmbossedStrokeCount = built.strokeCount;
   material.userData.kidsGalaxyEmbossLayerLevels = built.layerLevels;
+  material.userData.kidsGalaxyEmbossStrokeProfiles = built.strokeProfiles;
+  material.userData.kidsGalaxyEmbossHeightHeuristic = 'order35-width25-coverage20-pole10-jitter10';
   material.userData.kidsGalaxyNorthPoleStroke = built.northPoleStroke;
   material.userData.kidsGalaxySouthPoleStroke = built.southPoleStroke;
   material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-layered-on-body';
