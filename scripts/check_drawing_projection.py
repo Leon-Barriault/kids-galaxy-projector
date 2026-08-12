@@ -5,8 +5,9 @@ The product rule: the colour the child picks is the sphere, and every stroke
 they draw keeps its shape and is wrapped around the planet at the height they
 drew it. A straight horizontal line is a band right round the ball. A wavy line
 stays wavy as it goes round. A line drawn top to bottom spirals from pole to
-pole. Paint that reaches a pole owns the whole cap, so there is never background
-showing at the top of the planet.
+pole. Paint that reaches a pole owns the whole cap, closing around the stroke so
+there is no background left at the top - but only when the paint actually gets
+there. A drawing that stops short leaves a pale pole.
 
 This replaces check_latitude_band_projection.py, which asserted the per-row
 collapse: every row of the drawing reduced to one colour, so a stroke owned
@@ -78,6 +79,20 @@ def rainbow_disc() -> bytes:
 def vertical_disc(width: int) -> bytes:
     """A line straight down the middle - the case that used to flood the planet."""
     return _clipped(lambda draw: draw.line([(256, 70), (256, 440)], fill=GREEN, width=width))
+
+
+def over_top_disc() -> bytes:
+    """A stroke drawn right over the top of the disc - this one owns the cap.
+
+    Deliberately taken to within a few pixels of the disc's top edge, where the
+    tablet's circular clip has narrowed the drawable width to about a fifth of
+    the disc. Paint landing there was aimed at the top of the planet.
+    """
+    return _clipped(
+        lambda draw: draw.line(
+            [(120, 190), (256, 6), (392, 190)], fill=ARCS[0][0], width=40, joint="curve"
+        )
+    )
 
 
 def crooked_disc() -> bytes:
@@ -195,6 +210,7 @@ def main() -> int:
         vertical_id = server.upload("Vertical", artwork=vertical_disc(26), body_color=BODY)
         thin_id = server.upload("Thin vertical", artwork=vertical_disc(8), body_color=BODY)
         crooked_id = server.upload("Crooked", artwork=crooked_disc(), body_color=BODY)
+        over_id = server.upload("Over the top", artwork=over_top_disc(), body_color=BODY)
 
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
@@ -213,6 +229,7 @@ def main() -> int:
             vertical = read_state(page, vertical_id)
             thin = read_state(page, thin_id)
             crooked = read_state(page, crooked_id)
+            over = read_state(page, over_id)
             browser.close()
 
     print("\nsurface contract")
@@ -245,15 +262,43 @@ def main() -> int:
             runs.append([name, 1])
     floor = max(2, int(len(rows) * 0.03))
     kept = [name for name, length in runs if length >= floor]
-    significant = [name for index, name in enumerate(kept) if index == 0 or name != kept[index - 1]]
-    expected = ["#7b3fb5", "#e8862f", "#f0d040", "#4fae54", "body"]
+    # Body runs are dropped rather than asserted in sequence. Where background
+    # legitimately appears is the poles' business, checked on its own below, and
+    # it moved once caps became conditional - the rainbow now has a pale pole
+    # above the purple. Pinning it in both places means one behaviour change
+    # breaking two assertions and neither of them saying what went wrong.
+    painted_order = [name for name in kept if name != "body"]
+    significant = [
+        name
+        for index, name in enumerate(painted_order)
+        if index == 0 or name != painted_order[index - 1]
+    ]
+    expected = ["#7b3fb5", "#e8862f", "#f0d040", "#4fae54"]
     check(significant == expected, f"north to south reads {' -> '.join(significant)}")
 
-    print("\npaint that reaches a pole owns the cap")
+    print("\na pole is capped only when paint actually reaches it")
     # Every longitude of the top row, not just one: a cap with background in it
-    # anywhere is a hole at the top of the planet.
-    top = [nearest(pixel, palette) for pixel in colour[0]]
-    check(set(top) == {"#7b3fb5"}, f"the whole north cap is the topmost colour ({set(top)})")
+    # anywhere is a hole at the top of the planet. A stroke drawn over the top
+    # rarely arrives across every longitude at once, so closing the cap has to
+    # fill around the stroke rather than above it.
+    over_top = [nearest(pixel, palette) for pixel in over["colour"][0]]
+    check(
+        set(over_top) == {"#7b3fb5"},
+        f"a stroke drawn over the top owns the whole cap, no gaps ({set(over_top)})",
+    )
+    # And the other way. This reverses the previous behaviour, which extended the
+    # topmost colour to the pole unconditionally: a rainbow whose apex sits a
+    # third of the way down the drawing left the entire northern hemisphere in
+    # that colour, and so did a wavy line drawn across the middle. Untouched
+    # canvas above a drawing is a pale pole and is meant to show.
+    check(
+        all(is_body(pixel) for pixel in colour[0]),
+        "a drawing that stops short of the top leaves a pale north pole",
+    )
+    check(
+        all(is_body(pixel) for pixel in crooked["colour"][0]),
+        "a wavy line mid-drawing does not repaint the northern hemisphere",
+    )
     check(
         all(is_body(pixel) for pixel in colour[-1]),
         "unpainted canvas below the drawing returns as the south pole",

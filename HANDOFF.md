@@ -137,12 +137,19 @@ Decisions in there that look arbitrary and are not:
 - **Sampled backwards, per texel of the output.** Forwards leaves holes: a stroke
   stretched from 200 drawing pixels to 512 columns visits 200 of them, and the
   line arrives combed into vertical stripes with background between them.
-- **Paint that reaches a pole owns the whole cap.** Arcing paint over the top of
-  the disc leaves untouched canvas above the apex; a child reads that arc as the
-  top of their planet, not as a stripe under a cap of background. The south is
-  only capped when paint actually runs off the bottom of the disc — otherwise
-  unpainted canvas below the drawing is the pale south pole, and it is meant to
-  show.
+- **A pole is capped only when paint actually reaches it**, within 4% of the
+  drawing's edge — the top twenty rows of 512, where the tablet's circular clip
+  has narrowed the drawable width to about a fifth of the disc, so paint landing
+  there was aimed at the top. The cap *closes around* the stroke rather than
+  overwriting whole rows: a stroke drawn over the top reaches row 0 only across
+  the longitudes it happens to cross, and replacing the row would erase the
+  stroke while leaving the gaps beside it.
+  This reverses the earlier rule, which extended the topmost colour to the pole
+  unconditionally. That was inherited from the per-row version and it is right
+  for a stroke drawn over the pole and wrong for everything else: a rainbow whose
+  apex sits a third of the way down left the whole northern hemisphere purple,
+  and so did a wavy line across the middle. Untouched canvas above or below a
+  drawing is a pale pole and is meant to show.
 - **Stroke thickness comes from the colour, not from stroke order.** Same green,
   same thickness, every render. Three discrete tiers rather than a continuum,
   because distinct thicknesses read as layering where a gradient reads as an

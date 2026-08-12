@@ -74,6 +74,12 @@ const SHOULDER_TEXELS = 6;
 // line the reference planets get from a pad sitting on a surface, and it is
 // what makes relief legible at a glance rather than only at the terminator.
 const STROKE_EDGE_SHADE = 0.78;
+// How near the edge of the drawing paint must come before it counts as the child
+// colouring that pole. Four percent of 512 is the top twenty rows, where the
+// tablet's circular clip has narrowed the drawable width to about a fifth of the
+// disc - so paint landing there was aimed at the very top, not left there by a
+// stroke that happens to be high up.
+const POLE_REACH_FRACTION = 0.04;
 
 function readDisc(image) {
   const canvas = document.createElement('canvas');
@@ -263,16 +269,20 @@ function projectStrokes(disc, bodyRgb, labels, strokes) {
 }
 
 /**
- * Paint that reaches a pole owns the whole cap.
+ * Paint that reaches a pole owns the whole cap - and only then.
  *
- * Arcing paint over the top of the disc leaves untouched canvas above the apex,
- * and a child reads that arc as the top of their planet - not as a stripe under
- * a cap of background. Carrying the topmost colour up to the pole is what makes
- * a rainbow arrive as a purple cap instead of a purple ring with a hole in it.
+ * A child who draws right over the top of the disc means the top of their
+ * planet, and the circular clip leaves a sliver of untouched canvas above their
+ * apex that would otherwise arrive as a ring of background sitting on the pole.
+ * Carrying that colour up closes it.
  *
- * The south is not symmetrical by default: unpainted canvas below a drawing is
- * meant to show as a pale south pole. It is only capped when the child's paint
- * actually runs off the bottom of the disc, which is them colouring that pole.
+ * Both ends are gated on the paint actually getting there. Extending the topmost
+ * colour unconditionally - which is what this did first, inherited from the
+ * per-row version - is right for a stroke drawn over the pole and wrong for
+ * everything else: a wavy line a third of the way down the drawing turned the
+ * entire northern hemisphere into a cap of its colour, which is not what the
+ * child drew. Unpainted canvas above or below a drawing is a pale pole, and it
+ * is meant to show.
  */
 function fillPoles(colour, owner, disc, bodyRgb) {
   const rowOwned = (v) => {
@@ -300,19 +310,41 @@ function fillPoles(colour, owner, disc, bodyRgb) {
     return n ? { rgb: [r / n, g / n, b / n], source } : null;
   };
 
-  const paint = (fromRow, toRow, cap) => {
-    for (let v = fromRow; v <= toRow; v += 1) {
+  // Fills only what the stroke did not already claim. A stroke drawn right over
+  // the top reaches row 0 but only across the longitudes it happens to cross, so
+  // overwriting whole rows would erase the stroke itself while leaving the gaps
+  // beside it - the cap has to close around it, not replace it.
+  const closeGaps = (fromRow, toRow, cap) => {
+    for (let v = Math.max(0, fromRow); v <= Math.min(TEXTURE_HEIGHT - 1, toRow); v += 1) {
       for (let u = 0; u < TEXTURE_WIDTH; u += 1) {
         const texel = v * TEXTURE_WIDTH + u;
+        if (owner[texel] >= 0) continue;
         colour[texel * 3] = cap.rgb[0];
         colour[texel * 3 + 1] = cap.rgb[1];
         colour[texel * 3 + 2] = cap.rgb[2];
         // The cap belongs to the stroke that reached it, so it is raised with
-        // that stroke rather than sitting flat while the band beside it stands
+        // that stroke rather than sitting flat while the paint beside it stands
         // proud - which would put a visible step right at the pole.
         owner[texel] = cap.source;
       }
     }
+  };
+
+  // Whether the child's paint actually lands in a band of the drawing, read off
+  // the drawing rather than off the projected map: the map has already been
+  // stretched around the planet, so a stroke's own extent is clearer at source.
+  const { data, size } = disc;
+  const paintWithin = (fromRow, toRow) => {
+    for (let y = Math.max(0, fromRow); y <= Math.min(size - 1, toRow); y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const offset = (y * size + x) * 4;
+        const dr = data[offset] - bodyRgb[0];
+        const dg = data[offset + 1] - bodyRgb[1];
+        const db = data[offset + 2] - bodyRgb[2];
+        if (Math.sqrt(dr * dr + dg * dg + db * db) >= PAINT_MATCH_DISTANCE) return true;
+      }
+    }
+    return false;
   };
 
   let first = -1;
@@ -324,31 +356,20 @@ function fillPoles(colour, owner, disc, bodyRgb) {
   }
   if (first < 0) return;
 
-  if (first > 0) {
+  const reach = Math.floor(size * POLE_REACH_FRACTION);
+  // The same band measured on the finished map. The cap is closed across all of
+  // it, not merely above the topmost paint, because paint that reaches the pole
+  // rarely arrives across every longitude at once.
+  const band = Math.ceil(TEXTURE_HEIGHT * POLE_REACH_FRACTION);
+
+  if (paintWithin(0, reach)) {
     const cap = averageOf(first);
-    if (cap) paint(0, first - 1, cap);
+    if (cap) closeGaps(0, Math.max(first - 1, band), cap);
   }
 
-  if (last < TEXTURE_HEIGHT - 1) {
-    const { data, size } = disc;
-    const bottomBand = Math.floor(size * 0.97);
-    let reachesBottom = false;
-    for (let y = bottomBand; y < size && !reachesBottom; y += 1) {
-      for (let x = 0; x < size; x += 1) {
-        const offset = (y * size + x) * 4;
-        const dr = data[offset] - bodyRgb[0];
-        const dg = data[offset + 1] - bodyRgb[1];
-        const db = data[offset + 2] - bodyRgb[2];
-        if (Math.sqrt(dr * dr + dg * dg + db * db) >= PAINT_MATCH_DISTANCE) {
-          reachesBottom = true;
-          break;
-        }
-      }
-    }
-    if (reachesBottom) {
-      const cap = averageOf(last);
-      if (cap) paint(last + 1, TEXTURE_HEIGHT - 1, cap);
-    }
+  if (paintWithin(size - 1 - reach, size - 1)) {
+    const cap = averageOf(last);
+    if (cap) closeGaps(Math.min(last + 1, TEXTURE_HEIGHT - 1 - band), TEXTURE_HEIGHT - 1, cap);
   }
 }
 
