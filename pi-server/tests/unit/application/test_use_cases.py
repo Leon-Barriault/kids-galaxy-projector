@@ -1,540 +1,358 @@
-"""
-Application layer: use cases driven entirely through test doubles.
+"""Unit tests for application orchestration in the manifest-first architecture."""
 
-No filesystem, no Pillow, no FastAPI. This is the payoff of dependency
-inversion - the orchestration logic (rate limit -> validate -> store ->
-publish -> prune) is verified in isolation and runs in microseconds.
-"""
+from __future__ import annotations
+
+import json
+from contextlib import asynccontextmanager
+from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from app.application.event_types import ApplicationEvent
 from app.application.events import GalaxyCleared, PlanetCreated, PlanetRemoved
 from app.application.use_cases import (
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
+    GetPlanetByIdUseCase,
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
-from app.domain.errors import (
-    ImageValidationError,
-    NotFoundError,
-    RateLimitedError,
-)
+from app.domain.errors import NotFoundError, ValidationError
 from app.domain.planet import NO_PLANET_PAYLOAD, Planet
+from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter
 
-PNG_BYTES = b"\x89PNG\r\n\x1a\n valid-enough-for-the-fake"
+PNG = b"\x89PNG\r\n\x1a\n" + b"kid drawing"
+NORMALIZED = b"\x89PNG\r\n\x1a\n" + b"normalized"
 
 
-class FakePlanetRepository:
+def manifest_bytes(background: str = "#ffffff") -> bytes:
+    return json.dumps(
+        {
+            "version": 1,
+            "coordinate_space": "normalized-canvas-v1",
+            "canvas": {"width": 512, "height": 512},
+            "background_color": background,
+            "background_explicit": True,
+            "strokes": [
+                {
+                    "order": 0,
+                    "color": "#7b1fa2",
+                    "width_px": 32,
+                    "width_normalized": 0.0625,
+                    "points": [[0.1, 0.12], [0.5, 0.15], [0.9, 0.13]],
+                },
+                {
+                    "order": 1,
+                    "color": "#43a047",
+                    "width_px": 24,
+                    "width_normalized": 0.046875,
+                    "points": [[0.49, 0.4], [0.52, 0.65], [0.5, 0.88]],
+                },
+            ],
+            "raster": {
+                "background_fill": "solid",
+                "stroke_cap": "round",
+                "stroke_join": "round",
+                "stroke_order": "oldest-to-newest",
+            },
+        }
+    ).encode()
+
+
+class FakeRepository(PlanetRepository):
     def __init__(self):
-        self.saved: list[Planet] = []
+        self.planets: list[Planet] = []
+        self.saved_manifests: list[dict] = []
+        self.saved_images: list[bytes] = []
         self.pruned_to: int | None = None
 
-    def save(self, planet_id, display_name, image_bytes):
-        planet = Planet(
-            id=planet_id,
-            filename=f"{planet_id}_{display_name}.png",
-            display_name=display_name,
-            created_at=float(len(self.saved)),
-        )
-        self.saved.append(planet)
+    def save(self, planet_id: str, display_name: str, image_bytes: bytes) -> Planet:
+        planet = Planet(planet_id, f"{planet_id}.png", display_name, float(len(self.planets) + 1))
+        self.planets.insert(0, planet)
         return planet
 
-    def latest(self):
-        return self.saved[-1] if self.saved else None
+    def save_designed_with_manifest(
+        self,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+        drawing_manifest: dict,
+        ring_color: str,
+        crater_color: str,
+        mountain_color: str,
+        body_color: str | None = None,
+    ) -> Planet:
+        planet = Planet(
+            id=planet_id,
+            filename=f"{planet_id}.png",
+            display_name=display_name,
+            created_at=float(len(self.planets) + 1),
+            style=style,
+            companions=companions,
+            ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
+            body_color=body_color,
+            has_drawing_manifest=True,
+        )
+        self.saved_images.append(image_bytes)
+        self.saved_manifests.append(drawing_manifest)
+        self.planets.insert(0, planet)
+        return planet
 
-    def recent(self, limit):
-        if limit <= 0:
-            return []
-        return list(reversed(self.saved))[:limit]
+    def latest(self) -> Planet | None:
+        return self.planets[0] if self.planets else None
 
-    def delete(self, planet_id):
-        for index, planet in enumerate(self.saved):
-            if planet.id == planet_id:
-                return self.saved.pop(index)
-        return None
+    def recent(self, limit: int) -> list[Planet]:
+        return self.planets[:limit]
 
-    def clear(self):
-        removed = list(self.saved)
-        self.saved.clear()
+    def clear(self) -> list[Planet]:
+        removed = list(self.planets)
+        self.planets.clear()
         return removed
 
-    def prune(self, keep):
+    def prune(self, keep: int) -> None:
         self.pruned_to = keep
+        del self.planets[keep:]
+
+    def delete(self, planet_id: str) -> Planet | None:
+        for index, planet in enumerate(self.planets):
+            if planet.id == planet_id:
+                return self.planets.pop(index)
+        return None
+
+    def resolve_image(self, filename: str) -> Path | None:
+        return Path(filename)
 
 
-class FakeEventPublisher:
+class FakePublisher(EventPublisher):
     def __init__(self):
-        self.published: list[ApplicationEvent] = []
+        self.events = []
 
-    def publish(self, event: ApplicationEvent):
-        self.published.append(event)
+    def publish(self, event) -> None:
+        self.events.append(event)
+
+    @asynccontextmanager
+    async def subscribe(self):
+        yield None
 
 
-class AllowAllRateLimiter:
-    """Records calls so we can assert *when* the cooldown is consumed."""
-
+class FakeLimiter(RateLimiter):
     def __init__(self):
         self.checked: list[str] = []
         self.recorded: list[str] = []
+        self.error: Exception | None = None
 
-    def check(self, key):
+    def check(self, key: str) -> None:
         self.checked.append(key)
+        if self.error:
+            raise self.error
 
-    def record(self, key):
+    def record(self, key: str) -> None:
         self.recorded.append(key)
 
 
-class DenyAllRateLimiter:
+class FakeImageProcessor(ImageProcessor):
     def __init__(self):
-        self.recorded: list[str] = []
+        self.calls = []
 
-    def check(self, key):
-        raise RateLimitedError("Please wait a few seconds.")
-
-    def record(self, key):
-        self.recorded.append(key)
-
-
-class FakeSurfaceStyler:
-    """Records what it was handed, so ordering against the processor is testable."""
-
-    def __init__(self, marker: bytes = b"styled"):
-        self.received: list[bytes] = []
-        self._marker = marker
-
-    def style(self, png_bytes):
-        self.received.append(png_bytes)
-        return self._marker
-
-
-class FakeImageProcessor:
-    """Stands in for Pillow: records calls, returns normalised bytes."""
-
-    def __init__(self, fail=False):
-        self.fail = fail
-        self.calls = 0
-
-    def normalize_to_png(self, content, max_dimension, target_size):
-        self.calls += 1
-        if self.fail:
-            raise ImageValidationError("Invalid or corrupted image.")
-        return b"normalised-png"
+    def normalize_to_png(self, image_bytes: bytes, max_dimension: int, target_size: int) -> bytes:
+        self.calls.append((image_bytes, max_dimension, target_size))
+        return NORMALIZED
 
 
 @pytest.fixture
-def deps():
-    return {
-        "repository": FakePlanetRepository(),
-        "publisher": FakeEventPublisher(),
-        "rate_limiter": AllowAllRateLimiter(),
-        "image_processor": FakeImageProcessor(),
-        "surface_styler": FakeSurfaceStyler(),
+def repository():
+    return FakeRepository()
+
+
+@pytest.fixture
+def publisher():
+    return FakePublisher()
+
+
+@pytest.fixture
+def limiter():
+    return FakeLimiter()
+
+
+@pytest.fixture
+def image_processor():
+    return FakeImageProcessor()
+
+
+@pytest.fixture
+def submit(repository, publisher, limiter, image_processor):
+    return SubmitPlanetUseCase(
+        repository=repository,
+        publisher=publisher,
+        rate_limiter=limiter,
+        image_processor=image_processor,
+        retention=3,
+    )
+
+
+def execute(submit, **overrides):
+    arguments = {
+        "image_bytes": PNG,
+        "content_type": "image/png",
+        "raw_name": "  My Planet  ",
+        "client_key": "tablet-1",
+        "drawing_manifest_bytes": manifest_bytes(),
     }
+    arguments.update(overrides)
+    return submit.execute(**arguments)
 
 
-def build(deps, **overrides):
-    return SubmitPlanetUseCase(**{**deps, **overrides})
+class TestSubmitPlanetUseCase:
+    def test_manifest_is_required_inside_application_layer(self, submit, limiter, repository):
+        with pytest.raises(ValidationError, match="manifest is required"):
+            execute(submit, drawing_manifest_bytes=None)
+        assert limiter.checked == ["tablet-1"]
+        assert limiter.recorded == []
+        assert repository.planets == []
 
+    def test_valid_manifest_is_the_only_persistence_path(
+        self, submit, repository, publisher, limiter, image_processor
+    ):
+        planet = execute(submit)
 
-class TestSubmitPlanet:
-    def test_stores_the_planet(self, deps):
-        result = build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Sparkle World",
-            client_key="10.0.0.1",
+        assert planet.display_name == "My Planet"
+        assert planet.body_color == "#ffffff"
+        assert planet.has_drawing_manifest is True
+        assert planet.drawing_manifest_url is not None
+        assert repository.saved_images == [NORMALIZED]
+        assert repository.saved_manifests[0]["background_color"] == "#ffffff"
+        assert [stroke["color"] for stroke in repository.saved_manifests[0]["strokes"]] == [
+            "#7b1fa2",
+            "#43a047",
+        ]
+        assert repository.pruned_to == 3
+        assert limiter.recorded == ["tablet-1"]
+        assert image_processor.calls == [(PNG, 2048, 1024)]
+        assert isinstance(publisher.events[-1], PlanetCreated)
+        assert publisher.events[-1].planet == planet
+
+    def test_manifest_background_becomes_body_color(self, submit):
+        planet = execute(submit, drawing_manifest_bytes=manifest_bytes("#112233"))
+        assert planet.body_color == "#112233"
+
+    def test_explicit_body_color_must_match_manifest(self, submit, limiter):
+        with pytest.raises(ValidationError, match="background does not match"):
+            execute(
+                submit,
+                raw_body_color="#ffffff",
+                drawing_manifest_bytes=manifest_bytes("#112233"),
+            )
+        assert limiter.recorded == []
+
+    def test_style_companions_and_feature_colors_are_forwarded(self, submit):
+        planet = execute(
+            submit,
+            raw_style="ringed",
+            raw_companions="astronaut,moon",
+            raw_ring_color="#123456",
+            raw_crater_color="#234567",
+            raw_mountain_color="#345678",
         )
-        assert len(deps["repository"].saved) == 1
-        assert result.display_name == "Sparkle World"
+        assert planet.style == "ringed"
+        assert planet.companions == ("astronaut", "moon")
+        assert planet.ring_color == "#123456"
+        assert planet.crater_color == "#234567"
+        assert planet.mountain_color == "#345678"
 
-    def test_publishes_so_the_projector_updates_without_polling(self, deps):
-        build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Pushed World",
-            client_key="10.0.0.1",
+    def test_invalid_manifest_is_rejected_before_image_processing(
+        self, submit, image_processor, limiter
+    ):
+        with pytest.raises(ValidationError):
+            execute(submit, drawing_manifest_bytes=b"not-json")
+        assert image_processor.calls == []
+        assert limiter.recorded == []
+
+    def test_invalid_content_type_is_rejected_before_processing(self, submit, image_processor):
+        with pytest.raises(ValidationError):
+            execute(submit, content_type="text/plain")
+        assert image_processor.calls == []
+
+    def test_empty_input_is_rejected(self, submit, image_processor):
+        with pytest.raises(ValidationError):
+            execute(submit, image_bytes=b"")
+        assert image_processor.calls == []
+
+    def test_size_limit_is_enforced(self, submit, image_processor):
+        oversized = b"\x89PNG\r\n\x1a\n" + b"x" * 100
+        with pytest.raises(ValidationError):
+            execute(submit, image_bytes=oversized, max_size=16)
+        assert image_processor.calls == []
+
+    def test_successful_upload_records_cooldown_only_after_save(self, submit, limiter):
+        execute(submit)
+        assert limiter.checked == ["tablet-1"]
+        assert limiter.recorded == ["tablet-1"]
+
+
+class TestReadUseCases:
+    def test_current_planet_is_empty_for_empty_repository(self, repository):
+        assert GetCurrentPlanetUseCase(repository).execute() == NO_PLANET_PAYLOAD
+
+    def test_current_planet_returns_manifest_url(self, repository):
+        planet = repository.save_designed_with_manifest(
+            "abc",
+            "Planet",
+            NORMALIZED,
+            "classic",
+            (),
+            json.loads(manifest_bytes()),
+            "#d6b06f",
+            "#73808f",
+            "#d98242",
+            "#ffffff",
         )
-        assert len(deps["publisher"].published) == 1
-        event = deps["publisher"].published[0]
-        assert isinstance(event, PlanetCreated)
-        assert event.planet.display_name == "Pushed World"
+        payload = GetCurrentPlanetUseCase(repository).execute()
+        assert payload["id"] == planet.id
+        assert payload["drawing_manifest_url"].endswith(".drawing.json")
 
-    def test_prunes_after_storing(self, deps):
-        build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="X",
-            client_key="10.0.0.1",
-        )
-        assert deps["repository"].pruned_to is not None
+    def test_get_by_id_finds_retained_planet(self, repository):
+        first = repository.save("one", "One", NORMALIZED)
+        repository.save("two", "Two", NORMALIZED)
+        assert GetPlanetByIdUseCase(repository).execute(first.id) == first
 
-    def test_blank_name_gets_the_default(self, deps):
-        result = build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="   ",
-            client_key="10.0.0.1",
-        )
-        assert result.display_name == "My Planet"
-
-    def test_rate_limited_request_is_rejected_before_any_work(self, deps):
-        use_case = build(deps, rate_limiter=DenyAllRateLimiter())
-        with pytest.raises(RateLimitedError):
-            use_case.execute(
-                image_bytes=PNG_BYTES,
-                content_type="image/png",
-                raw_name="Blocked",
-                client_key="10.0.0.1",
-            )
-        # Nothing stored, nothing published, no image work done.
-        assert deps["repository"].saved == []
-        assert deps["publisher"].published == []
-        assert deps["image_processor"].calls == 0
-
-    def test_cooldown_is_consumed_only_after_a_successful_upload(self, deps):
-        build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Good",
-            client_key="10.0.0.1",
-        )
-        assert deps["rate_limiter"].checked == ["10.0.0.1"]
-        assert deps["rate_limiter"].recorded == ["10.0.0.1"]
-
-    def test_rejected_upload_does_not_consume_the_cooldown(self, deps):
-        """
-        A corrupt or oversized drawing must not make the child wait: nothing was
-        stored, so the cooldown should not start.
-        """
-        with pytest.raises(ImageValidationError):
-            build(deps).execute(
-                image_bytes=b"not an image at all",
-                content_type="image/png",
-                raw_name="Bad",
-                client_key="10.0.0.1",
-            )
-        assert deps["rate_limiter"].checked == ["10.0.0.1"]
-        assert deps["rate_limiter"].recorded == []
-
-    def test_processing_failure_does_not_consume_the_cooldown(self, deps):
-        use_case = build(deps, image_processor=FakeImageProcessor(fail=True))
-        with pytest.raises(ImageValidationError):
-            use_case.execute(
-                image_bytes=PNG_BYTES,
-                content_type="image/png",
-                raw_name="Corrupt",
-                client_key="10.0.0.1",
-            )
-        assert deps["rate_limiter"].recorded == []
-
-    def test_bad_content_type_is_rejected(self, deps):
-        with pytest.raises(ImageValidationError):
-            build(deps).execute(
-                image_bytes=PNG_BYTES,
-                content_type="text/plain",
-                raw_name="Bad",
-                client_key="10.0.0.1",
-            )
-        assert deps["repository"].saved == []
-
-    def test_content_not_matching_magic_bytes_is_rejected(self, deps):
-        with pytest.raises(ImageValidationError):
-            build(deps).execute(
-                image_bytes=b"totally not an image",
-                content_type="image/png",
-                raw_name="Bad",
-                client_key="10.0.0.1",
-            )
-        assert deps["repository"].saved == []
-
-    def test_empty_upload_is_rejected(self, deps):
-        with pytest.raises(ImageValidationError):
-            build(deps).execute(
-                image_bytes=b"",
-                content_type="image/png",
-                raw_name="Empty",
-                client_key="10.0.0.1",
-            )
-
-    def test_oversized_upload_is_rejected(self, deps):
-        use_case = build(deps)
-        with pytest.raises(ImageValidationError):
-            use_case.execute(
-                image_bytes=b"\x89PNG\r\n\x1a\n" + b"x" * 10_000,
-                content_type="image/png",
-                raw_name="Huge",
-                client_key="10.0.0.1",
-                max_size=100,
-            )
-        assert deps["repository"].saved == []
-
-    def test_processing_failure_does_not_publish(self, deps):
-        use_case = build(deps, image_processor=FakeImageProcessor(fail=True))
-        with pytest.raises(ImageValidationError):
-            use_case.execute(
-                image_bytes=PNG_BYTES,
-                content_type="image/png",
-                raw_name="Corrupt",
-                client_key="10.0.0.1",
-            )
-        assert deps["publisher"].published == []
-
-    def test_the_raw_upload_is_never_what_gets_stored(self, deps):
-        """
-        Re-encoding is what strips hostile metadata, so the bytes reaching disk
-        must have been through it - and now out the far side of styling too.
-        What matters is that nothing the client sent is written verbatim.
-        """
-        captured = {}
-
-        class CapturingRepo(FakePlanetRepository):
-            def save(self, planet_id, display_name, image_bytes):
-                captured["bytes"] = image_bytes
-                return super().save(planet_id, display_name, image_bytes)
-
-        use_case = build(deps, repository=CapturingRepo())
-        use_case.execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Clean",
-            client_key="10.0.0.1",
-        )
-        assert captured["bytes"] != PNG_BYTES
-        assert deps["image_processor"].calls == 1
-        assert deps["surface_styler"].received == [b"normalised-png"]
-
-
-class TestGetCurrentPlanet:
-    def test_returns_no_planet_when_empty(self):
-        repo = FakePlanetRepository()
-        assert GetCurrentPlanetUseCase(repo).execute() == NO_PLANET_PAYLOAD
-
-    def test_returns_latest_planet_payload(self):
-        repo = FakePlanetRepository()
-        repo.save("id1", "First", b"x")
-        repo.save("id2", "Second", b"x")
-        payload = GetCurrentPlanetUseCase(repo).execute()
-        assert payload["has_planet"] is True
-        assert payload["name"] == "Second"
-
-
-class TestListRecentPlanets:
-    """
-    Feeds the projector's gallery. Every drawing gets its own planet now, so
-    the projector needs the whole set on load - not just the newest - or a
-    refresh would empty the sky.
-    """
-
-    def test_returns_nothing_when_no_planet_has_been_drawn(self):
-        result = ListRecentPlanetsUseCase(FakePlanetRepository()).execute(limit=12)
-        assert result == {"planets": []}
-
-    def test_returns_payloads_newest_first(self):
-        repo = FakePlanetRepository()
-        repo.save("id1", "First", b"x")
-        repo.save("id2", "Second", b"x")
-
-        result = ListRecentPlanetsUseCase(repo).execute(limit=12)
-
-        assert [p["name"] for p in result["planets"]] == ["Second", "First"]
-        assert all(p["has_planet"] is True for p in result["planets"])
-
-    def test_uses_the_same_payload_shape_as_the_single_planet_endpoint(self):
-        """One wire format, so the projector has one code path for both."""
-        repo = FakePlanetRepository()
-        planet = repo.save("id1", "Only", b"x")
-
-        result = ListRecentPlanetsUseCase(repo).execute(limit=12)
-
-        assert result["planets"] == [planet.to_payload()]
-
-    def test_clamps_the_limit_to_the_configured_maximum(self):
-        """A projector asking for 10000 must not be able to walk the whole store."""
-        repo = FakePlanetRepository()
-        for i in range(20):
-            repo.save(f"id{i}", f"Planet {i}", b"x")
-
-        result = ListRecentPlanetsUseCase(repo, max_limit=12).execute(limit=10_000)
-
-        assert len(result["planets"]) == 12
-
-    def test_a_non_positive_limit_yields_nothing(self):
-        repo = FakePlanetRepository()
-        repo.save("id1", "First", b"x")
-        assert ListRecentPlanetsUseCase(repo).execute(limit=0) == {"planets": []}
-
-    def test_default_limit_is_applied_when_none_is_requested(self):
-        repo = FakePlanetRepository()
-        for i in range(20):
-            repo.save(f"id{i}", f"Planet {i}", b"x")
-
-        result = ListRecentPlanetsUseCase(repo, max_limit=5).execute(limit=None)
-
-        assert len(result["planets"]) == 5
-
-
-class TestDeletePlanet:
-    """
-    A volunteer taking a drawing down mid-event. The use case owns two things
-    the HTTP layer cannot: that nothing is announced when nothing was removed,
-    and that the announcement rides the application event bus.
-    """
-
-    def test_removes_the_planet_and_returns_it(self):
-        repo = FakePlanetRepository()
-        repo.save("keep1", "Keep", b"x")
-        doomed = repo.save("drop1", "Drop", b"x")
-        publisher = FakeEventPublisher()
-
-        removed = DeletePlanetUseCase(repo, publisher).execute("drop1")
-
-        assert removed == doomed
-        assert [p.id for p in repo.saved] == ["keep1"]
-
-    def test_announces_the_removal_as_a_typed_event(self):
-        repo = FakePlanetRepository()
-        repo.save("gone1", "Gone", b"x")
-        publisher = FakeEventPublisher()
-
-        DeletePlanetUseCase(repo, publisher).execute("gone1")
-
-        assert publisher.published == [PlanetRemoved("gone1")]
-
-    def test_an_unknown_id_raises_rather_than_pretending_to_succeed(self):
-        repo = FakePlanetRepository()
-        repo.save("real1", "Real", b"x")
-        publisher = FakeEventPublisher()
-
+    def test_get_by_id_raises_for_missing_planet(self, repository):
         with pytest.raises(NotFoundError):
-            DeletePlanetUseCase(repo, publisher).execute("ghost")
+            GetPlanetByIdUseCase(repository).execute("missing")
 
-        assert [p.id for p in repo.saved] == ["real1"]
+    def test_recent_planets_are_limited(self, repository):
+        for index in range(5):
+            repository.save(str(index), f"Planet {index}", NORMALIZED)
+        payload = ListRecentPlanetsUseCase(repository, max_limit=3).execute(limit=99)
+        assert len(payload["planets"]) == 3
+        assert [item["name"] for item in payload["planets"]] == [
+            "Planet 4",
+            "Planet 3",
+            "Planet 2",
+        ]
 
-    def test_a_failed_delete_announces_nothing(self):
-        """
-        Order matters: publish only after the store confirms. Announcing a
-        removal that did not happen would clear the planet from every
-        projector while the file is still on disk, and nothing would ever put
-        it back.
-        """
-        repo = FakePlanetRepository()
-        publisher = FakeEventPublisher()
 
+class TestMutationUseCases:
+    def test_delete_publishes_typed_event(self, repository, publisher):
+        planet = repository.save("abc", "Planet", NORMALIZED)
+        deleted = DeletePlanetUseCase(repository, publisher).execute(planet.id)
+        assert deleted == planet
+        assert publisher.events == [PlanetRemoved(planet.id)]
+
+    def test_delete_unknown_raises_not_found(self, repository, publisher):
         with pytest.raises(NotFoundError):
-            DeletePlanetUseCase(repo, publisher).execute("never-existed")
+            DeletePlanetUseCase(repository, publisher).execute("missing")
+        assert publisher.events == []
 
-        assert publisher.published == []
-
-    def test_deleting_the_same_planet_twice_raises_the_second_time(self):
-        repo = FakePlanetRepository()
-        repo.save("once1", "Once", b"x")
-        publisher = FakeEventPublisher()
-        use_case = DeletePlanetUseCase(repo, publisher)
-
-        use_case.execute("once1")
-
-        with pytest.raises(NotFoundError):
-            use_case.execute("once1")
-        assert len(publisher.published) == 1
-
-    def test_the_deleted_planet_leaves_the_gallery_listing(self):
-        repo = FakePlanetRepository()
-        repo.save("a", "Alpha", b"x")
-        repo.save("b", "Beta", b"x")
-
-        DeletePlanetUseCase(repo, FakeEventPublisher()).execute("a")
-
-        listing = ListRecentPlanetsUseCase(repo).execute(limit=12)
-        assert [p["name"] for p in listing["planets"]] == ["Beta"]
-
-
-class TestSurfaceStyling:
-    """
-    The drawing is marker on white paper; a planet is not. Styling turns one
-    into the other, and *where* it sits in the pipeline is the part worth
-    pinning down.
-    """
-
-    def test_the_stored_bytes_are_the_styled_ones(self, deps):
-        build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Pretty",
-            client_key="10.0.0.1",
-        )
-        assert deps["repository"].saved  # sanity
-        assert deps["surface_styler"].received == [b"normalised-png"]
-
-    def test_styling_happens_after_the_security_re_encode_never_before(self, deps):
-        """
-        The styler must only ever see bytes the image processor has already
-        vouched for. Handing it the raw upload would mean running a decode and
-        a dozen filters over whatever a client chose to send.
-        """
-        build(deps).execute(
-            image_bytes=PNG_BYTES,
-            content_type="image/png",
-            raw_name="Safe",
-            client_key="10.0.0.1",
-        )
-        assert deps["surface_styler"].received == [b"normalised-png"]
-        assert PNG_BYTES not in deps["surface_styler"].received
-
-    def test_a_rejected_upload_is_never_styled(self, deps):
-        with pytest.raises(ImageValidationError):
-            build(deps).execute(
-                image_bytes=b"not an image at all",
-                content_type="image/png",
-                raw_name="Bad",
-                client_key="10.0.0.1",
-            )
-        assert deps["surface_styler"].received == []
-
-
-class TestClearPlanets:
-    def test_removes_everything_and_reports_how_many(self):
-        repo = FakePlanetRepository()
-        for i in range(4):
-            repo.save(f"id{i}", f"Planet {i}", b"x")
-        publisher = FakeEventPublisher()
-
-        removed = ClearPlanetsUseCase(repo, publisher).execute()
-
-        assert removed == 4
-        assert repo.saved == []
-
-    def test_announces_one_event_not_one_per_planet(self):
-        """One GalaxyCleared event empties the projector in a frame."""
-        repo = FakePlanetRepository()
-        for i in range(10):
-            repo.save(f"id{i}", f"Planet {i}", b"x")
-        publisher = FakeEventPublisher()
-
-        ClearPlanetsUseCase(repo, publisher).execute()
-
-        assert publisher.published == [GalaxyCleared()]
-
-    def test_announces_even_when_the_store_was_already_empty(self):
-        """
-        A projector that has drifted out of step - a missed removal, a tab left
-        open since yesterday - is put right by this. A clear event that visibly
-        does nothing is worse than one that does.
-        """
-        publisher = FakeEventPublisher()
-
-        removed = ClearPlanetsUseCase(FakePlanetRepository(), publisher).execute()
-
-        assert removed == 0
-        assert publisher.published == [GalaxyCleared()]
-
-    def test_the_gallery_is_empty_afterwards(self):
-        repo = FakePlanetRepository()
-        repo.save("a", "Alpha", b"x")
-        repo.save("b", "Beta", b"x")
-
-        ClearPlanetsUseCase(repo, FakeEventPublisher()).execute()
-
-        assert ListRecentPlanetsUseCase(repo).execute(limit=12) == {"planets": []}
+    def test_clear_returns_count_and_publishes_once(self, repository, publisher):
+        repository.save("one", "One", NORMALIZED)
+        repository.save("two", "Two", NORMALIZED)
+        removed = ClearPlanetsUseCase(repository, publisher).execute()
+        assert removed == 2
+        assert repository.planets == []
+        assert len(publisher.events) == 1
+        assert isinstance(publisher.events[0], GalaxyCleared)
