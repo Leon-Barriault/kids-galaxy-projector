@@ -1,7 +1,6 @@
 package com.kidsgalaxy.manager.data
 
 import android.content.Context
-import kotlinx.coroutines.delay
 
 class PlanetExportHttpException(
     val statusCode: Int,
@@ -19,9 +18,6 @@ class PlanetExportClient(
 ) {
     companion object {
         private const val EXPORT_READ_TIMEOUT_SECONDS = 60L
-        private const val WEBGL_NOT_READY_STATUS = 409
-        private const val WEBGL_READY_ATTEMPTS = 40
-        private const val WEBGL_READY_RETRY_MS = 250L
         private val PDF_SIGNATURE = "%PDF".encodeToByteArray()
     }
 
@@ -32,18 +28,19 @@ class PlanetExportClient(
             readTimeoutSeconds = EXPORT_READ_TIMEOUT_SECONDS,
         )
 
+    /**
+     * The galaxy server always has a sheet to give us now, so this asks once.
+     *
+     * It used to poll for a 409 to clear - forty attempts, 250 ms apart. When
+     * the projector browser was not going to publish a render for this planet
+     * (nobody has the projector open, or it is past the twelfth planet the
+     * projector holds while we list thirty) the 409 never cleared, so tapping
+     * Print froze the app for ten seconds and then showed "HTTP 409". Waiting
+     * longer was never going to help; the server now answers with its own
+     * render instead, and says which one it sent in X-Kids-Galaxy-Render-Source.
+     */
     suspend fun printPdf(planetId: String): ByteArray {
-        var response = api.printPdf(planetId)
-        var attempt = 1
-        while (
-            response.code() == WEBGL_NOT_READY_STATUS &&
-            attempt < WEBGL_READY_ATTEMPTS
-        ) {
-            response.errorBody()?.close()
-            delay(WEBGL_READY_RETRY_MS)
-            attempt += 1
-            response = api.printPdf(planetId)
-        }
+        val response = api.printPdf(planetId)
 
         if (!response.isSuccessful) {
             throw PlanetExportHttpException(response.code(), "Print")

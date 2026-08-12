@@ -131,14 +131,6 @@ def build_router(
             raise HTTPException(status_code=404, detail="Planet drawing not found")
         return planet, image_path
 
-    def require_projector_snapshot(planet) -> None:
-        if export_renderer.has_projector_snapshot(planet):
-            return
-        raise HTTPException(
-            status_code=409,
-            detail="Projector WebGL render is not ready yet",
-        )
-
     @router.get("/", response_class=HTMLResponse, dependencies=[Depends(projector_only)])
     async def galaxy_page():
         index_path = settings.static_dir / "index.html"
@@ -223,7 +215,7 @@ def build_router(
     )
     async def print_planet_png(planet_id: str):
         planet, image_path = export_target(planet_id)
-        require_projector_snapshot(planet)
+        source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
         content = await run_in_threadpool(
             export_renderer.render_print_sheet, planet, image_path
         )
@@ -232,7 +224,7 @@ def build_router(
             media_type="image/png",
             headers={
                 "Content-Disposition": f'inline; filename="{planet.id}_planet_print.png"',
-                "X-Kids-Galaxy-Render-Source": "webgl",
+                "X-Kids-Galaxy-Render-Source": source,
             },
         )
 
@@ -242,7 +234,7 @@ def build_router(
     )
     async def print_planet_pdf(planet_id: str):
         planet, image_path = export_target(planet_id)
-        require_projector_snapshot(planet)
+        source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
         content = await run_in_threadpool(
             export_renderer.render_print_pdf, planet, image_path
         )
@@ -251,7 +243,7 @@ def build_router(
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f'inline; filename="{planet.id}_planet_print.pdf"',
-                "X-Kids-Galaxy-Render-Source": "webgl",
+                "X-Kids-Galaxy-Render-Source": source,
             },
         )
 

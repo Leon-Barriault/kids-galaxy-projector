@@ -72,11 +72,35 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         return super().render_preview(planet, image_path)
 
     def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
-        hero = self._projector_snapshot(planet)
-        if hero is None:
-            raise RuntimeError("Projector WebGL render is not ready")
+        """
+        Compose the print sheet, preferring the projector's own WebGL frame.
 
+        This used to raise when no snapshot existed, which the API turned into a
+        permanent 409. That made printing depend on the projector browser having
+        loaded *this* planet since it last started, and there are ordinary ways
+        for that never to happen: nobody has the projector page open; the
+        projector holds twelve planets while the manager lists thirty, so
+        everything past the twelfth can never be snapshotted; or the manager
+        prints in the second between upload and the projector's capture.
+
+        A parent printing their child's planet should never be told "409". So
+        the server-side render - already trusted enough to be the preview
+        fallback - is the fallback here too, and the sheet says which one the
+        reader is holding rather than quietly passing off an approximation as
+        the real render.
+        """
         source = Image.open(image_path).convert("RGB")
+        hero = self._projector_snapshot(planet)
+        if hero is not None:
+            heading = "Projector WebGL render"
+            provenance = "projector WebGL"
+            footer = "Kids Galaxy Projector · captured from the live Three.js planet renderer"
+        else:
+            hero = self._render_projector_mapped_sphere(source, planet)
+            heading = "Planet preview"
+            provenance = "server render"
+            footer = "Kids Galaxy Projector · rendered by the galaxy server"
+
         drawing = source.copy()
         drawing.thumbnail((620, 620), Image.Resampling.LANCZOS)
         hero.thumbnail((700, 700), Image.Resampling.LANCZOS)
@@ -86,7 +110,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         font = self._font(32)
         label_font = self._font(22)
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
-        draw.text((70, 92), "Projector WebGL render", fill="#4b5563", font=label_font)
+        draw.text((70, 92), heading, fill="#4b5563", font=label_font)
         draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
 
         hero_x = 60 + (700 - hero.width) // 2
@@ -101,17 +125,12 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             (70, 870),
             (
                 f"Style: {planet.style}   Planet ID: {planet.id}   "
-                "Visual source: projector WebGL"
+                f"Visual source: {provenance}"
             ),
             fill="#6b7280",
             font=label_font,
         )
-        draw.text(
-            (70, 915),
-            "Kids Galaxy Projector · captured from the live Three.js planet renderer",
-            fill="#9ca3af",
-            font=label_font,
-        )
+        draw.text((70, 915), footer, fill="#9ca3af", font=label_font)
 
         output = io.BytesIO()
         canvas.save(output, format="PNG", compress_level=4)

@@ -122,12 +122,8 @@ def test_planet_exports_are_manager_only(tmp_path, make_png_bytes):
         assert client.get(url, headers=headers("kid")).status_code == 403, url
         assert client.get(url, headers=headers("projector")).status_code == 403, url
 
-    # A manager still gets through. print/pdf answer 409 until the projector
-    # publishes its WebGL frame, which is an authorized answer, not a refusal.
-    assert client.get(exports[0], headers=headers("manager")).status_code == 200
-    assert client.get(exports[3], headers=headers("manager")).status_code == 200
-    for url in exports[1:3]:
-        assert client.get(url, headers=headers("manager")).status_code == 409, url
+    for url in exports:
+        assert client.get(url, headers=headers("manager")).status_code == 200, url
 
 
 def test_unverified_forwarded_role_is_rejected(tmp_path):

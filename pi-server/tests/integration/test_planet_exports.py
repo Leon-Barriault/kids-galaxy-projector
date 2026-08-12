@@ -87,14 +87,25 @@ def test_server_preview_falls_back_until_projector_snapshot_arrives(client):
     assert authoritative.content == snapshot
 
 
-def test_print_waits_for_projector_webgl_snapshot(client, upload_planet):
+def test_print_upgrades_to_webgl_but_never_dead_ends(client, upload_planet):
+    """
+    Printing used to answer 409 until the projector browser published a WebGL
+    frame for this exact planet. Three ordinary situations make that never
+    happen: nobody has the projector page open, the planet sits past the
+    twelfth in the projector's gallery while the manager lists thirty, or the
+    parent prints in the second between upload and capture. A parent printing
+    their child's planet must not be told "409" in any of them.
+    """
     planet = upload_planet(name="Print Me")
     url = f"/api/admin/planets/{planet['planet_id']}/print.png"
 
-    not_ready = client.get(url)
+    before = client.get(url)
 
-    assert not_ready.status_code == 409
-    assert "WebGL render is not ready" in not_ready.json()["detail"]
+    assert before.status_code == 200
+    assert before.headers["content-type"] == "image/png"
+    assert before.headers["x-kids-galaxy-render-source"] == "fallback"
+    assert before.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(before.content) > 1_000
 
     _store_projector_snapshot(client, planet["planet_id"])
     response = client.get(url)
@@ -104,6 +115,39 @@ def test_print_waits_for_projector_webgl_snapshot(client, upload_planet):
     assert response.headers["x-kids-galaxy-render-source"] == "webgl"
     assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
     assert len(response.content) > 1_000
+    # The authoritative render is a different picture, not the same fallback
+    # relabelled - otherwise the header would be the only thing that changed.
+    assert response.content != before.content
+
+
+def test_fallback_print_sheet_says_which_render_it_is(client, upload_planet):
+    """
+    The two sheets must be tellable apart on paper. Handing someone an
+    approximation captioned as the projector's own render is worse than
+    handing them the approximation.
+    """
+    planet = upload_planet(name="Honest Sheet")
+    url = f"/api/admin/planets/{planet['planet_id']}/print.png"
+
+    fallback = Image.open(io.BytesIO(client.get(url).content)).convert("RGB")
+    _store_projector_snapshot(client, planet["planet_id"])
+    authoritative = Image.open(io.BytesIO(client.get(url).content)).convert("RGB")
+
+    # The provenance line sits under the hero at y=870. Different text means
+    # different ink in that band; identical text would mean a silent swap.
+    band = (70, 860, 900, 900)
+    assert list(fallback.crop(band).getdata()) != list(authoritative.crop(band).getdata())
+
+
+def test_print_pdf_also_falls_back_rather_than_failing(client, upload_planet):
+    planet = upload_planet(name="PDF Fallback")
+
+    response = client.get(f"/api/admin/planets/{planet['planet_id']}/print.pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["x-kids-galaxy-render-source"] == "fallback"
+    assert response.content.startswith(b"%PDF")
 
 
 def test_ringed_print_preserves_projector_render_including_ring(client):
