@@ -35,8 +35,8 @@ android {
         applicationId = "com.kidsgalaxy.manager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.1.3"
+        versionCode = 6
+        versionName = "1.1.4"
 
         buildConfigField("String", "CLIENT_CERT_PASSWORD", "\"$certPassword\"")
     }
