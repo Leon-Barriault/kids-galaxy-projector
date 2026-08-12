@@ -5,14 +5,49 @@ State as of the last commit on this branch. Written so a session started fresh
 
 ## Where things stand
 
-`origin/main` is at `4334373`. Four commits after it exist locally but are not
-pushed, because the session that wrote them had read-only access to the repo
-through its git proxy: `940ba59`, `67e3b4b`, `8113a30`, `5d50814`. The files are
-on disk in `C:\CodeRepo\kids-galaxy-projector`. Push them before doing anything
-else, then confirm CI is green — that is the only outstanding mechanical step.
+`origin/main`, local `main` and `HEAD` are all at `e3c69fb`. Nothing is waiting
+to be pushed. The four unpushed commits that the previous version of this file
+described are gone: they were reworked before being pushed, so `940ba59`,
+`67e3b4b`, `8113a30` and `5d50814` no longer exist. What sits after `4334373` is
+three commits — `3cba327`, `ec7e612`, `e3c69fb`.
 
-Everything below passes at that commit: five projector acceptance scripts, 391
-Python tests, ruff, and the architecture boundary checks.
+CI is still unconfirmed, and it needs a look rather than an assumption: GitHub
+shows **no check runs at all against `e3c69fb`**, and the newest run on the
+Actions page is for a commit 585 back in `main`'s history. All three workflows
+trigger on `push` to `main` with no path filters, so runs should exist for every
+commit since. Actions being disabled on the repository fits that better than
+anything specific to this commit. Settle it before trusting a green tree.
+
+Everything below passes at that commit locally: five projector acceptance
+scripts, 391 Python tests, ruff, and the architecture boundary checks.
+
+## Line endings — pinned, one commit still to make
+
+The repository had no `.gitattributes`, so line-ending behaviour depended on
+whatever `core.autocrlf` each machine happened to have. Committed blobs were
+already LF throughout — the single exception, `android/gradlew.bat`, is correctly
+CRLF and is vendored by the Gradle wrapper. The risk was prospective rather than
+present: a clone made with `autocrlf` off would commit CRLF into
+`scripts/start_kiosk.sh` or `pi-server/certs/generate_certs.sh`, and those reach
+the Pi as `bad interpreter: /bin/bash^M`.
+
+`.gitattributes` now pins it: `* text=auto eol=lf`, LF forced explicitly for
+`*.sh`, `gradlew`, `Makefile` and Dockerfiles, `*.bat`/`*.cmd` frozen as
+committed so the vendored wrapper is not rewritten, and binaries marked. The 233
+working-tree files that were CRLF have been rewritten to LF byte-for-byte from
+their own committed blobs, so no committed content changed.
+
+**`.gitattributes` and this file are not committed yet:**
+
+    git add .gitattributes HANDOFF.md
+    git commit -m "chore: pin line endings with .gitattributes; docs: correct handoff state"
+
+Two notes for whoever picks this up in a cloud session with the repo on a mounted
+Windows disk. `git status` there reports every file modified and cannot be
+trusted, because git cannot write the index through the mount; `git diff
+--name-only` does the content comparison and is the honest answer. And a
+`_to_delete/` folder at the repo root holds stale `.git/index.lock` files that
+the same restriction prevented removing in place — delete it.
 
 ## The one thing that is not confirmed fixed
 
@@ -123,6 +158,9 @@ Python 3.12 is required, not 3.11 — the code uses PEP 695 `type X = ...`.
 
 ## Still open
 
+- CI. No check runs for `e3c69fb`, and none for roughly the last 585 commits
+  either. Nothing about that is specific to the projector work — check whether
+  Actions is disabled on the repository.
 - The freeze, above. Unconfirmed either way.
 - Projector hygiene, never started: polling never stops, particles are rebuilt
   every 2.5 s so snow teleports, and there is a large amount of unreachable code
