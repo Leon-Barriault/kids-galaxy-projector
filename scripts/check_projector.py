@@ -9,6 +9,7 @@ architecture; focused visual scripts own detailed appearance assertions.
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import socket
 import subprocess
@@ -36,7 +37,13 @@ def chromium_executable() -> str | None:
     cannot run the WebGL these contracts exist to check.
     """
     builds = sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome"))
-    return str(builds[-1]) if builds else None
+    if builds:
+        return str(builds[-1])
+    # Nothing pre-provisioned: any non-Linux host, or a plain `playwright install
+    # chromium`. None lets Playwright use the build it manages itself, which is
+    # correct as long as that is the full browser - `--only-shell` ships no GPU
+    # stack and cannot run the WebGL these contracts exist to check.
+    return None
 
 
 def free_port() -> int:
@@ -86,8 +93,13 @@ class Server:
         self._process: subprocess.Popen | None = None
 
     def __enter__(self) -> "Server":
+        # Inherit the real environment and override only what this server needs.
+        # Replacing it wholesale with a POSIX PATH meant these contracts could
+        # only ever run on Linux: on Windows the child interpreter cannot start
+        # without SYSTEMROOT, so the server never came up and every script
+        # failed at "server did not start" with nothing to say why.
         env = {
-            "PATH": "/usr/bin:/bin:/usr/local/bin",
+            **os.environ,
             "PYTHONPATH": str(SERVER_DIR),
             "UPLOAD_DIR": str(self.uploads),
             "STATE_DIR": str(self.state),
