@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import io
+import json
+import math
 import sys
 import time
 from pathlib import Path
 
 import httpx
-from PIL import Image
+from PIL import Image, ImageChops
 from playwright.sync_api import sync_playwright
 
 from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
@@ -70,6 +72,28 @@ def visible_ring_extent(image: Image.Image) -> tuple[int, int, int]:
     return len(coordinates), max(xs) - min(xs), max(ys) - min(ys)
 
 
+def motion_state(page, planet_id: str) -> dict:
+    return page.evaluate(
+        """
+        (id) => {
+          const kg = window.kidsGalaxy;
+          const planet = kg.kidPlanets.get(id);
+          return {
+            rotationY: planet.mesh.rotation.y,
+            position: planet.mesh.position.toArray(),
+            screenTarget: kg.renderer.getRenderTarget() === null,
+            contextLost: kg.renderer.getContext().isContextLost(),
+          };
+        }
+        """,
+        planet_id,
+    )
+
+
+def position_distance(left: list[float], right: list[float]) -> float:
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right, strict=True)))
+
+
 def main() -> int:
     failures: list[str] = []
     ARTIFACTS.mkdir(exist_ok=True)
@@ -82,6 +106,20 @@ def main() -> int:
             body_color="#2196F3",
             ring_color="#ffffff",
         )
+        # Fill the complete projector gallery before Chromium opens so all
+        # textures finish together and snapshot publication is maximally
+        # concurrent. This is the case that used to let captures save/restore
+        # each other's off-screen targets out of order.
+        extra_planets = [
+            server.upload(
+                f"Snapshot Race {index}",
+                artwork=kid_style_png_bytes(),
+                style="classic",
+                body_color="#ffffff" if index % 2 == 0 else "#2196F3",
+            )
+            for index in range(11)
+        ]
+        snapshot_ids = [planet_id, *extra_planets]
 
         # Before the projector publishes, print still has to produce something.
         # This used to be a 409, and the manager polled it for ten seconds
@@ -113,13 +151,51 @@ def main() -> int:
         page.goto(f"{server.base}/", wait_until="load")
         wait_for(
             page,
-            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)",
-            12_000,
+            "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 12",
+            15_000,
         )
         wait_for(
             page,
-            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.userData?.kidsGalaxyWebglSnapshotPublished)",
+            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)",
             12_000,
+        )
+        snapshot_ids_js = json.dumps(snapshot_ids)
+        wait_for(
+            page,
+            f"{snapshot_ids_js}.every((id) => Boolean(window.kidsGalaxy?.kidPlanets?.get(id)?.userData?.kidsGalaxyWebglSnapshotPublished))",
+            45_000,
+        )
+
+        # Snapshot completion must leave the renderer attached to the visible
+        # default framebuffer. Numerical motion alone is not enough: the bug we
+        # are guarding kept requestAnimationFrame/update running while every
+        # frame was rendered to an off-screen target, so the projector showed a
+        # still image. Capture the actual canvas twice as the user sees it.
+        motion_before = motion_state(page, planet_id)
+        canvas = page.locator("#canvas-container canvas")
+        visible_before = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
+        page.wait_for_timeout(1200)
+        motion_after = motion_state(page, planet_id)
+        visible_after = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
+        visible_difference = ImageChops.difference(visible_before, visible_after).getbbox()
+
+        check(motion_before["screenTarget"], "renderer returns to the visible framebuffer after all snapshots", failures)
+        check(motion_after["screenTarget"], "renderer stays on the visible framebuffer while animating", failures)
+        check(not motion_before["contextLost"] and not motion_after["contextLost"], "WebGL context remains healthy after all snapshots", failures)
+        check(
+            abs(motion_after["rotationY"] - motion_before["rotationY"]) > 0.001,
+            "planet rotation continues after rendered previews complete",
+            failures,
+        )
+        check(
+            position_distance(motion_before["position"], motion_after["position"]) > 0.001,
+            "planet orbit continues after rendered previews complete",
+            failures,
+        )
+        check(
+            visible_difference is not None,
+            "the visible projector canvas keeps changing after rendered previews complete",
+            failures,
         )
 
         response = wait_for_webgl_preview(server.base, planet_id)
