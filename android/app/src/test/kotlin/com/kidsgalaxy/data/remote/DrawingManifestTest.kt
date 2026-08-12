@@ -46,14 +46,17 @@ class DrawingManifestTest {
     @Test
     fun `same color authored strokes keep separate stable identities`() {
         val color = 0xFFFF8800.toInt()
-        val drawing =
-            Drawing(canvasSize = CanvasSize(500f, 500f)).addStroke(
+        var drawing = Drawing(canvasSize = CanvasSize(500f, 500f))
+        drawing =
+            drawing.addStroke(
                 StrokePath(
                     points = listOf(Point(30f, 100f), Point(470f, 110f)),
                     colorArgb = color,
                     strokeWidth = 30f,
                 ),
-            ).addStroke(
+            )
+        drawing =
+            drawing.addStroke(
                 StrokePath(
                     points = listOf(Point(40f, 250f), Point(460f, 270f)),
                     colorArgb = color,
