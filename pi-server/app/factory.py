@@ -35,28 +35,9 @@ from app.infrastructure.service_advertiser import (
     NullServiceAdvertiser,
     ZeroconfServiceAdvertiser,
 )
-from app.infrastructure.surface_styler import PillowSurfaceStyler
 from app.infrastructure.webgl_planet_export_renderer import WebglPlanetExportRenderer
 
 logger = logging.getLogger("kids-galaxy")
-
-
-def _styler_for(style: str):
-    """Return the product-safe passthrough surface styler.
-
-    Planet appearance is now interpreted by the projector from the child's raw
-    drawing. The old ``terrain``/``blend`` server styles diffused marker colours
-    until untouched paper disappeared, permanently destroying the recognizable
-    composition before Three.js could see it. Keep accepting the legacy config
-    strings so deployed environment files do not fail to boot, but never bake
-    those transformations into newly stored planets.
-    """
-    if style != "off":
-        logger.info(
-            "Ignoring legacy SURFACE_STYLE=%s; projector owns planet art direction",
-            style,
-        )
-    return PillowSurfaceStyler(enabled=False)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -70,7 +51,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cooldown_seconds=settings.rate_limit_seconds
     )
     image_processor = PillowImageProcessor()
-    surface_styler = _styler_for(settings.surface_style)
     export_renderer = WebglPlanetExportRenderer(
         settings.state_dir / "projector-snapshots"
     )
@@ -83,7 +63,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         publisher=publisher,
         rate_limiter=rate_limiter,
         image_processor=image_processor,
-        surface_styler=surface_styler,
         retention=settings.max_stored_planets,
     )
     get_current_planet = GetCurrentPlanetUseCase(repository)
@@ -140,7 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.5.0",
+        version="1.6.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )

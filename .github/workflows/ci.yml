@@ -39,7 +39,8 @@ jobs:
 
       - name: Install hadolint
         run: |
-          curl -sL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
+          curl -fsSL --retry 4 --retry-all-errors --retry-delay 2 \
+            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
             -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
 
@@ -62,7 +63,9 @@ jobs:
 
       - name: Lint Kotlin (all Android sources)
         run: |
-          curl -sL https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint -o /tmp/ktlint
+          curl -fsSL --retry 4 --retry-all-errors --retry-delay 2 \
+            https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint \
+            -o /tmp/ktlint
           chmod +x /tmp/ktlint
           cd android
           # Every module, main and test sources - no path allowlist. Shared

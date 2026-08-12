@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.api.auth import PROXY_MARKER
@@ -14,8 +16,6 @@ def secure_client(tmp_path) -> TestClient:
             static_dir=tmp_path / "static",
             rate_limit_seconds=0.0,
             authorization_enabled=True,
-            # Starlette TestClient identifies itself this way. Production uses
-            # only loopback addresses for the trusted reverse proxy.
             trusted_role_proxy_hosts=("testclient",),
         )
     )
@@ -30,6 +30,41 @@ def headers(role: str) -> dict[str, str]:
     }
 
 
+def manifest_file(background: str = "#ff0000"):
+    content = json.dumps(
+        {
+            "version": 1,
+            "coordinate_space": "normalized-canvas-v1",
+            "canvas": {"width": 64, "height": 64},
+            "background_color": background,
+            "background_explicit": True,
+            "strokes": [
+                {
+                    "order": 0,
+                    "color": "#7b1fa2",
+                    "width_px": 8,
+                    "width_normalized": 0.125,
+                    "points": [[0.1, 0.2], [0.5, 0.18], [0.9, 0.2]],
+                }
+            ],
+            "raster": {
+                "background_fill": "solid",
+                "stroke_cap": "round",
+                "stroke_join": "round",
+                "stroke_order": "oldest-to-newest",
+            },
+        }
+    ).encode()
+    return ("drawing-manifest.json", content, "application/json")
+
+
+def upload_files(png: bytes):
+    return {
+        "file": ("planet.png", png, "image/png"),
+        "manifest": manifest_file(),
+    }
+
+
 def test_discovery_identity_remains_public_in_secure_mode(tmp_path):
     client = secure_client(tmp_path)
     assert client.get("/api/galaxy").status_code == 200
@@ -41,7 +76,7 @@ def test_kid_can_upload_but_cannot_delete(tmp_path, make_png_bytes):
     upload = client.post(
         "/api/upload",
         headers=headers("kid"),
-        files={"file": ("planet.png", make_png_bytes(), "image/png")},
+        files=upload_files(make_png_bytes()),
         data={"name": "Kid World"},
     )
     assert upload.status_code == 200
@@ -59,7 +94,7 @@ def test_manager_can_list_and_delete_but_cannot_submit(tmp_path, make_png_bytes)
     upload = client.post(
         "/api/upload",
         headers=headers("kid"),
-        files={"file": ("planet.png", make_png_bytes(), "image/png")},
+        files=upload_files(make_png_bytes()),
         data={"name": "Managed World"},
     )
     planet_id = upload.json()["planet_id"]
@@ -77,7 +112,7 @@ def test_manager_can_list_and_delete_but_cannot_submit(tmp_path, make_png_bytes)
     forbidden_upload = client.post(
         "/api/upload",
         headers=headers("manager"),
-        files={"file": ("planet.png", make_png_bytes(), "image/png")},
+        files=upload_files(make_png_bytes()),
         data={"name": "Manager World"},
     )
     assert forbidden_upload.status_code == 403
@@ -92,20 +127,11 @@ def test_direct_trusted_client_is_read_only_projector(tmp_path):
 
 
 def test_planet_exports_are_manager_only(tmp_path, make_png_bytes):
-    """
-    The /api/admin/planets/{id}/... exports hand back a child's artwork sized
-    for print and for a 3D printer. They shipped with no `dependencies` at all,
-    so anyone who could reach the port could pull them with a guessed id while
-    every neighbouring route was locked down.
-
-    Projector clients are covered too: the projector pushes its render up, it
-    has no reason to pull print sheets back down.
-    """
     client = secure_client(tmp_path)
     upload = client.post(
         "/api/upload",
         headers=headers("kid"),
-        files={"file": ("planet.png", make_png_bytes(), "image/png")},
+        files=upload_files(make_png_bytes()),
         data={"name": "Private World"},
     )
     planet_id = upload.json()["planet_id"]
@@ -117,7 +143,6 @@ def test_planet_exports_are_manager_only(tmp_path, make_png_bytes):
     )
 
     for url in exports:
-        # No role header at all: the direct-trusted-client projector identity.
         assert client.get(url).status_code == 403, url
         assert client.get(url, headers=headers("kid")).status_code == 403, url
         assert client.get(url, headers=headers("projector")).status_code == 403, url

@@ -44,7 +44,7 @@ class PlanetRepository(ABC):
         mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
         body_color: str | None = None,
     ) -> Planet:
-        """Store richer design metadata; legacy adapters fall back to classic saves."""
+        """Store richer design metadata; simple adapters may fall back to save()."""
         return self.save(planet_id, display_name, image_bytes)
 
     def save_designed_with_manifest(
@@ -173,14 +173,6 @@ class RateLimiter(ABC):
     @abstractmethod
     def record(self, key: str) -> None:
         """Mark a successful upload, starting this client's cooldown."""
-
-
-class SurfaceStyler(ABC):
-    """Cosmetic treatment applied to a security-normalised PNG."""
-
-    @abstractmethod
-    def style(self, png_bytes: bytes) -> bytes:
-        """Apply cosmetic planet-surface treatment. Implementations must not raise."""
 
 
 class ServiceAdvertiser(ABC):

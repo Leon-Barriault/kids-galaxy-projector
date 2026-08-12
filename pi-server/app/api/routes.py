@@ -264,7 +264,7 @@ def build_router(
     async def upload_planet(
         request: Request,
         file: UploadFile = File(...),
-        manifest: UploadFile | None = File(None),
+        manifest: UploadFile = File(...),
         name: str = Form("My Planet"),
         style: str = Form("classic"),
         companions: str = Form(""),
@@ -277,11 +277,9 @@ def build_router(
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
         content = await file.read(settings.max_file_size + 1)
 
-        manifest_content = None
-        if manifest is not None:
-            if manifest.size is not None and manifest.size > MAX_MANIFEST_BYTES:
-                raise HTTPException(status_code=413, detail="Drawing manifest is too large")
-            manifest_content = await manifest.read(MAX_MANIFEST_BYTES + 1)
+        if manifest.size is not None and manifest.size > MAX_MANIFEST_BYTES:
+            raise HTTPException(status_code=413, detail="Drawing manifest is too large")
+        manifest_content = await manifest.read(MAX_MANIFEST_BYTES + 1)
 
         try:
             planet = submit_planet.execute(
@@ -310,7 +308,7 @@ def build_router(
             planet.display_name,
             planet.style,
         )
-        response = {
+        return {
             "status": "success",
             "message": "Your planet is flying to the galaxy!",
             "planet_id": planet.id,
@@ -318,15 +316,12 @@ def build_router(
             "url": planet.url,
             "style": planet.style,
             "companions": list(planet.companions),
+            "body_color": planet.body_color,
             "ring_color": planet.ring_color,
             "crater_color": planet.crater_color,
             "mountain_color": planet.mountain_color,
+            "drawing_manifest_url": planet.drawing_manifest_url,
         }
-        if planet.body_color is not None:
-            response["body_color"] = planet.body_color
-        if planet.drawing_manifest_url is not None:
-            response["drawing_manifest_url"] = planet.drawing_manifest_url
-        return response
 
     @router.delete("/api/planets", dependencies=[Depends(manager_only)])
     async def clear_planets_route():

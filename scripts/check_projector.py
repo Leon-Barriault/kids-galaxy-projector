@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Core real-browser smoke test for the current projector runtime.
 
-The projector depends on WebGL, EventSource and the live FastAPI server. This
-contract intentionally checks stable runtime behavior and current rendering
-architecture; focused visual scripts own detailed appearance assertions.
+The drawing manifest is the single rendering contract. Focused visual scripts
+own detailed appearance assertions; this file protects composition, WebGL,
+planet features, and live lifecycle behavior without pinning obsolete renderers.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import os
 import shutil
 import socket
@@ -27,23 +28,9 @@ SERVER_DIR = REPO_ROOT / "pi-server"
 
 
 def chromium_executable() -> str | None:
-    """
-    Launch whatever full Chromium this host actually has.
-
-    Playwright pins an exact browser revision and refuses to start anything
-    else, so this script dies on any machine whose installed build differs from
-    the pinned one - an environment mismatch reported as a test failure. It also
-    prefers the headless shell, which ships no GPU stack at all and therefore
-    cannot run the WebGL these contracts exist to check.
-    """
+    """Launch the full Chromium available on this host."""
     builds = sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome"))
-    if builds:
-        return str(builds[-1])
-    # Nothing pre-provisioned: any non-Linux host, or a plain `playwright install
-    # chromium`. None lets Playwright use the build it manages itself, which is
-    # correct as long as that is the full browser - `--only-shell` ships no GPU
-    # stack and cannot run the WebGL these contracts exist to check.
-    return None
+    return str(builds[-1]) if builds else None
 
 
 def free_port() -> int:
@@ -59,7 +46,7 @@ def png_bytes(colour: tuple[int, int, int]) -> bytes:
 
 
 def kid_style_png_bytes() -> bytes:
-    """Representative authored drawing with a body colour and several gestures."""
+    """Representative archival PNG; the manifest remains rendering authority."""
     image = Image.new("RGB", (64, 64), (33, 150, 243))
     draw = ImageDraw.Draw(image)
     draw.line(
@@ -75,14 +62,58 @@ def kid_style_png_bytes() -> bytes:
         joint="curve",
     )
     draw.ellipse((38, 24, 55, 36), fill=(255, 152, 0))
-    draw.ellipse((8, 27, 18, 35), fill=(76, 175, 80))
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
+def _hex_colour(colour: tuple[int, int, int]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*colour)
+
+
+def drawing_manifest_bytes(background: str) -> bytes:
+    """Small modern tablet-equivalent manifest used by shared browser fixtures."""
+    payload = {
+        "version": 1,
+        "coordinate_space": "normalized-canvas-v1",
+        "canvas": {"width": 64, "height": 64},
+        "background_color": background.lower(),
+        "background_explicit": True,
+        "strokes": [
+            {
+                "order": 0,
+                "color": "#7b1fa2",
+                "width_px": 8,
+                "width_normalized": 0.125,
+                "points": [[0.12, 0.16], [0.5, 0.18], [0.88, 0.15]],
+            },
+            {
+                "order": 1,
+                "color": "#f57c00",
+                "width_px": 7,
+                "width_normalized": 0.109375,
+                "points": [[0.18, 0.43], [0.5, 0.46], [0.82, 0.42]],
+            },
+            {
+                "order": 2,
+                "color": "#43a047",
+                "width_px": 6,
+                "width_normalized": 0.09375,
+                "points": [[0.49, 0.58], [0.52, 0.74], [0.5, 0.9]],
+            },
+        ],
+        "raster": {
+            "background_fill": "solid",
+            "stroke_cap": "round",
+            "stroke_join": "round",
+            "stroke_order": "oldest-to-newest",
+        },
+    }
+    return json.dumps(payload).encode()
+
+
 class Server:
-    """Disposable local FastAPI server used by all projector browser contracts."""
+    """Disposable local FastAPI server used by projector browser contracts."""
 
     def __init__(self) -> None:
         self.port = free_port()
@@ -94,11 +125,6 @@ class Server:
         self._log = None
 
     def __enter__(self) -> "Server":
-        # Inherit the real environment and override only what this server needs.
-        # Replacing it wholesale with a POSIX PATH meant these contracts could
-        # only ever run on Linux: on Windows the child interpreter cannot start
-        # without SYSTEMROOT, so the server never came up and every script
-        # failed at "server did not start" with nothing to say why.
         env = {
             **os.environ,
             "PYTHONPATH": str(SERVER_DIR),
@@ -107,17 +133,8 @@ class Server:
             "STATIC_DIR": str(SERVER_DIR / "static"),
             "RATE_LIMIT_SECONDS": "0",
             "ENVIRONMENT": "development",
-            # A disposable test server has no business announcing itself to the
-            # network, and on Windows Zeroconf registration blocks the lifespan
-            # startup outright - uvicorn sits at "Waiting for application
-            # startup" until the probe below gives up. Leaving it on also meant
-            # every local run of these contracts broadcast a phantom "Kids
-            # Galaxy" service to the LAN.
             "ADVERTISE": "false",
         }
-        # Keep the server's own output. It used to go to DEVNULL, so anything
-        # that stopped it starting - a port clash, a failed import, a lifespan
-        # that never completes - surfaced only as "server did not start".
         self._log = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed in __exit__
             mode="w+", suffix=".log", prefix="kg-server-", delete=False
         )
@@ -162,6 +179,7 @@ class Server:
         artwork: bytes | None = None,
         **design: str,
     ) -> str:
+        background = design.get("body_color") or _hex_colour(colour)
         response = httpx.post(
             f"{self.base}/api/upload",
             files={
@@ -169,7 +187,12 @@ class Server:
                     "planet.png",
                     artwork if artwork is not None else png_bytes(colour),
                     "image/png",
-                )
+                ),
+                "manifest": (
+                    "drawing-manifest.json",
+                    drawing_manifest_bytes(background),
+                    "application/json",
+                ),
             },
             data={"name": name, **design},
             timeout=10,
@@ -218,35 +241,28 @@ def core_render_state(page, planet_id: str) -> dict:
           const kg = window.kidsGalaxy;
           const p = kg.kidPlanets.get(id);
           const g = kg.engine.galaxyScene;
-          const group = p.sculptedArtworkGroup;
-          const patches = group?.children || [];
+          const m = p.mesh.material;
           return {
             pipeline: kg.renderPipeline || [],
             qualityProfile: g.renderer.userData.kidsGalaxyQualityProfile,
-            material: p.mesh.material.type,
+            material: m.type,
             widthSegments: p.mesh.geometry.parameters.widthSegments,
             heightSegments: p.mesh.geometry.parameters.heightSegments,
-            baseHasFlatTexture: Boolean(p.mesh.material.map),
-            baseHasDisplacement: Boolean(p.mesh.material.displacementMap),
-            softToySurface: Boolean(p.mesh.material.userData.kidsGalaxySoftToySurface),
-            projectionMode: p.mesh.material.userData.kidsGalaxyDesignProjectionMode || '',
-            roughness: p.mesh.material.roughness,
-            metalness: p.mesh.material.metalness,
-            clearcoat: p.mesh.material.clearcoat || 0,
-            paintRelief: p.mesh.material.bumpScale || 0,
-            hasPaintMask: Boolean(p.mesh.material.bumpMap),
-            paintRoughnessMask: Boolean(p.mesh.material.roughnessMap),
-            environmentLit: Boolean(p.mesh.material.envMap),
-            sculptedPatchesVisible: patches.filter((m) => m.visible).length,
-            trueSculpted: Boolean(p.mesh.material.userData.kidsGalaxyTrueSculptedArtwork),
-            patchCount: p.mesh.material.userData.kidsGalaxySculptedPatchCount || 0,
-            groupInstalled: Boolean(group?.userData?.kidsGalaxySculptedArtworkGroup),
-            frontPatches: patches.filter((m) => !m.userData?.kidsGalaxyBackDesignEcho).length,
-            backPatches: patches.filter((m) => m.userData?.kidsGalaxyBackDesignEcho).length,
-            minRelief: patches.length
-              ? Math.min(...patches.map((m) => m.geometry?.userData?.kidsGalaxyPatchRelief || 0))
-              : 0,
-            legacyShellsHidden: !p.accentEdgeMesh.visible && !p.accentMesh.visible,
+            manifest: Boolean(p.drawingManifest),
+            manifestSurface: Boolean(m.userData.kidsGalaxyManifestStrokeSurface),
+            projectionMode: m.userData.kidsGalaxyDesignProjectionMode || '',
+            strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount || 0,
+            layerLevels: m.userData.kidsGalaxyEmbossLayerLevels || [],
+            background: p.mesh.userData.kidsGalaxyManifestBackground || '',
+            displacement: Boolean(m.displacementMap),
+            displacementScale: m.displacementScale || 0,
+            bump: Boolean(m.bumpMap),
+            bumpScale: m.bumpScale || 0,
+            roughness: m.roughness,
+            metalness: m.metalness,
+            clearcoat: m.clearcoat || 0,
+            roughnessMap: Boolean(m.roughnessMap),
+            environmentLit: Boolean(m.envMap),
             shadows: g.renderer.shadowMap.enabled,
             sunCastsShadow: g.sunLight.castShadow,
             internalWidth: g.renderer.userData.kidsGalaxyInternalWidth,
@@ -353,61 +369,38 @@ def main() -> int:
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3", 12_000)
         wait_for(
             page,
-            f"Boolean(window.kidsGalaxy.kidPlanets.get('{ringed}')?.mesh?.material?.userData?.kidsGalaxySoftToySurface)",
+            f"Boolean(window.kidsGalaxy.kidPlanets.get('{ringed}')?.mesh?.material?.userData?.kidsGalaxyManifestStrokeSurface)",
             12_000,
         )
         check(bool(page.evaluate("window.kidsGalaxy")), "projector initializes")
         ids = planet_ids(page)
-        check(len(ids) == 3, f"three stored drawings produce three planets (got {len(ids)})")
+        check(len(ids) == 3, f"three manifest drawings produce three planets (got {len(ids)})")
         check(len(set(ids)) == len(ids), "SSE priming does not duplicate planets")
         check(set(ids) == {ringed, cratered, mountain}, "stored planet identities are preserved")
 
-        print("\ncurrent sculpted renderer")
+        print("\nauthoritative manifest renderer")
         state = core_render_state(page, ringed)
         check(state["qualityProfile"] == "laptop-high", "renderer uses laptop-high profile")
         check(state["widthSegments"] >= 96, "planet sphere uses high-density geometry")
         check(state["heightSegments"] >= 72, "planet sphere has dense vertical tessellation")
-        # The drawing is painted onto the body now rather than rebuilt as
-        # extruded slabs. The slab pipeline scaled each region to fill 94% of
-        # the planet and wound it 480 degrees, so a blob a child painted came
-        # back as a ribbon lapping the planet, and the slabs stood proud of the
-        # sphere as lumps on the silhouette.
-        check(state["softToySurface"], "the child's drawing is painted onto the body")
+        check(state["manifest"], "drawing manifest is loaded before rendering")
+        check(state["manifestSurface"], "manifest stroke surface owns planet appearance")
         check(
-            state["projectionMode"] == "strokes-wrapped-around-longitude",
-            "each stroke keeps its shape and wraps around the planet",
+            state["projectionMode"] == "manifest-strokes-layered-on-body",
+            "diagnostics identify the single manifest projection",
         )
-        # The sculpted pipeline this replaced did emboss the child's marks, and a
-        # bump map alone leaves the silhouette perfectly round - paint then reads
-        # as printed on rather than laid on, which is the moulded look the
-        # reference images have.
-        check(state["baseHasDisplacement"], "painted strokes are embossed into the body")
-        check(state["sculptedPatchesVisible"] == 0, "superseded sculpted slabs stay hidden")
-        check(state["legacyShellsHidden"], "superseded alpha-shell accents stay hidden")
+        check(state["strokeCount"] == 3, "all authored fixture strokes reach the renderer")
+        check(len(state["layerLevels"]) == 3, "each authored stroke receives a relief layer")
+        check(state["displacement"] and state["displacementScale"] >= 0.1, "strokes use real displacement")
+        check(state["bump"] and state["bumpScale"] >= 0.14, "strokes have visible rounded emboss")
 
-        print("\nmoulded painted-toy finish")
-        # The look is a painted moulded toy, so the body keeps a coat - but a
-        # broad soft one. The old body ran roughness 0.23 under clearcoat 0.24,
-        # whose pinpoint highlight reads as cheap plastic; a fully matte body
-        # loses the moulded look entirely. Mid roughness with a roughened coat
-        # is the band between those two, and both bounds are the look itself.
-        check(
-            0.35 <= state["roughness"] <= 0.7,
-            f"body holds a soft sheen (roughness {state['roughness']})",
-        )
+        print("\npainted-toy finish")
+        check(0.3 <= state["roughness"] <= 0.7, f"body holds a soft sheen ({state['roughness']})")
         check(state["metalness"] == 0, "planet body is not metallic")
-        check(state["clearcoat"] > 0, "planet body carries a painted-toy coat")
-        check(state["environmentLit"], "planet body picks up soft image-based light")
-        # Paint sitting on the body, not printed into it: the child's colours are
-        # raised and finished differently from the ball underneath.
-        check(state["hasPaintMask"] and state["paintRelief"] > 0, "painted areas stand off the body")
-        check(state["paintRoughnessMask"], "painted areas are finished differently from the body")
-
-        check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline exposes its first stage")
-        check(
-            state["pipeline"][-1] == "soft-toy-planet-surface",
-            "the painted surface is the last word on planet appearance",
-        )
+        check(state["clearcoat"] > 0, "planet carries a painted-toy coat")
+        check(state["roughnessMap"], "raised paint is finished separately from the body")
+        check(state["environmentLit"], "planet receives image-based light")
+        check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline still exposes its stable first stage")
         check(state["shadows"] and state["sunCastsShadow"], "renderer keeps real shadows")
         check(state["internalWidth"] <= 3840, "internal width stays within the 4K ceiling")
         check(state["internalHeight"] <= 2160, "internal height stays within the 4K ceiling")

@@ -29,13 +29,7 @@ from app.domain.planet_customization import (
     normalize_ring_color,
 )
 from app.domain.scene import Scene
-from app.ports import (
-    EventPublisher,
-    ImageProcessor,
-    PlanetRepository,
-    RateLimiter,
-    SurfaceStyler,
-)
+from app.ports import EventPublisher, ImageProcessor, PlanetRepository, RateLimiter
 
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024
 DEFAULT_MAX_DIMENSION = 2048
@@ -45,7 +39,7 @@ DEFAULT_GALLERY_SIZE = 12
 
 
 class SubmitPlanetUseCase:
-    """Orchestrates the full child-draws-a-planet workflow."""
+    """Orchestrates the manifest-backed child-draws-a-planet workflow."""
 
     def __init__(
         self,
@@ -53,14 +47,12 @@ class SubmitPlanetUseCase:
         publisher: EventPublisher,
         rate_limiter: RateLimiter,
         image_processor: ImageProcessor,
-        surface_styler: SurfaceStyler,
         retention: int = DEFAULT_RETENTION,
     ):
         self._repository = repository
         self._publisher = publisher
         self._rate_limiter = rate_limiter
         self._image_processor = image_processor
-        self._surface_styler = surface_styler
         self._retention = retention
 
     def execute(
@@ -80,7 +72,7 @@ class SubmitPlanetUseCase:
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
     ) -> Planet:
-        """Accept a child's drawing and turn it into a stored, projected planet."""
+        """Validate and persist one archival PNG plus its drawing-intent manifest."""
         self._rate_limiter.check(client_key)
         ensure_content_type_allowed(content_type)
         ensure_not_empty(len(image_bytes))
@@ -88,6 +80,9 @@ class SubmitPlanetUseCase:
         ensure_recognised_image(image_bytes)
 
         drawing_manifest = normalize_drawing_manifest(drawing_manifest_bytes)
+        if drawing_manifest is None:
+            raise ValidationError("Drawing manifest is required.")
+
         style = normalize_planet_style(raw_style)
         companions = normalize_companions(raw_companions)
         body_color = normalize_body_color(raw_body_color)
@@ -95,56 +90,35 @@ class SubmitPlanetUseCase:
         crater_color = normalize_crater_color(raw_crater_color)
         mountain_color = normalize_mountain_color(raw_mountain_color)
 
-        if drawing_manifest is not None:
-            manifest_background = drawing_manifest["background_color"]
-            if body_color is not None and body_color != manifest_background:
-                raise ValidationError("Drawing manifest background does not match body colour.")
-            body_color = manifest_background
+        manifest_background = drawing_manifest["background_color"]
+        if body_color is not None and body_color != manifest_background:
+            raise ValidationError("Drawing manifest background does not match body colour.")
+        body_color = manifest_background
 
+        # The PNG is archival/display data. Re-encoding strips metadata and
+        # bounds the image dimensions, but no server-side stylistic transform is
+        # allowed to reinterpret the child's authored pixels. The manifest owns
+        # all projector and lithophane rendering intent.
         clean_png = self._image_processor.normalize_to_png(
             image_bytes,
             max_dimension=max_dimension,
             target_size=target_size,
         )
-        # Manifest-aware tablets explicitly state which pixels are body and which
-        # paths are authored paint. Preserve the normalized raster exactly; the
-        # old surface styler exists only for legacy image-only uploads.
-        if body_color is None:
-            clean_png = self._surface_styler.style(clean_png)
 
         display_name = normalize_display_name(raw_name)
         planet_id = uuid.uuid4().hex[:10]
-        if drawing_manifest is not None:
-            planet = self._repository.save_designed_with_manifest(
-                planet_id=planet_id,
-                display_name=display_name,
-                image_bytes=clean_png,
-                style=style,
-                companions=companions,
-                drawing_manifest=drawing_manifest,
-                ring_color=ring_color,
-                crater_color=crater_color,
-                mountain_color=mountain_color,
-                body_color=body_color,
-            )
-        elif style == "classic" and not companions and body_color is None:
-            planet = self._repository.save(
-                planet_id=planet_id,
-                display_name=display_name,
-                image_bytes=clean_png,
-            )
-        else:
-            planet = self._repository.save_designed(
-                planet_id=planet_id,
-                display_name=display_name,
-                image_bytes=clean_png,
-                style=style,
-                companions=companions,
-                ring_color=ring_color,
-                crater_color=crater_color,
-                mountain_color=mountain_color,
-                body_color=body_color,
-            )
+        planet = self._repository.save_designed_with_manifest(
+            planet_id=planet_id,
+            display_name=display_name,
+            image_bytes=clean_png,
+            style=style,
+            companions=companions,
+            drawing_manifest=drawing_manifest,
+            ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
+            body_color=body_color,
+        )
         self._rate_limiter.record(client_key)
         self._repository.prune(keep=self._retention)
         self._publisher.publish(PlanetCreated(planet))

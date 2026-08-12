@@ -48,6 +48,16 @@ def _manifest(background: str = "#ffffff") -> bytes:
     ).encode()
 
 
+def test_manifest_is_required_for_every_new_planet(raw_client: TestClient):
+    response = raw_client.post(
+        "/api/upload",
+        files={"file": ("planet.png", _png(), "image/png")},
+        data={"name": "Image Only"},
+    )
+    assert response.status_code == 422
+    assert any(error.get("loc", [])[-1:] == ["manifest"] for error in response.json()["detail"])
+
+
 def test_manifest_is_stored_and_exposed_with_planet_payload(client: TestClient):
     response = client.post(
         "/api/upload",
@@ -74,7 +84,7 @@ def test_manifest_is_stored_and_exposed_with_planet_payload(client: TestClient):
     assert planet["drawing_manifest_url"] == payload["drawing_manifest_url"]
 
 
-def test_manifest_background_must_match_legacy_body_color_field(client: TestClient):
+def test_manifest_background_must_match_body_color_field(client: TestClient):
     response = client.post(
         "/api/upload",
         files={

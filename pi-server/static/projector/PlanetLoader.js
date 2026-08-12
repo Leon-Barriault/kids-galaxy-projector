@@ -55,21 +55,24 @@ export class PlanetLoader {
 
   async loadDrawingManifest(payload, entity) {
     const url = this.manifestUrlOf(payload);
-    if (!url) return;
+    if (!url) return false;
     try {
       const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) return;
+      if (!response.ok) return false;
       const manifest = await response.json();
       if (
-        manifest?.version === 1 &&
-        manifest?.coordinate_space === 'normalized-canvas-v1' &&
-        Array.isArray(manifest?.strokes)
+        manifest?.version !== 1 ||
+        manifest?.coordinate_space !== 'normalized-canvas-v1' ||
+        !Array.isArray(manifest?.strokes)
       ) {
-        entity.drawingManifest = manifest;
-        entity.mesh.userData.kidsGalaxyDrawingManifest = true;
+        return false;
       }
+      entity.drawingManifest = manifest;
+      entity.mesh.userData.kidsGalaxyDrawingManifest = true;
+      return true;
     } catch (error) {
-      console.warn('Kids Galaxy drawing manifest unavailable; using PNG fallback', payload.id, error);
+      console.warn('Kids Galaxy drawing manifest could not be loaded', payload.id, error);
+      return false;
     }
   }
 
@@ -94,7 +97,14 @@ export class PlanetLoader {
   add(payload, celebrate = false) {
     if (!payload || !payload.id) return;
     const textureUrl = this.textureUrlOf(payload);
-    if (!textureUrl || this.kidPlanets.has(payload.id)) return;
+    const manifestUrl = this.manifestUrlOf(payload);
+    if (!textureUrl || !manifestUrl || this.kidPlanets.has(payload.id)) {
+      if (textureUrl && !manifestUrl) {
+        window.kidsGalaxyIgnoredImageOnlyPlanets = window.kidsGalaxyIgnoredImageOnlyPlanets || [];
+        window.kidsGalaxyIgnoredImageOnlyPlanets.push(payload.id);
+      }
+      return;
+    }
 
     this.makeRoomForOne();
     const entity = new PlanetEntity({
@@ -112,20 +122,16 @@ export class PlanetLoader {
     entity.drawingManifest = null;
     this.kidPlanets.set(payload.id, entity);
 
-    const manifestUrl = this.manifestUrlOf(payload);
-    if (manifestUrl) {
-      // New vector-aware drawings wait for their authoritative sidecar so the
-      // first material ever shown already preserves the child's stroke intent.
-      this.loadDrawingManifest(payload, entity).finally(() => {
-        if (!entity.disposed && this.kidPlanets.get(payload.id) === entity) {
-          this.loadTexture(payload, entity, textureUrl);
-        }
-      });
-    } else {
-      // Preserve the exact legacy timing for image-only planets. Besides being
-      // faster, this avoids shifting snapshot/delete races in existing kiosks.
+    // The drawing manifest is the authoritative rendering contract. Do not
+    // display the archival PNG until its intent sidecar has been validated.
+    this.loadDrawingManifest(payload, entity).then((loaded) => {
+      if (entity.disposed || this.kidPlanets.get(payload.id) !== entity) return;
+      if (!loaded) {
+        this.remove(payload.id);
+        return;
+      }
       this.loadTexture(payload, entity, textureUrl);
-    }
+    });
 
     if (celebrate) this.celebration.show(payload);
   }
