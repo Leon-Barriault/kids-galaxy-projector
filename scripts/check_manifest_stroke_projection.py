@@ -87,8 +87,10 @@ def manifest_bytes() -> bytes:
                     "width_px": 24,
                     "width_normalized": 0.046875,
                     # Tall stroke remains a local meridian path rather than a
-                    # sixth latitude band.
-                    "points": [[0.49, 0.48], [0.52, 0.67], [0.5, 0.86]],
+                    # sixth latitude band. Keep it below the rainbow bands so
+                    # the 360-degree assertions measure the bands themselves,
+                    # not intentional later-paint occlusion.
+                    "points": [[0.49, 0.78], [0.52, 0.86], [0.5, 0.94]],
                 },
             ],
             "raster": {
@@ -234,7 +236,7 @@ def main() -> int:
     print("\nvertical stroke stays a path")
     white_rows = []
     widest_white = 0.0
-    for y in range(105, 235):
+    for y in range(185, 252):
         fraction = row_fraction(state, y, WHITE)
         if fraction > 0.005:
             white_rows.append(y)
