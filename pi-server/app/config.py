@@ -15,13 +15,6 @@ DEFAULT_TEXTURE_SIZE = 1024
 DEFAULT_RATE_LIMIT_SECONDS = 3.0
 DEFAULT_MAX_STORED_PLANETS = 30
 DEFAULT_GALLERY_SIZE = 12
-
-# The projector owns the artistic interpretation of the child's drawing. The
-# historical terrain/blend options remain parseable for deployed environment
-# compatibility, but factory.py deliberately treats them as passthrough so no
-# server-side diffusion can destroy the child's composition before rendering.
-DEFAULT_SURFACE_STYLE = "off"
-SURFACE_STYLES = ("terrain", "blend", "off")
 DEFAULT_GALAXY_NAME = "Kids Galaxy"
 DEFAULT_ADVERTISE = True
 DEFAULT_ADVERTISE_SCHEME = "http"
@@ -41,7 +34,6 @@ class Settings:
     rate_limit_seconds: float = DEFAULT_RATE_LIMIT_SECONDS
     max_stored_planets: int = DEFAULT_MAX_STORED_PLANETS
     gallery_size: int = DEFAULT_GALLERY_SIZE
-    surface_style: str = DEFAULT_SURFACE_STYLE
     galaxy_name: str = DEFAULT_GALAXY_NAME
     advertise: bool = DEFAULT_ADVERTISE
     advertise_scheme: str = DEFAULT_ADVERTISE_SCHEME
@@ -104,7 +96,6 @@ class Settings:
             ),
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
             gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
-            surface_style=_choice("SURFACE_STYLE", SURFACE_STYLES, DEFAULT_SURFACE_STYLE),
             galaxy_name=(source.get("GALAXY_NAME") or DEFAULT_GALAXY_NAME).strip()
             or DEFAULT_GALAXY_NAME,
             advertise=_flag("ADVERTISE", default=DEFAULT_ADVERTISE),
