@@ -43,7 +43,8 @@ def test_vertical_stroke_stays_near_one_meridian():
         ]
     )
 
-    centre = manifest_relief_strength(manifest, 0.0, 0.0)
+    authored_meridian = (0.52 * math.tau) - math.pi
+    centre = manifest_relief_strength(manifest, 0.0, authored_meridian)
     opposite = manifest_relief_strength(manifest, 0.0, math.pi * 0.8)
 
     assert centre > 0.6
