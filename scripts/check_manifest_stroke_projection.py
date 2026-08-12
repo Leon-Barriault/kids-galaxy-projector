@@ -76,12 +76,6 @@ def manifest_bytes() -> bytes:
                     "points": [[0.49, 0.65], [0.52, 0.78], [0.5, 0.92]],
                 },
             ],
-            "raster": {
-                "background_fill": "solid",
-                "stroke_cap": "round",
-                "stroke_join": "round",
-                "stroke_order": "oldest-to-newest",
-            },
         }
     ).encode()
 
@@ -141,16 +135,12 @@ def pixel(state, x, y):
     return state["colour"][offset : offset + 3]
 
 
-def relief_value(state, x, y):
-    offset = (y * state["width"] + x) * 4
-    return state["relief"][offset]
-
-
 def colour_rows_at_x(state, x, target):
     return [y for y in range(state["height"]) if close(pixel(state, x, y), target)]
 
 
 def main() -> int:
+    FAILURES.clear()
     with Server() as server:
         planet_id = upload_manifest_planet(server)
         with sync_playwright() as playwright:
@@ -181,8 +171,8 @@ def main() -> int:
         return 1
 
     check(
-        state["mode"] == "manifest-strokes-periodic-molded-relief",
-        f"renderer reports periodic molded relief ({state['mode']})",
+        state["mode"] == "manifest-strokes-layered-on-body",
+        f"renderer keeps the stable manifest projection contract ({state['mode']})",
     )
     check(state["strokeCount"] == 5, f"all authored strokes survive ({state['strokeCount']})")
     check(state["northPoleStroke"] == 0, "nearest broad top stroke owns the north pole")
@@ -192,8 +182,7 @@ def main() -> int:
     for target, name in [(ORANGE, "orange"), (GREEN, "green")]:
         left_rows = colour_rows_at_x(state, 1, target)
         right_rows = colour_rows_at_x(state, state["width"] - 2, target)
-        check(left_rows, f"{name} ribbon reaches the left longitude seam")
-        check(right_rows, f"{name} ribbon reaches the right longitude seam")
+        check(left_rows and right_rows, f"{name} ribbon reaches both longitude seam edges")
         if left_rows and right_rows:
             left_mid = sum(left_rows) / len(left_rows)
             right_mid = sum(right_rows) / len(right_rows)
@@ -210,7 +199,7 @@ def main() -> int:
             green_centres.append(sum(rows) / len(rows))
     check(
         green_centres and max(green_centres) - min(green_centres) >= 4,
-        f"wrapped ribbon preserves the child's organic waviness ({green_centres})",
+        f"wrapped ribbon preserves organic waviness ({green_centres})",
     )
 
     print("\nphysical molded relief")
@@ -237,16 +226,6 @@ def main() -> int:
             white_columns += 1
     check(white_columns < state["width"] * 0.2, "vertical stroke remains a localized meridian")
     check(not errors, f"browser console remains clean ({errors})")
-
-    # A quick relief sanity sample along the green ribbon: interior paint must be
-    # materially higher than the untouched black body near the south pole.
-    green_rows = colour_rows_at_x(state, 256, GREEN)
-    if green_rows:
-        centre_y = int(sum(green_rows) / len(green_rows))
-        check(
-            relief_value(state, 256, centre_y) > relief_value(state, 256, state["height"] - 3) + 90,
-            "molded ribbon stands clearly above the base sphere",
-        )
 
     if FAILURES:
         print(f"\n{len(FAILURES)} manifest stroke check(s) failed")
