@@ -56,6 +56,12 @@ jobs:
         run: python scripts/check_projector.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
+      # Publishing a preview must not stop the galaxy. Every earlier check here
+      # asserts scene state, and the freeze this guards against left the scene
+      # graph perfect while the renderer drew to an offscreen target - visible
+      # only in the frames actually reaching the canvas.
+      - name: Verify the projector keeps animating after publishing previews
+        run: python scripts/check_projector_live_after_snapshot.py
       # One script owns planet appearance now. It replaces check_sculpted_renderer,
       # check_artwork_coverage, check_stroke_wrap, check_area_fill_latitude_projection
       # and check_explicit_body_color, which between them asserted the sculpted-slab
