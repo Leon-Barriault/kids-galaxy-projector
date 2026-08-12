@@ -47,21 +47,19 @@ class DrawingManifestTest {
     fun `same color authored strokes keep separate stable identities`() {
         val color = 0xFFFF8800.toInt()
         val drawing =
-            Drawing(canvasSize = CanvasSize(500f, 500f))
-                .addStroke(
-                    StrokePath(
-                        points = listOf(Point(30f, 100f), Point(470f, 110f)),
-                        colorArgb = color,
-                        strokeWidth = 30f,
-                    ),
-                )
-                .addStroke(
-                    StrokePath(
-                        points = listOf(Point(40f, 250f), Point(460f, 270f)),
-                        colorArgb = color,
-                        strokeWidth = 42f,
-                    ),
-                )
+            Drawing(canvasSize = CanvasSize(500f, 500f)).addStroke(
+                StrokePath(
+                    points = listOf(Point(30f, 100f), Point(470f, 110f)),
+                    colorArgb = color,
+                    strokeWidth = 30f,
+                ),
+            ).addStroke(
+                StrokePath(
+                    points = listOf(Point(40f, 250f), Point(460f, 270f)),
+                    colorArgb = color,
+                    strokeWidth = 42f,
+                ),
+            )
 
         val strokes =
             JsonParser.parseString(DrawingManifestSerializer.toJson(drawing))
