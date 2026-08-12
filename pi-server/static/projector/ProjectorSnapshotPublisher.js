@@ -4,6 +4,7 @@ const SNAPSHOT_SIZE = 700;
 const SNAPSHOT_FOV_DEGREES = 40;
 const CAMERA_DISTANCE = 7.4;
 const CAMERA_ELEVATION_RATIO = 11 / 26;
+const RING_CAMERA_ELEVATION_RATIO = -1 / 2;
 const MAX_UPLOAD_ATTEMPTS = 3;
 
 /**
@@ -72,7 +73,7 @@ export class ProjectorSnapshotPublisher {
 
   async capture(entity) {
     const exportScene = this.createExportScene(entity);
-    const camera = this.createExportCamera();
+    const camera = this.createExportCamera(entity);
     const target = new THREE.WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE, {
       depthBuffer: true,
       stencilBuffer: false,
@@ -151,14 +152,24 @@ export class ProjectorSnapshotPublisher {
     return scene;
   }
 
-  createExportCamera() {
+  createExportCamera(entity) {
     const camera = new THREE.PerspectiveCamera(
       SNAPSHOT_FOV_DEGREES,
       1,
       0.1,
       100,
     );
-    const elevation = CAMERA_DISTANCE * CAMERA_ELEVATION_RATIO;
+    const hasSaturnRing = (entity.decorations || []).some(
+      (decoration) => decoration.userData?.kidsGalaxySaturnParticleRing,
+    );
+    // The live Saturn ring is tilted mostly toward -Y/+Z. Looking from the
+    // normal +Y hero elevation makes that real ring nearly edge-on. Keep the
+    // same front longitude but move the export camera below the equator for
+    // ringed planets so the actual particle ring opens into a readable ellipse.
+    const elevationRatio = hasSaturnRing
+      ? RING_CAMERA_ELEVATION_RATIO
+      : CAMERA_ELEVATION_RATIO;
+    const elevation = CAMERA_DISTANCE * elevationRatio;
     camera.position.set(0, elevation, CAMERA_DISTANCE);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
