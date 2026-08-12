@@ -1,9 +1,10 @@
 """
 Filesystem-backed planet repository.
 
-Layout: `<id>_<safe name>.png` alongside `<id>_<safe name>.json`. The JSON
-sidecar preserves the display name and the kid-selected planet design while
-remaining backward-compatible with older name-only sidecars.
+Layout: `<id>_<safe name>.png` alongside `<id>_<safe name>.json`. New kid-tablet
+uploads also include `<id>_<safe name>.drawing.json`, a vector sidecar that
+preserves background colour and authored brush paths without changing the
+backward-compatible metadata file used by older planets.
 """
 
 import json
@@ -56,6 +57,59 @@ class FileSystemPlanetRepository(PlanetRepository):
         mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
         body_color: str | None = None,
     ) -> Planet:
+        return self._save_designed(
+            planet_id=planet_id,
+            display_name=display_name,
+            image_bytes=image_bytes,
+            style=style,
+            companions=companions,
+            ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
+            body_color=body_color,
+            drawing_manifest=None,
+        )
+
+    def save_designed_with_manifest(
+        self,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+        drawing_manifest: dict,
+        ring_color: str = DEFAULT_RING_COLOR,
+        crater_color: str = DEFAULT_CRATER_COLOR,
+        mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
+        body_color: str | None = None,
+    ) -> Planet:
+        return self._save_designed(
+            planet_id=planet_id,
+            display_name=display_name,
+            image_bytes=image_bytes,
+            style=style,
+            companions=companions,
+            ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
+            body_color=body_color,
+            drawing_manifest=drawing_manifest,
+        )
+
+    def _save_designed(
+        self,
+        *,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+        ring_color: str,
+        crater_color: str,
+        mountain_color: str,
+        body_color: str | None,
+        drawing_manifest: dict | None,
+    ) -> Planet:
         filename = build_stored_filename(planet_id, display_name)
         image_path = self._directory / filename
         image_path.write_bytes(image_bytes)
@@ -71,8 +125,11 @@ class FileSystemPlanetRepository(PlanetRepository):
             crater_color=crater_color,
             mountain_color=mountain_color,
             body_color=body_color,
+            has_drawing_manifest=drawing_manifest is not None,
         )
         self._write_metadata(planet)
+        if drawing_manifest is not None:
+            self._write_drawing_manifest(planet, drawing_manifest)
         return planet
 
     def _write_metadata(self, planet: Planet) -> None:
@@ -92,6 +149,15 @@ class FileSystemPlanetRepository(PlanetRepository):
                 json.dump(payload, fh, ensure_ascii=False)
         except OSError as e:
             logger.warning("Could not write metadata for %s: %s", planet.filename, e)
+
+    def _write_drawing_manifest(self, planet: Planet, manifest: dict) -> None:
+        path = self._directory / planet.drawing_manifest_filename
+        try:
+            with path.open("w", encoding="utf-8") as fh:
+                json.dump(manifest, fh, ensure_ascii=False, separators=(",", ":"))
+        except OSError as e:
+            logger.warning("Could not write drawing manifest for %s: %s", planet.filename, e)
+            raise
 
     def latest(self) -> Planet | None:
         images = self._images_newest_first()
@@ -155,6 +221,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             if isinstance(raw_body_color, str) and raw_body_color.strip()
             else None
         )
+        manifest_path = self._directory / f"{stem}.drawing.json"
 
         return Planet(
             id=planet_id,
@@ -167,6 +234,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             crater_color=crater_color,
             mountain_color=mountain_color,
             body_color=body_color,
+            has_drawing_manifest=manifest_path.is_file(),
         )
 
     @staticmethod
@@ -186,6 +254,10 @@ class FileSystemPlanetRepository(PlanetRepository):
             logger.warning("Could not read metadata for %s: %s", image_path.name, e)
             return {}
 
+    def _remove_sidecars(self, planet: Planet) -> None:
+        (self._directory / planet.metadata_filename).unlink(missing_ok=True)
+        (self._directory / planet.drawing_manifest_filename).unlink(missing_ok=True)
+
     def delete(self, planet_id: str) -> Planet | None:
         for image_path in self._images_newest_first():
             planet = self._to_planet(image_path)
@@ -193,8 +265,7 @@ class FileSystemPlanetRepository(PlanetRepository):
                 continue
             try:
                 image_path.unlink(missing_ok=True)
-                meta = self._directory / planet.metadata_filename
-                meta.unlink(missing_ok=True)
+                self._remove_sidecars(planet)
                 logger.info("Deleted planet %s (%s)", planet.id, planet.display_name)
             except OSError as e:
                 logger.warning("Could not delete %s: %s", image_path.name, e)
@@ -208,7 +279,7 @@ class FileSystemPlanetRepository(PlanetRepository):
             planet = self._to_planet(image_path)
             try:
                 image_path.unlink(missing_ok=True)
-                (self._directory / planet.metadata_filename).unlink(missing_ok=True)
+                self._remove_sidecars(planet)
             except OSError as e:
                 logger.warning("Could not clear %s: %s", image_path.name, e)
                 continue
@@ -232,10 +303,10 @@ class FileSystemPlanetRepository(PlanetRepository):
         if keep <= 0:
             return
         for stale in self._images_newest_first()[keep:]:
+            planet = self._to_planet(stale)
             try:
                 stale.unlink(missing_ok=True)
-                metadata_path = self._directory / Path(stale.name).with_suffix(".json").name
-                metadata_path.unlink(missing_ok=True)
+                self._remove_sidecars(planet)
                 logger.info("Pruned old planet: %s", stale.name)
             except OSError as e:
                 logger.warning("Could not prune %s: %s", stale.name, e)
