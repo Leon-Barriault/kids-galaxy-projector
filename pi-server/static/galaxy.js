@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 
+import { installAreaFillSphericalProjection } from './projector/AreaFillSphericalProjection.js';
 import { installArtworkCoverageProjection } from './projector/ArtworkCoverageProjection.js';
 import {
   ASTRONAUT_VARIANTS,
@@ -64,6 +65,10 @@ function installVisualRefinementStage() {
 function installSphericalStrokeProjectionStage() {
   installStrokeWrapProjection();
   installStrokeLatitudeProjection();
+  // Filled compositions are fundamentally different from thin brush strokes.
+  // Run this last inside the stable projection stage so large source regions
+  // keep their real canvas latitude instead of being recentered as sculpted blobs.
+  installAreaFillSphericalProjection();
 }
 
 const PLANET_RENDER_STAGES = Object.freeze([
@@ -91,8 +96,9 @@ const PLANET_RENDER_STAGES = Object.freeze([
   // Reshapes authoritative sculpted art, deepens installed crater geometry,
   // then replaces the older dark-visor astronaut with selectable friendly models.
   { name: 'visual-refinement', install: installVisualRefinementStage },
-  // Deliberately last for new tablet planets: X becomes a 480-degree longitude
-  // winding while Y is normalized into a controlled 130-degree latitude span.
+  // Deliberately last for new tablet planets: thin marks keep their 480-degree
+  // winding and controlled latitude treatment. Large filled regions instead
+  // preserve source canvas Y all the way from north pole to south pole.
   { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
 ]);
 
