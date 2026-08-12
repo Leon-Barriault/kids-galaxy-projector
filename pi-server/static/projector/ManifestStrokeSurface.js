@@ -78,14 +78,11 @@ function smoothstep(value) {
 
 function makePeriodic(points) {
   if (points.length < 2) return points;
-  const firstY = points[0][1];
-  const lastY = points[points.length - 1][1];
-  const seamY = (firstY + lastY) * 0.5;
-
+  const seamY = (points[0][1] + points[points.length - 1][1]) * 0.5;
   const adjusted = points.map(([x, y]) => {
     const seamDistance = Math.min(x, 1 - x);
-    const weight = 1 - smoothstep(seamDistance / SEAM_BLEND_FRACTION);
-    return [x, THREE.MathUtils.lerp(y, seamY, weight)];
+    const seamWeight = 1 - smoothstep(seamDistance / SEAM_BLEND_FRACTION);
+    return [x, THREE.MathUtils.lerp(y, seamY, seamWeight)];
   });
   adjusted[0] = [0, seamY];
   adjusted[adjusted.length - 1] = [1, seamY];
@@ -102,18 +99,16 @@ function strokeProjection(stroke, strokeIndex) {
   let maxY = 0;
   let sumY = 0;
   let pathLength = 0;
-  for (let index = 0; index < points.length; index += 1) {
-    const [x, y] = points[index];
+  points.forEach(([x, y], index) => {
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     sumY += y;
     if (index > 0) {
-      const [previousX, previousY] = points[index - 1];
-      pathLength += Math.hypot(x - previousX, y - previousY);
+      pathLength += Math.hypot(x - points[index - 1][0], y - points[index - 1][1]);
     }
-  }
+  });
 
   const spanX = Math.max(0.0001, maxX - minX);
   const spanY = Math.max(0.0001, maxY - minY);
@@ -123,13 +118,9 @@ function strokeProjection(stroke, strokeIndex) {
   const wrapsLongitude = !nearVertical && horizontalAspect >= WRAP_ASPECT_THRESHOLD;
   const horizontalPoleCandidate =
     !nearVertical && horizontalAspect >= HORIZONTAL_POLE_ASPECT_THRESHOLD;
-
-  let projected;
-  if (wrapsLongitude) {
-    projected = makePeriodic(points.map(([x, y]) => [(x - minX) / spanX, y]));
-  } else {
-    projected = points;
-  }
+  const projected = wrapsLongitude
+    ? makePeriodic(points.map(([x, y]) => [(x - minX) / spanX, y]))
+    : points;
 
   const widthNormalized = THREE.MathUtils.clamp(
     Number(stroke.width_normalized) || Number(stroke.width_px) / 512 || 0.02,
@@ -155,8 +146,6 @@ function strokeProjection(stroke, strokeIndex) {
     centerY: sumY / points.length,
     bandFrom: THREE.MathUtils.clamp(minY - halfWidth, 0, 1),
     bandTo: THREE.MathUtils.clamp(maxY + halfWidth, 0, 1),
-    nearVertical,
-    wrapsLongitude,
     horizontalPoleCandidate,
     widthNormalized,
     coverageMetric,
@@ -173,7 +162,6 @@ function drawProjectedStroke(mask, projection) {
   context.lineCap = 'round';
   context.lineJoin = 'round';
   context.lineWidth = Math.max(2, projection.widthNormalized * TEXTURE_HEIGHT);
-
   for (const shift of [-TEXTURE_WIDTH, 0, TEXTURE_WIDTH]) {
     context.beginPath();
     projection.points.forEach(([x, y], index) => {
@@ -187,16 +175,16 @@ function drawProjectedStroke(mask, projection) {
   return context.getImageData(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT).data;
 }
 
-function paintRows(owner, colourBuffer, colour, strokeIndex, from, to) {
+function paintRows(owner, colour, projection, from, to) {
   const start = Math.max(0, Math.floor(from));
   const end = Math.min(TEXTURE_HEIGHT - 1, Math.ceil(to));
   for (let v = start; v <= end; v += 1) {
     for (let u = 0; u < TEXTURE_WIDTH; u += 1) {
       const texel = v * TEXTURE_WIDTH + u;
-      owner[texel] = strokeIndex;
-      colourBuffer[texel * 3] = colour[0];
-      colourBuffer[texel * 3 + 1] = colour[1];
-      colourBuffer[texel * 3 + 2] = colour[2];
+      owner[texel] = projection.strokeIndex;
+      colour[texel * 3] = projection.colour[0];
+      colour[texel * 3 + 1] = projection.colour[1];
+      colour[texel * 3 + 2] = projection.colour[2];
     }
   }
 }
@@ -209,29 +197,18 @@ function choosePoleOwners(projections) {
   const south = candidates
     .filter((projection) => projection.bandTo >= 1 - POLE_CLAIM_THRESHOLD)
     .sort((a, b) => b.bandTo - a.bandTo || b.centerY - a.centerY)[0];
-  return {
-    north: north?.strokeIndex ?? -1,
-    south: south?.strokeIndex ?? -1,
-  };
+  return { north: north?.strokeIndex ?? -1, south: south?.strokeIndex ?? -1 };
 }
 
-function closePole(owner, colourBuffer, projection, poleOwners) {
+function closePole(owner, colour, projection, poleOwners) {
   if (projection.strokeIndex === poleOwners.north) {
-    paintRows(
-      owner,
-      colourBuffer,
-      projection.colour,
-      projection.strokeIndex,
-      0,
-      projection.bandTo * (TEXTURE_HEIGHT - 1),
-    );
+    paintRows(owner, colour, projection, 0, projection.bandTo * (TEXTURE_HEIGHT - 1));
   }
   if (projection.strokeIndex === poleOwners.south) {
     paintRows(
       owner,
-      colourBuffer,
-      projection.colour,
-      projection.strokeIndex,
+      colour,
+      projection,
       projection.bandFrom * (TEXTURE_HEIGHT - 1),
       TEXTURE_HEIGHT - 1,
     );
@@ -253,66 +230,41 @@ function normalizedMetricScores(projections, selector) {
 
 function strokeProfiles(projections, poleOwners) {
   const orderScores = normalizedMetricScores(projections, (projection) => projection.order);
-  const widthScores = normalizedMetricScores(
-    projections,
-    (projection) => projection.widthNormalized,
-  );
-  const coverageScores = normalizedMetricScores(
-    projections,
-    (projection) => projection.coverageMetric,
-  );
-
+  const widthScores = normalizedMetricScores(projections, (projection) => projection.widthNormalized);
+  const coverageScores = normalizedMetricScores(projections, (projection) => projection.coverageMetric);
   return projections.map((projection) => {
-    const orderScore = orderScores[projection.strokeIndex] ?? 0.5;
-    const widthScore = widthScores[projection.strokeIndex] ?? 0.5;
-    const coverageScore = coverageScores[projection.strokeIndex] ?? 0.5;
-    let poleScore = 0;
-    if (
-      projection.strokeIndex === poleOwners.north ||
-      projection.strokeIndex === poleOwners.south
-    ) {
-      poleScore = 1;
+    const order = orderScores[projection.strokeIndex] ?? 0.5;
+    const width = widthScores[projection.strokeIndex] ?? 0.5;
+    const coverage = coverageScores[projection.strokeIndex] ?? 0.5;
+    let pole = 0;
+    if (projection.strokeIndex === poleOwners.north || projection.strokeIndex === poleOwners.south) {
+      pole = 1;
     } else if (
       projection.horizontalPoleCandidate &&
       (projection.bandFrom <= POLE_CLAIM_THRESHOLD * 1.35 ||
         projection.bandTo >= 1 - POLE_CLAIM_THRESHOLD * 1.35)
     ) {
-      poleScore = 0.5;
+      pole = 0.5;
     }
-    const jitterScore = stableUnitHash(projection.strokeId);
+    const jitter = stableUnitHash(projection.strokeId);
     const score = THREE.MathUtils.clamp(
-      ORDER_WEIGHT * orderScore +
-        WIDTH_WEIGHT * widthScore +
-        COVERAGE_WEIGHT * coverageScore +
-        POLE_WEIGHT * poleScore +
-        JITTER_WEIGHT * jitterScore,
+      ORDER_WEIGHT * order +
+        WIDTH_WEIGHT * width +
+        COVERAGE_WEIGHT * coverage +
+        POLE_WEIGHT * pole +
+        JITTER_WEIGHT * jitter,
       0,
       1,
     );
-    const shoulderScore = THREE.MathUtils.clamp(
-      widthScore * 0.65 + coverageScore * 0.25 + jitterScore * 0.1,
-      0,
-      1,
-    );
-
+    const shoulderScore = THREE.MathUtils.clamp(width * 0.65 + coverage * 0.25 + jitter * 0.1, 0, 1);
     return {
       strokeIndex: projection.strokeIndex,
       strokeId: projection.strokeId,
       colour: projection.colourHex,
       level: THREE.MathUtils.lerp(MIN_LAYER_LEVEL, MAX_LAYER_LEVEL, score),
-      shoulderTexels: THREE.MathUtils.lerp(
-        MIN_SHOULDER_TEXELS,
-        MAX_SHOULDER_TEXELS,
-        shoulderScore,
-      ),
+      shoulderTexels: THREE.MathUtils.lerp(MIN_SHOULDER_TEXELS, MAX_SHOULDER_TEXELS, shoulderScore),
       score,
-      components: {
-        order: orderScore,
-        width: widthScore,
-        coverage: coverageScore,
-        pole: poleScore,
-        jitter: jitterScore,
-      },
+      components: { order, width, coverage, pole, jitter },
     };
   });
 }
@@ -325,11 +277,9 @@ function roundedRelief(owner, profiles) {
   profiles.forEach((profile) => {
     profileByStroke[profile.strokeIndex] = profile;
   });
-
   const ownerAt = (v, u) => {
     if (v < 0 || v >= TEXTURE_HEIGHT) return null;
-    const wrappedU = (u + TEXTURE_WIDTH) % TEXTURE_WIDTH;
-    return owner[v * TEXTURE_WIDTH + wrappedU];
+    return owner[v * TEXTURE_WIDTH + ((u + TEXTURE_WIDTH) % TEXTURE_WIDTH)];
   };
 
   for (let v = 0; v < TEXTURE_HEIGHT; v += 1) {
@@ -340,15 +290,8 @@ function roundedRelief(owner, profiles) {
         distance[texel] = 0;
         continue;
       }
-      const neighbours = [
-        ownerAt(v - 1, u),
-        ownerAt(v + 1, u),
-        ownerAt(v, u - 1),
-        ownerAt(v, u + 1),
-      ];
-      distance[texel] = neighbours.some(
-        (neighbour) => neighbour !== null && neighbour !== strokeIndex,
-      )
+      const neighbours = [ownerAt(v - 1, u), ownerAt(v + 1, u), ownerAt(v, u - 1), ownerAt(v, u + 1)];
+      distance[texel] = neighbours.some((neighbour) => neighbour !== null && neighbour !== strokeIndex)
         ? 1
         : far;
     }
@@ -386,18 +329,35 @@ function roundedRelief(owner, profiles) {
 
   const height = new Float32Array(texels);
   const shade = new Float32Array(texels).fill(1);
-  for (let i = 0; i < texels; i += 1) {
-    const strokeIndex = owner[i];
+  for (let index = 0; index < texels; index += 1) {
+    const strokeIndex = owner[index];
     if (strokeIndex < 0) continue;
     const profile = profileByStroke[strokeIndex];
-    const shoulderTexels = profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS;
-    const t = Math.min(1, distance[i] / shoulderTexels);
+    const t = Math.min(1, distance[index] / (profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS));
     const eased = smoothstep(t);
     const rounded = SHOULDER_FLOOR + (1 - SHOULDER_FLOOR) * eased;
-    height[i] = (profile?.level || 0.75) * rounded;
-    shade[i] = EDGE_SHADE + (1 - EDGE_SHADE) * eased;
+    height[index] = (profile?.level || 0.75) * rounded;
+    shade[index] = EDGE_SHADE + (1 - EDGE_SHADE) * eased;
   }
   return { height, shade };
+}
+
+function scalarCanvas(height, writer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = TEXTURE_WIDTH;
+  canvas.height = TEXTURE_HEIGHT;
+  const context = canvas.getContext('2d', { alpha: false });
+  if (!context) return null;
+  const values = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  for (let index = 0; index < height.length; index += 1) {
+    const value = writer(height[index]);
+    values.data[index * 4] = value;
+    values.data[index * 4 + 1] = value;
+    values.data[index * 4 + 2] = value;
+    values.data[index * 4 + 3] = 255;
+  }
+  context.putImageData(values, 0, 0);
+  return canvas;
 }
 
 function buildManifestMaps(manifest) {
@@ -405,10 +365,10 @@ function buildManifestMaps(manifest) {
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const colour = new Uint8ClampedArray(texels * 3);
   const owner = new Int32Array(texels).fill(-1);
-  for (let i = 0; i < texels; i += 1) {
-    colour[i * 3] = body[0];
-    colour[i * 3 + 1] = body[1];
-    colour[i * 3 + 2] = body[2];
+  for (let index = 0; index < texels; index += 1) {
+    colour[index * 3] = body[0];
+    colour[index * 3 + 1] = body[1];
+    colour[index * 3 + 2] = body[2];
   }
 
   const projections = manifest.strokes
@@ -416,7 +376,6 @@ function buildManifestMaps(manifest) {
     .filter(Boolean);
   const poleOwners = choosePoleOwners(projections);
   const profiles = strokeProfiles(projections, poleOwners);
-
   const mask = document.createElement('canvas');
   mask.width = TEXTURE_WIDTH;
   mask.height = TEXTURE_HEIGHT;
@@ -425,12 +384,12 @@ function buildManifestMaps(manifest) {
   projections.forEach((projection) => {
     const alpha = drawProjectedStroke(mask, projection);
     if (!alpha) return;
-    for (let i = 0; i < texels; i += 1) {
-      if (alpha[i * 4 + 3] < 32) continue;
-      owner[i] = projection.strokeIndex;
-      colour[i * 3] = projection.colour[0];
-      colour[i * 3 + 1] = projection.colour[1];
-      colour[i * 3 + 2] = projection.colour[2];
+    for (let index = 0; index < texels; index += 1) {
+      if (alpha[index * 4 + 3] < 32) continue;
+      owner[index] = projection.strokeIndex;
+      colour[index * 3] = projection.colour[0];
+      colour[index * 3 + 1] = projection.colour[1];
+      colour[index * 3 + 2] = projection.colour[2];
     }
     closePole(owner, colour, projection, poleOwners);
     renderedStrokeCount += 1;
@@ -443,31 +402,13 @@ function buildManifestMaps(manifest) {
   const context = colourCanvas.getContext('2d', { alpha: false });
   if (!context) return null;
   const image = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-  for (let i = 0; i < texels; i += 1) {
-    image.data[i * 4] = colour[i * 3] * shade[i];
-    image.data[i * 4 + 1] = colour[i * 3 + 1] * shade[i];
-    image.data[i * 4 + 2] = colour[i * 3 + 2] * shade[i];
-    image.data[i * 4 + 3] = 255;
+  for (let index = 0; index < texels; index += 1) {
+    image.data[index * 4] = colour[index * 3] * shade[index];
+    image.data[index * 4 + 1] = colour[index * 3 + 1] * shade[index];
+    image.data[index * 4 + 2] = colour[index * 3 + 2] * shade[index];
+    image.data[index * 4 + 3] = 255;
   }
   context.putImageData(image, 0, 0);
-
-  const scalarCanvas = (writer) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = TEXTURE_WIDTH;
-    canvas.height = TEXTURE_HEIGHT;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) return null;
-    const values = ctx.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-    for (let i = 0; i < texels; i += 1) {
-      const value = writer(height[i]);
-      values.data[i * 4] = value;
-      values.data[i * 4 + 1] = value;
-      values.data[i * 4 + 2] = value;
-      values.data[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(values, 0, 0);
-    return canvas;
-  };
 
   const diagnostics = profiles.map((profile) => ({
     strokeId: profile.strokeId,
@@ -478,11 +419,10 @@ function buildManifestMaps(manifest) {
     shoulderTexels: profile.shoulderTexels,
     components: { ...profile.components },
   }));
-
   return {
     colour: colourCanvas,
-    height: scalarCanvas((relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
-    roughness: scalarCanvas((relief) => 238 - relief * 72),
+    height: scalarCanvas(height, (relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
+    roughness: scalarCanvas(height, (relief) => 238 - relief * 72),
     strokeCount: renderedStrokeCount,
     layerLevels: diagnostics.map((profile) => profile.level),
     strokeProfiles: diagnostics,
@@ -506,7 +446,6 @@ function applyManifestSurface(entity) {
   if (typeof document === 'undefined' || !validManifest(entity?.drawingManifest)) return false;
   const built = buildManifestMaps(entity.drawingManifest);
   if (!built) return false;
-
   const previous = entity.mesh.material;
   const material = new THREE.MeshPhysicalMaterial({
     map: canvasTexture(built.colour, { srgb: true }),
@@ -530,7 +469,10 @@ function applyManifestSurface(entity) {
   material.userData.kidsGalaxyEmbossHeightHeuristic = 'order35-width25-coverage20-pole10-jitter10';
   material.userData.kidsGalaxyNorthPoleStroke = built.northPoleStroke;
   material.userData.kidsGalaxySouthPoleStroke = built.southPoleStroke;
-  material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-periodic-molded-relief';
+  // Keep the stable contract name used by the shared projector smoke suite. The
+  // implementation is now periodic/wavy rather than row-filled, but it is still
+  // the same manifest-strokes-on-body rendering stage.
+  material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-layered-on-body';
 
   entity.mesh.material = material;
   entity.mesh.userData.kidsGalaxyDrawingManifest = true;
@@ -542,7 +484,6 @@ function applyManifestSurface(entity) {
 export function installManifestStrokeSurface() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyManifestStrokeSurface) return;
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
-
   function manifestStrokeTexture(texture) {
     previousApplyTexture.call(this, texture);
     try {
@@ -553,7 +494,6 @@ export function installManifestStrokeSurface() {
       window.kidsGalaxyManifestStrokeFailures.push({ id: this.id, message: String(error) });
     }
   }
-
   manifestStrokeTexture.kidsGalaxyManifestStrokeSurface = true;
   PlanetEntity.prototype.applyTexture = manifestStrokeTexture;
 }
