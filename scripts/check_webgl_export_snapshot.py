@@ -12,7 +12,7 @@ import httpx
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, kid_style_png_bytes, wait_for
+from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = REPO_ROOT / "artifacts"
@@ -83,16 +83,25 @@ def main() -> int:
             ring_color="#ffffff",
         )
 
-        # The server must never silently generate a mismatched print before the
-        # projector has published its real Three.js render.
+        # Before the projector publishes, print still has to produce something.
+        # This used to be a 409, and the manager polled it for ten seconds
+        # before showing "HTTP 409" - which is what a parent saw whenever the
+        # projector page was not open, or the planet sat past the twelfth the
+        # projector holds while the manager lists thirty.
         before = httpx.get(
             f"{server.base}/api/admin/planets/{planet_id}/print.pdf",
-            timeout=5,
+            timeout=10,
         )
-        check(before.status_code == 409, "print waits for the projector WebGL render", failures)
+        check(before.status_code == 200, "print never dead-ends on a missing render", failures)
+        check(
+            before.headers.get("x-kids-galaxy-render-source") == "fallback",
+            "the pre-projector sheet declares itself as the server render",
+            failures,
+        )
 
         browser = playwright.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []

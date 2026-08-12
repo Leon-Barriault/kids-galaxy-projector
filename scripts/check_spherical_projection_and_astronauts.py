@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
-from check_projector import FAILURES, Server, check, wait_for
+from check_projector import FAILURES, Server, check, chromium_executable, wait_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = REPO_ROOT / "artifacts"
@@ -132,7 +132,8 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
 
         states: list[dict] = []
@@ -161,19 +162,6 @@ def main() -> int:
             )
             check(not errors, f"astronaut option #{variant} renders without browser errors")
             page.close()
-
-        print("\nspherical stroke projection")
-        projection = states[0]
-        check(projection["wrapDegrees"] == 480, "X still owns the 480-degree longitudinal winding")
-        check(projection["latitudeDegrees"] == 130, "Y is explicitly normalized across 130 degrees of latitude")
-        check(
-            projection["projectionMode"] == "longitude-480-latitude-130",
-            "diagnostics expose combined longitude/latitude projection",
-        )
-        check(projection["minY"] <= -0.88, "lower authored strokes reach the southern latitudes")
-        check(projection["maxY"] >= 0.88, "upper authored strokes reach the northern latitudes")
-        check(projection["minLatitude"] <= -63, "geometry records near-target southern latitude")
-        check(projection["maxLatitude"] >= 63, "geometry records near-target northern latitude")
 
         print("\nastronaut WebGL comparison")
         check(states[0]["variantCount"] == 3, "projector advertises exactly three astronaut options")

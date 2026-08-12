@@ -56,20 +56,18 @@ jobs:
         run: python scripts/check_projector.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
-      - name: Exercise true kid geometry and Saturn rings in the real projector
-        run: python scripts/check_sculpted_renderer.py
-      - name: Verify kid traits cover the planet
-        run: python scripts/check_artwork_coverage.py
+      # One script owns planet appearance now. It replaces check_sculpted_renderer,
+      # check_artwork_coverage, check_stroke_wrap, check_area_fill_latitude_projection
+      # and check_explicit_body_color, which between them asserted the sculpted-slab
+      # architecture - regions extruded into slabs, scaled to fill 94% of the body
+      # and wound 480 degrees of longitude. They were pinning the appearance the
+      # product owner asked to change, so they were replaced rather than repaired.
+      - name: Verify the child's drawing becomes latitude bands on the planet
+        run: python scripts/check_latitude_band_projection.py
       - name: Verify tablet-selected Saturn ring colors
         run: python scripts/check_ring_color_fidelity.py
-      - name: Verify explicit tablet bucket/body colors
-        run: python scripts/check_explicit_body_color.py
-      - name: Verify explicit-body strokes wrap 480 degrees
-        run: python scripts/check_stroke_wrap.py
-      - name: Verify spherical Y projection and astronaut WebGL options
+      - name: Verify astronaut WebGL options
         run: python scripts/check_spherical_projection_and_astronauts.py
-      - name: Verify fill-heavy artwork preserves source latitude order
-        run: python scripts/check_area_fill_latitude_projection.py
       - name: Upload rendered comparison frames
         if: always()
         uses: actions/upload-artifact@v4

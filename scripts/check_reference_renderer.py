@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, force_space_activity, kid_style_png_bytes, wait_for
+from check_projector import Server, chromium_executable, force_space_activity, kid_style_png_bytes, wait_for
 
 
 FAILURES: list[str] = []
@@ -33,7 +33,8 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []

@@ -336,8 +336,8 @@ def main() -> int:
         # sphere as lumps on the silhouette.
         check(state["softToySurface"], "the child's drawing is painted onto the body")
         check(
-            state["projectionMode"] == "orthographic-disc-mirrored-hemispheres",
-            "the disc is read as a front view rather than stretched over the sphere",
+            state["projectionMode"] == "drawing-rows-as-latitude-bands",
+            "the drawing's rows become latitude bands right around the planet",
         )
         check(not state["baseHasDisplacement"], "paint does not inflate the base sphere")
         check(state["sculptedPatchesVisible"] == 0, "superseded sculpted slabs stay hidden")

@@ -81,7 +81,33 @@ def _two_tone(draw: ImageDraw.ImageDraw) -> None:
     draw.ellipse((120, 280, 330, 420), fill="#ffd166")
 
 
+def _rainbow_arcs(draw: ImageDraw.ImageDraw) -> None:
+    """
+    The shape a child actually draws: nested rainbow arcs over a plain body.
+
+    This is the case that exposed the mapping. Read as latitude bands it must
+    come out as a purple cap over orange, yellow and green rings with the body
+    colour left at the south pole - the vertical order of the drawing, in the
+    vertical order of the planet.
+    """
+    bands = (("#7b3fb5", 40), ("#e8862f", 96), ("#f0d040", 152), ("#4fae54", 208))
+    for colour, inset in bands:
+        top = inset + 40
+        # arc(180..360) draws the upper half, so the dome's flat bottom lands at
+        # (top + bottom) / 2. Anchoring that at 390 of 512 leaves real unpainted
+        # canvas below it - which is what must come back as body colour at the
+        # south pole, and would be hidden if the arcs ran off the bottom edge.
+        draw.arc(
+            (inset, top, CANVAS - inset, 780 - top),
+            start=180,
+            end=360,
+            fill=colour,
+            width=46,
+        )
+
+
 SUBJECTS = (
+    ("rainbow", "#f2f2f2", _rainbow_arcs),
     ("ocean", "#3aa0e8", _ocean),
     ("lava", "#7a2f2f", _lava),
     ("twotone", "#2f4f8f", _two_tone),

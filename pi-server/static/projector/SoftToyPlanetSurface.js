@@ -13,15 +13,18 @@ import { PlanetEntity } from './PlanetEntity.js';
  * of material tuning fixes that, because the shape is wrong before the shading
  * starts.
  *
- * Here the drawing stays a picture. The disc is read as an orthographic view of
- * the planet's front - which is what a child means when they colour a circle -
- * and resampled into an equirectangular texture. The back hemisphere mirrors
- * the front, so the rim pixels agree across the silhouette and the seam is
- * invisible while the composition stays recognisable from the front.
+ * Here the drawing becomes the planet's latitude profile. The body colour the
+ * child chose is the sphere; every line they draw across the disc becomes a
+ * band right around the planet at the height they drew it, so a rainbow drawn
+ * as arcs from purple down to green arrives as a purple cap, then orange,
+ * yellow and green rings, then a white south pole. Vertical order in the
+ * drawing is vertical order on the planet, and longitude carries no information
+ * on purpose - a stripe goes all the way round, which is what a child means by
+ * drawing a stripe across a planet.
  *
- * A matching luminance-derived bump gives paint the thickness of poster paint
- * rather than the thickness of a slab: relief you read at the terminator, never
- * on the outline.
+ * Paint is raised off the body by the same mask that decides its colour, so a
+ * band has the thickness of poster paint rather than of a slab: relief you read
+ * at the terminator, never on the outline.
  */
 
 const TEXTURE_WIDTH = 1024;
@@ -31,66 +34,150 @@ const BUMP_SCALE = 0.045;
 // over what distance that judgement fades in. Both in RGB units.
 const PAINT_MATCH_DISTANCE = 26;
 const PAINT_EDGE_SOFTNESS = 34;
-// Rim samples are read at grazing angles where an orthographic view has almost
-// no information left. Pulling them in slightly trades a sliver of the outer
-// drawing for an edge that is not a smear of one pixel column.
-const RIM_INSET = 0.985;
+// A row needs this fraction of painted pixels to become a band. Below it, the
+// row is almost certainly an anti-aliased edge or a slip of the finger, and
+// turning that into a ring right around the planet is very visible.
+const MIN_ROW_COVERAGE = 0.02;
 
-function sphericalToDisc(u, v) {
-  // Three.js SphereGeometry, verbatim: x = -cos(phi)sin(theta), y = cos(theta),
-  // z = sin(phi)sin(theta) with phi = u*2pi and theta = v*pi. Deriving this from
-  // a generic "longitude = (u-0.5)*2pi" instead puts the front of the planet at
-  // u=0.5, but the geometry puts it at u=0.25, and the drawing lands a quarter
-  // turn away - visible only as the composition sliding off to both edges.
-  const phi = u * Math.PI * 2;
-  const theta = v * Math.PI;
-  const sinTheta = Math.sin(theta);
-  return {
-    // Camera on +z with +y up, so screen x is world x and screen y is world y:
-    // an orthographic view of the front hemisphere is exactly (x, y).
-    x: -Math.cos(phi) * sinTheta * RIM_INSET,
-    y: Math.cos(theta) * RIM_INSET,
-  };
+function readDisc(image) {
+  const canvas = document.createElement('canvas');
+  const size = Math.min(image.width || 512, image.height || 512, 512);
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  if (!context) return null;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, 0, 0, size, size);
+  return { data: context.getImageData(0, 0, size, size).data, size };
 }
 
-function buildEquirectangularCanvas(image) {
-  const source = document.createElement('canvas');
-  const size = Math.min(image.width || 512, image.height || 512, 512);
-  source.width = size;
-  source.height = size;
-  const sourceContext = source.getContext('2d', { alpha: false, willReadFrequently: true });
-  if (!sourceContext) return null;
-  sourceContext.imageSmoothingEnabled = true;
-  sourceContext.imageSmoothingQuality = 'high';
-  sourceContext.drawImage(image, 0, 0, size, size);
-  const disc = sourceContext.getImageData(0, 0, size, size).data;
+/**
+ * Reduce the drawing to one colour per row: the latitude profile of the planet.
+ *
+ * A row the child left alone is body colour and stays body colour. A row they
+ * painted takes the colour of the paint nearest the middle of the drawing at
+ * that height, and then averages only the pixels in that row belonging to the
+ * same band, so the band keeps its own colour instead of a blend.
+ *
+ * Nearest-to-centre is what makes a rainbow work. Drawn as nested arcs, a
+ * horizontal line low down crosses every colour twice - purple out at the
+ * edges, then orange, yellow, green in the middle - so averaging the row gives
+ * brown and taking the most common colour gives whichever arc happens to be
+ * widest there, which is the outermost one and inverts the order. Reading
+ * inward-most instead recovers exactly the order the child sees down the middle
+ * of their drawing: purple cap, then orange, yellow, green. It also does the
+ * obvious thing for a plain stripe drawn anywhere across the disc.
+ *
+ * Coverage is returned per row but never fades the ring - the ring is drawn at
+ * full strength all the way round. It only separates a real stroke from a
+ * single stray pixel.
+ */
+function latitudeProfile(disc, bodyRgb) {
+  const { data, size } = disc;
+  const colours = new Float32Array(size * 3);
+  const coverage = new Float32Array(size);
+  const centre = (size - 1) / 2;
 
+  const isPaint = (offset) => {
+    const dr = data[offset] - bodyRgb[0];
+    const dg = data[offset + 1] - bodyRgb[1];
+    const db = data[offset + 2] - bodyRgb[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db) >= PAINT_MATCH_DISTANCE;
+  };
+
+  for (let y = 0; y < size; y += 1) {
+    let painted = 0;
+    let innermost = -1;
+    let innermostDistance = Infinity;
+    for (let x = 0; x < size; x += 1) {
+      const offset = (y * size + x) * 4;
+      if (!isPaint(offset)) continue;
+      painted += 1;
+      const distance = Math.abs(x - centre);
+      if (distance < innermostDistance) {
+        innermostDistance = distance;
+        innermost = offset;
+      }
+    }
+
+    const fraction = painted / size;
+    coverage[y] = fraction < MIN_ROW_COVERAGE ? 0 : fraction;
+    if (coverage[y] === 0 || innermost < 0) {
+      colours[y * 3] = bodyRgb[0];
+      colours[y * 3 + 1] = bodyRgb[1];
+      colours[y * 3 + 2] = bodyRgb[2];
+      continue;
+    }
+
+    // Average across the rest of that band only, which cancels the tablet's
+    // anti-aliasing without dragging in the neighbouring colours.
+    const target = [data[innermost], data[innermost + 1], data[innermost + 2]];
+    let members = 0;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let x = 0; x < size; x += 1) {
+      const offset = (y * size + x) * 4;
+      if (!isPaint(offset)) continue;
+      const dr = data[offset] - target[0];
+      const dg = data[offset + 1] - target[1];
+      const db = data[offset + 2] - target[2];
+      if (Math.sqrt(dr * dr + dg * dg + db * db) > PAINT_MATCH_DISTANCE) continue;
+      members += 1;
+      r += data[offset];
+      g += data[offset + 1];
+      b += data[offset + 2];
+    }
+    colours[y * 3] = members ? r / members : target[0];
+    colours[y * 3 + 1] = members ? g / members : target[1];
+    colours[y * 3 + 2] = members ? b / members : target[2];
+  }
+
+  return { colours, coverage, size };
+}
+
+/**
+ * Sweep the latitude profile around the planet.
+ *
+ * Longitude carries no information by design: a line drawn at some height goes
+ * all the way round at that height, which is what a child means when they draw
+ * a stripe across a planet. Rows map straight to latitude - the top of the disc
+ * is the north pole, the bottom is the south pole - so the vertical order of
+ * the drawing is the vertical order of the finished planet.
+ */
+function buildEquirectangularCanvas(disc, bodyRgb) {
+  const profile = latitudeProfile(disc, bodyRgb);
   const target = document.createElement('canvas');
   target.width = TEXTURE_WIDTH;
   target.height = TEXTURE_HEIGHT;
-  const targetContext = target.getContext('2d', { alpha: false });
-  if (!targetContext) return null;
-  const painted = targetContext.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  const context = target.getContext('2d', { alpha: false });
+  if (!context) return null;
+  const painted = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  const rowCoverage = new Float32Array(TEXTURE_HEIGHT);
 
   for (let y = 0; y < TEXTURE_HEIGHT; y += 1) {
-    const v = (y + 0.5) / TEXTURE_HEIGHT;
+    // v runs north pole to south pole and the disc's rows run top to bottom, so
+    // this is a straight proportional read with no flip.
+    const source = Math.min(
+      profile.size - 1,
+      Math.max(0, Math.round(((y + 0.5) / TEXTURE_HEIGHT) * (profile.size - 1))),
+    );
+    const r = profile.colours[source * 3];
+    const g = profile.colours[source * 3 + 1];
+    const b = profile.colours[source * 3 + 2];
+    rowCoverage[y] = profile.coverage[source];
     for (let x = 0; x < TEXTURE_WIDTH; x += 1) {
-      const u = (x + 0.5) / TEXTURE_WIDTH;
-      const disc2d = sphericalToDisc(u, v);
-      // Disc space is [-1,1]; the source bitmap is [0,size).
-      const sx = Math.min(size - 1, Math.max(0, Math.round((disc2d.x * 0.5 + 0.5) * (size - 1))));
-      const sy = Math.min(size - 1, Math.max(0, Math.round((0.5 - disc2d.y * 0.5) * (size - 1))));
-      const from = (sy * size + sx) * 4;
-      const to = (y * TEXTURE_WIDTH + x) * 4;
-      painted.data[to] = disc[from];
-      painted.data[to + 1] = disc[from + 1];
-      painted.data[to + 2] = disc[from + 2];
-      painted.data[to + 3] = 255;
+      const offset = (y * TEXTURE_WIDTH + x) * 4;
+      painted.data[offset] = r;
+      painted.data[offset + 1] = g;
+      painted.data[offset + 2] = b;
+      painted.data[offset + 3] = 255;
     }
   }
 
-  targetContext.putImageData(painted, 0, 0);
-  return { canvas: target, pixels: painted };
+  context.putImageData(painted, 0, 0);
+  return { canvas: target, pixels: painted, rowCoverage };
 }
 
 /**
@@ -201,7 +288,7 @@ function hideSculptedGeometry(entity) {
   });
 }
 
-function bodyColourOf(entity, built) {
+function bodyColourOf(entity, disc) {
   if (typeof entity?.bodyColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(entity.bodyColor)) {
     return [
       Number.parseInt(entity.bodyColor.slice(1, 3), 16),
@@ -209,18 +296,21 @@ function bodyColourOf(entity, built) {
       Number.parseInt(entity.bodyColor.slice(5, 7), 16),
     ];
   }
-  // Older planets stored before tablets sent body_color. The pole row comes from
-  // the disc's extreme edge, which the tablet never lets a stroke reach.
-  return [built.pixels.data[0], built.pixels.data[1], built.pixels.data[2]];
+  // Older planets, stored before tablets sent body_color. The top-left pixel is
+  // outside the circular clip the tablet applies, so no stroke can reach it.
+  return [disc.data[0], disc.data[1], disc.data[2]];
 }
 
 function applySoftToySurface(entity, texture, renderer) {
   const image = texture?.image;
   if (!image || typeof document === 'undefined') return false;
 
-  const built = buildEquirectangularCanvas(image);
+  const disc = readDisc(image);
+  if (!disc) return false;
+  const bodyRgb = bodyColourOf(entity, disc);
+  const built = buildEquirectangularCanvas(disc, bodyRgb);
   if (!built) return false;
-  const maps = buildPaintMaps(built.pixels, bodyColourOf(entity, built));
+  const maps = buildPaintMaps(built.pixels, bodyRgb);
 
   const map = new THREE.CanvasTexture(built.canvas);
   map.colorSpace = THREE.SRGBColorSpace;
@@ -258,7 +348,7 @@ function applySoftToySurface(entity, texture, renderer) {
   entity.mesh.castShadow = true;
   entity.mesh.receiveShadow = true;
   material.userData.kidsGalaxySoftToySurface = true;
-  material.userData.kidsGalaxyDesignProjectionMode = 'orthographic-disc-mirrored-hemispheres';
+  material.userData.kidsGalaxyDesignProjectionMode = 'drawing-rows-as-latitude-bands';
   if (previous && previous !== material) previous.dispose();
   return true;
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from playwright.sync_api import sync_playwright
 
-from check_projector import FAILURES, Server, check, wait_for
+from check_projector import FAILURES, Server, check, chromium_executable, wait_for
 from check_visual_renderer import kid_disc_image, png_bytes
 
 
@@ -27,7 +27,8 @@ def main() -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
         page = browser.new_page(viewport={"width": 900, "height": 700})
         errors: list[str] = []

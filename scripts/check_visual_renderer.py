@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, check, wait_for
+from check_projector import Server, check, chromium_executable, wait_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_DIR = REPO_ROOT / "artifacts"
@@ -170,7 +170,8 @@ def main(isolate_planet_fn=isolate_planet) -> int:
         )
 
         browser = pw.chromium.launch(
-            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+            executable_path=chromium_executable(),
+            args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
         )
         page = browser.new_page(viewport={"width": 1000, "height": 1000})
         errors: list[str] = []
