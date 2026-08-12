@@ -35,6 +35,8 @@ internal data class DrawingManifestCanvasDto(
 )
 
 internal data class DrawingManifestStrokeDto(
+    @SerializedName("stroke_id")
+    val strokeId: String,
     val order: Int,
     val color: String,
     @SerializedName("width_px")
@@ -73,6 +75,7 @@ internal object DrawingManifestSerializer {
             strokes =
                 authored.mapIndexed { order, stroke ->
                     DrawingManifestStrokeDto(
+                        strokeId = "stroke-${order.toString().padStart(4, '0')}",
                         order = order,
                         color = stroke.colorArgb.toRgbHex(),
                         widthPx = stroke.strokeWidth,
