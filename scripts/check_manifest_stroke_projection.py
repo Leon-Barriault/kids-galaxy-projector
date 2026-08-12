@@ -17,10 +17,13 @@ from playwright.sync_api import sync_playwright
 
 from check_projector import FAILURES, Server, check, chromium_executable, wait_for
 
-BODY = (255, 255, 255)
+BODY = (0, 0, 0)
 PURPLE = (123, 31, 162)
 ORANGE = (245, 124, 0)
 GREEN = (67, 160, 71)
+BLUE = (30, 136, 229)
+PINK = (216, 27, 96)
+WHITE = (255, 255, 255)
 
 
 def blank_png() -> bytes:
@@ -36,7 +39,7 @@ def manifest_bytes() -> bytes:
             "version": 1,
             "coordinate_space": "normalized-canvas-v1",
             "canvas": {"width": 512, "height": 512},
-            "background_color": "#ffffff",
+            "background_color": "#000000",
             "background_explicit": True,
             "strokes": [
                 {
@@ -44,26 +47,48 @@ def manifest_bytes() -> bytes:
                     "color": "#7b1fa2",
                     "width_px": 48,
                     "width_normalized": 0.09375,
-                    # Reaches the north-pole intent band and should close the cap.
-                    "points": [[0.12, 0.045], [0.5, 0.07], [0.88, 0.05]],
+                    # Deliberately does not touch y=0. It is merely the nearest
+                    # broad stroke to the north and should still claim the pole.
+                    "points": [[0.12, 0.14], [0.5, 0.16], [0.88, 0.145]],
                 },
                 {
                     "order": 1,
                     "color": "#f57c00",
                     "width_px": 38,
                     "width_normalized": 0.07421875,
-                    # Short source stroke: projector must stretch its own X span
-                    # across the complete longitude, not leave a front-side patch.
-                    "points": [[0.28, 0.34], [0.5, 0.37], [0.72, 0.33]],
+                    # A short, slightly wavy stroke must become a complete
+                    # longitude band rather than a partial front-side ribbon.
+                    "points": [[0.28, 0.29], [0.5, 0.33], [0.72, 0.30]],
                 },
                 {
                     "order": 2,
                     "color": "#43a047",
-                    "width_px": 30,
-                    "width_normalized": 0.05859375,
-                    # Tall stroke: must remain a meridian-like path rather than
-                    # flooding every longitude at every latitude it crosses.
-                    "points": [[0.48, 0.48], [0.53, 0.68], [0.49, 0.88]],
+                    "width_px": 36,
+                    "width_normalized": 0.0703125,
+                    "points": [[0.2, 0.43], [0.48, 0.45], [0.8, 0.42]],
+                },
+                {
+                    "order": 3,
+                    "color": "#1e88e5",
+                    "width_px": 34,
+                    "width_normalized": 0.06640625,
+                    "points": [[0.25, 0.55], [0.5, 0.57], [0.75, 0.54]],
+                },
+                {
+                    "order": 4,
+                    "color": "#d81b60",
+                    "width_px": 34,
+                    "width_normalized": 0.06640625,
+                    "points": [[0.2, 0.68], [0.5, 0.70], [0.8, 0.67]],
+                },
+                {
+                    "order": 5,
+                    "color": "#ffffff",
+                    "width_px": 24,
+                    "width_normalized": 0.046875,
+                    # Tall stroke remains a local meridian path rather than a
+                    # sixth latitude band.
+                    "points": [[0.49, 0.48], [0.52, 0.67], [0.5, 0.86]],
                 },
             ],
             "raster": {
@@ -83,7 +108,7 @@ def upload_manifest_planet(server: Server) -> str:
             "file": ("blank.png", blank_png(), "image/png"),
             "manifest": ("drawing-manifest.json", manifest_bytes(), "application/json"),
         },
-        data={"name": "Manifest Strokes", "body_color": "#ffffff"},
+        data={"name": "Manifest Strokes", "body_color": "#000000"},
         timeout=10,
     )
     response.raise_for_status()
@@ -115,19 +140,22 @@ SURFACE_STATE = """
     manifestSurface: Boolean(m.userData.kidsGalaxyManifestStrokeSurface),
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
+    layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
+    northPoleStroke: m.userData.kidsGalaxyNorthPoleStroke,
     background: p.mesh.userData.kidsGalaxyManifestBackground,
     width: image.width,
     height: image.height,
     colour: read(image),
     relief: read(relief),
     displacementScale: m.displacementScale,
+    bumpScale: m.bumpScale,
   };
 }
 """
 
 
-def close(pixel, target, tolerance=45):
-    return sum((int(pixel[i]) - target[i]) ** 2 for i in range(3)) <= tolerance**2
+def close(pixel_value, target, tolerance=45):
+    return sum((int(pixel_value[i]) - target[i]) ** 2 for i in range(3)) <= tolerance**2
 
 
 def pixel(state, x, y):
@@ -138,6 +166,10 @@ def pixel(state, x, y):
 def row_fraction(state, y, target):
     hits = sum(close(pixel(state, x, y), target) for x in range(state["width"]))
     return hits / state["width"]
+
+
+def best_fraction(state, target, start, end):
+    return max(row_fraction(state, y, target) for y in range(start, end))
 
 
 def main() -> int:
@@ -174,46 +206,66 @@ def main() -> int:
     check(state["manifest"], "projector loaded the drawing manifest")
     check(state["manifestSurface"], "outermost manifest renderer replaced PNG inference")
     check(
-        state["mode"] == "manifest-strokes-embossed-on-body",
-        f"diagnostics identify the manifest projection ({state['mode']})",
+        state["mode"] == "manifest-strokes-layered-on-body",
+        f"diagnostics identify the layered manifest projection ({state['mode']})",
     )
-    check(state["strokeCount"] == 3, f"all authored strokes survive ({state['strokeCount']})")
-    check(state["background"] == "#ffffff", "manifest background is the planet base")
+    check(state["strokeCount"] == 6, f"all authored strokes survive ({state['strokeCount']})")
+    check(state["background"] == "#000000", "manifest background is the planet base")
 
-    print("\nhorizontal and polar projection")
+    print("\nfull-revolution latitude layers and polar ownership")
+    check(state["northPoleStroke"] == 0, "nearest broad top stroke owns the north pole")
     check(
-        row_fraction(state, 2, PURPLE) > 0.95,
-        "a stroke reaching the north edge closes into a full purple pole cap",
+        row_fraction(state, 2, PURPLE) > 0.98,
+        "the nearest purple stroke closes into a complete north-pole cap",
     )
-    orange_best = max(row_fraction(state, y, ORANGE) for y in range(70, 115))
-    check(
-        orange_best > 0.88,
-        f"a horizontal stroke is stretched around the complete sphere ({orange_best:.0%})",
-    )
+    band_checks = [
+        (ORANGE, 55, 100, "orange"),
+        (GREEN, 90, 130, "green"),
+        (BLUE, 120, 165, "blue"),
+        (PINK, 155, 200, "pink"),
+    ]
+    for target, start, end, name in band_checks:
+        fraction = best_fraction(state, target, start, end)
+        check(
+            fraction > 0.98,
+            f"{name} horizontal stroke makes a complete 360-degree layer ({fraction:.0%})",
+        )
 
     print("\nvertical stroke stays a path")
-    green_rows = []
-    widest_green = 0.0
+    white_rows = []
+    widest_white = 0.0
     for y in range(105, 235):
-        fraction = row_fraction(state, y, GREEN)
-        if fraction > 0.01:
-            green_rows.append(y)
-            widest_green = max(widest_green, fraction)
-    check(len(green_rows) >= 35, f"vertical stroke follows many latitudes ({len(green_rows)} rows)")
+        fraction = row_fraction(state, y, WHITE)
+        if fraction > 0.005:
+            white_rows.append(y)
+            widest_white = max(widest_white, fraction)
+    check(len(white_rows) >= 35, f"vertical stroke follows many latitudes ({len(white_rows)} rows)")
     check(
-        widest_green < 0.24,
-        f"vertical stroke remains a narrow meridian instead of a belt ({widest_green:.0%})",
+        widest_white < 0.18,
+        f"vertical stroke remains a narrow meridian instead of a belt ({widest_white:.0%})",
     )
     check(
         row_fraction(state, state["height"] - 1, BODY) > 0.95,
-        "untouched south pole remains the white base colour",
+        "untouched south pole remains the black base colour",
     )
 
-    print("\nembossing")
+    print("\nlayered embossing")
+    levels = state["layerLevels"] or []
+    rounded_levels = {round(float(level), 3) for level in levels}
+    check(len(levels) == 6, f"each stroke receives an emboss level ({len(levels)})")
+    check(
+        len(rounded_levels) == 6,
+        f"adjacent authored layers use distinct physical heights ({levels})",
+    )
+    check(
+        max(levels) - min(levels) >= 0.35,
+        f"layer height separation is visually meaningful ({min(levels):.2f}-{max(levels):.2f})",
+    )
     body_level = 36
     relief_values = state["relief"][0::4]
-    check(state["displacementScale"] > 0, "manifest paint uses real displacement geometry")
-    check(max(relief_values) > body_level + 100, "stroke interiors stand clearly above the body")
+    check(state["displacementScale"] >= 0.1, "manifest paint uses stronger real displacement geometry")
+    check(state["bumpScale"] >= 0.14, "rounded layer shoulders have visible surface emboss")
+    check(max(relief_values) > body_level + 175, "highest stroke layer stands clearly above the body")
     check(not errors, f"browser console remains clean ({errors})")
 
     if FAILURES:
