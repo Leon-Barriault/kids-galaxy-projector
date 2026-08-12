@@ -110,6 +110,14 @@ def build_router(
             raise HTTPException(status_code=404, detail="Planet drawing not found")
         return planet, image_path
 
+    def require_projector_snapshot(planet) -> None:
+        if export_renderer.has_projector_snapshot(planet):
+            return
+        raise HTTPException(
+            status_code=409,
+            detail="Projector WebGL render is not ready yet",
+        )
+
     @router.get("/", response_class=HTMLResponse, dependencies=[Depends(projector_only)])
     async def galaxy_page():
         index_path = settings.static_dir / "index.html"
@@ -146,39 +154,63 @@ def build_router(
     async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
         return list_recent_planets.execute(limit=limit)
 
-    # The Pi is authoritative for all visual exports. The manager only consumes
-    # these results and never maintains a second planet renderer.
+    # The Pi is authoritative for all visual exports. The projector browser
+    # publishes the exact finalized Three.js hero image; manager clients only
+    # consume the resulting server-side preview/print/PDF resources.
+    @router.put(
+        "/api/admin/planets/{planet_id}/rendered-preview.png",
+        dependencies=[Depends(projector_only)],
+    )
+    async def store_projector_preview(planet_id: str, request: Request):
+        planet, _image_path = export_target(planet_id)
+        content = await request.body()
+        if len(content) > settings.max_file_size:
+            raise HTTPException(status_code=413, detail="Projector snapshot is too large")
+        try:
+            export_renderer.store_projector_snapshot(planet, content)
+        except (ValueError, OSError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return {"status": "stored", "planet_id": planet.id, "source": "projector-webgl"}
+
     @router.get("/api/admin/planets/{planet_id}/preview.png")
     async def preview_planet(planet_id: str):
         planet, image_path = export_target(planet_id)
+        source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
         content = export_renderer.render_preview(planet, image_path)
         return Response(
             content=content,
             media_type="image/png",
-            headers={"Cache-Control": "no-store"},
+            headers={
+                "Cache-Control": "no-store",
+                "X-Kids-Galaxy-Render-Source": source,
+            },
         )
 
     @router.get("/api/admin/planets/{planet_id}/print.png")
     async def print_planet_png(planet_id: str):
         planet, image_path = export_target(planet_id)
+        require_projector_snapshot(planet)
         content = export_renderer.render_print_sheet(planet, image_path)
         return Response(
             content=content,
             media_type="image/png",
             headers={
-                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.png"'
+                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.png"',
+                "X-Kids-Galaxy-Render-Source": "webgl",
             },
         )
 
     @router.get("/api/admin/planets/{planet_id}/print.pdf")
     async def print_planet_pdf(planet_id: str):
         planet, image_path = export_target(planet_id)
+        require_projector_snapshot(planet)
         content = export_renderer.render_print_pdf(planet, image_path)
         return Response(
             content=content,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.pdf"'
+                "Content-Disposition": f'inline; filename="{planet.id}_planet_print.pdf"',
+                "X-Kids-Galaxy-Render-Source": "webgl",
             },
         )
 
