@@ -1,6 +1,7 @@
 package com.kidsgalaxy.data.repository
 
 import android.util.Log
+import com.kidsgalaxy.data.remote.DrawingManifestSerializer
 import com.kidsgalaxy.data.remote.PlanetApi
 import com.kidsgalaxy.domain.model.Drawing
 import com.kidsgalaxy.domain.model.PlanetDesign
@@ -39,6 +40,14 @@ class RetrofitPlanetRepository(
                         "planet.png",
                         png.toRequestBody(PNG_MEDIA_TYPE.toMediaType()),
                     )
+                val manifestPart =
+                    MultipartBody.Part.createFormData(
+                        "manifest",
+                        "drawing-manifest.json",
+                        DrawingManifestSerializer
+                            .toJson(drawing)
+                            .toRequestBody(JSON_MEDIA_TYPE.toMediaType()),
+                    )
                 val namePart = name.toTextPart()
                 val stylePart = design.style.wireValue.toTextPart()
                 val companionPart =
@@ -54,6 +63,7 @@ class RetrofitPlanetRepository(
                 val response =
                     api.uploadPlanet(
                         filePart,
+                        manifestPart,
                         namePart,
                         stylePart,
                         companionPart,
@@ -75,6 +85,7 @@ class RetrofitPlanetRepository(
     private companion object {
         const val TAG = "KidsGalaxyRepo"
         const val PNG_MEDIA_TYPE = "image/png"
+        const val JSON_MEDIA_TYPE = "application/json"
         const val TEXT_MEDIA_TYPE = "text/plain"
     }
 }
