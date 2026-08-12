@@ -336,15 +336,14 @@ def main() -> int:
         # sphere as lumps on the silhouette.
         check(state["softToySurface"], "the child's drawing is painted onto the body")
         check(
-            state["projectionMode"] == "drawing-rows-as-latitude-bands",
-            "the drawing's rows become latitude bands right around the planet",
+            state["projectionMode"] == "strokes-wrapped-around-longitude",
+            "each stroke keeps its shape and wraps around the planet",
         )
         # The sculpted pipeline this replaced did emboss the child's marks, and a
         # bump map alone leaves the silhouette perfectly round - paint then reads
         # as printed on rather than laid on, which is the moulded look the
-        # reference images have. The band mask is a function of latitude, so real
-        # radial displacement costs one texture read per vertex and none per pixel.
-        check(state["baseHasDisplacement"], "painted bands are embossed into the body")
+        # reference images have.
+        check(state["baseHasDisplacement"], "painted strokes are embossed into the body")
         check(state["sculptedPatchesVisible"] == 0, "superseded sculpted slabs stay hidden")
         check(state["legacyShellsHidden"], "superseded alpha-shell accents stay hidden")
 

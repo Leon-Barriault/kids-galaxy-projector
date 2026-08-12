@@ -62,14 +62,15 @@ jobs:
       # only in the frames actually reaching the canvas.
       - name: Verify the projector keeps animating after publishing previews
         run: python scripts/check_projector_live_after_snapshot.py
-      # One script owns planet appearance now. It replaces check_sculpted_renderer,
-      # check_artwork_coverage, check_stroke_wrap, check_area_fill_latitude_projection
-      # and check_explicit_body_color, which between them asserted the sculpted-slab
-      # architecture - regions extruded into slabs, scaled to fill 94% of the body
-      # and wound 480 degrees of longitude. They were pinning the appearance the
-      # product owner asked to change, so they were replaced rather than repaired.
-      - name: Verify the child's drawing becomes latitude bands on the planet
-        run: python scripts/check_latitude_band_projection.py
+      # One script owns planet appearance. It replaces check_latitude_band_projection,
+      # and before that check_sculpted_renderer, check_artwork_coverage,
+      # check_stroke_wrap, check_area_fill_latitude_projection and
+      # check_explicit_body_color. Each was replaced rather than repaired for the
+      # same reason: it pinned the appearance being changed. The latest of those
+      # asserted "every latitude is one colour right around the planet", which a
+      # crooked line now has to violate by design.
+      - name: Verify the child's strokes wrap the planet keeping their shape
+        run: python scripts/check_drawing_projection.py
       - name: Verify tablet-selected Saturn ring colors
         run: python scripts/check_ring_color_fidelity.py
       - name: Verify astronaut WebGL options
