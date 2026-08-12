@@ -113,7 +113,32 @@ export class ProjectorSnapshotPublisher {
       renderer.setScissorTest(previousScissorTest);
       renderer.autoClear = previousAutoClear;
       target.dispose();
+      this.disposeExportScene(exportScene);
     }
+  }
+
+  /**
+   * Release what the export scene allocated, and only that.
+   *
+   * Object3D.clone() shares geometry and material with the original, so those
+   * must be left alone - disposing them here would strip the live planet the
+   * clone came from. A cloned light is different: Light.copy() gives it its own
+   * LightShadow, and a shadow-casting point light allocates a six-face cube
+   * shadow map. Nothing disposed that, so every published snapshot leaked one,
+   * and a full gallery of twelve leaked twelve. Enough of them exhausts GPU
+   * memory and the context is lost - at which point the last frame stays on
+   * screen and the galaxy appears to stop, moments after a preview is generated.
+   */
+  disposeExportScene(scene) {
+    if (!scene) return;
+    scene.traverse((object) => {
+      if (object.isLight && object.shadow?.map) {
+        object.shadow.map.dispose();
+        object.shadow.map = null;
+      }
+      if (object.isLight) object.dispose?.();
+    });
+    scene.clear();
   }
 
   createExportScene(entity) {
@@ -149,6 +174,11 @@ export class ProjectorSnapshotPublisher {
 
     const sun = this.galaxyScene.sunLight?.clone();
     if (sun) {
+      // The hero frame is a single planet on a plain background with nothing to
+      // receive a shadow, so casting one buys nothing and costs a whole cube
+      // shadow map allocated on the spot. Off before the light is ever rendered
+      // is cheaper than disposing it afterwards.
+      sun.castShadow = false;
       // Preserve the live sun direction and inverse-square distance from this
       // planet so the hero image uses the same lighting model as the projector.
       sun.position.copy(this.galaxyScene.sunGroup.position).sub(entity.mesh.position);

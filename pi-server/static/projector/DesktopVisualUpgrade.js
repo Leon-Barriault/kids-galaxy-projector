@@ -34,7 +34,11 @@ export function applyDesktopVisualUpgrade(galaxyScene) {
   const { renderer, scene, sunLight } = galaxyScene;
 
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // PCFShadowMap, not PCFSoftShadowMap: the soft variant is deprecated as of
+  // three r185, which warns and then silently uses this one anyway. Asking for
+  // it directly changes nothing on screen and removes a warning that made a real
+  // error harder to spot in the console.
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.userData ??= {};
   renderer.userData.kidsGalaxyQualityProfile = 'laptop-high';
   renderer.userData.kidsGalaxyRealtimeShadows = true;

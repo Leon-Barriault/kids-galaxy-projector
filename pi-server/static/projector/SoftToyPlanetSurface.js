@@ -533,7 +533,14 @@ export function installSoftToyPlanetSurface() {
     } catch (error) {
       // A planet that renders in the older style is far better than a planet
       // that does not render at all, so this never takes the projector down.
-      console.warn('Kids Galaxy soft-toy surface unavailable', error);
+      // But it must not fail quietly either: swallowing the error leaves the
+      // old appearance with no way to tell "this code is not running" from
+      // "this code ran and did nothing", which is exactly the question asked
+      // when a look change does not show up. So it is an error, not a warning,
+      // it names the planet, and it is left somewhere inspectable afterwards.
+      console.error('Kids Galaxy soft-toy surface failed', this.id, error);
+      window.kidsGalaxySoftToyFailures = window.kidsGalaxySoftToyFailures || [];
+      window.kidsGalaxySoftToyFailures.push({ id: this.id, message: String(error) });
     }
   }
 

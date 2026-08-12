@@ -139,11 +139,22 @@ const planetLoader = new PlanetLoader({
   snapshotPublisher,
 });
 
-const clock = new THREE.Clock();
+// THREE.Timer, not THREE.Clock: Clock is deprecated as of three r185 and warns
+// on every load. Timer has to be advanced once per frame before it is read,
+// where Clock computed elapsed time on demand - so update() leads the frame.
+//
+// Deliberately not calling timer.connect(document). That opts into pausing while
+// the page is hidden, which sounds right for a kiosk but is a new way for the
+// galaxy to stop dead - on a projector running in an unfocused or offscreen
+// window, "hidden" is not always what you would guess. Clock never paused, so
+// not connecting keeps behaviour identical and this stays a warning fix rather
+// than a behaviour change smuggled in beside one.
+const timer = new THREE.Timer();
 
 function animate() {
   requestAnimationFrame(animate);
-  const t = clock.getElapsedTime();
+  timer.update();
+  const t = timer.getElapsed();
   galaxyScene.update(t);
   environment.update(t);
   planetLoader.update(t);
