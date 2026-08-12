@@ -3,18 +3,24 @@
 The projector browser is the only renderer that knows the complete final planet
 object graph. It uploads a hero PNG after the Three.js pipeline has finished;
 this adapter persists that image and uses it verbatim for preview/print/PDF.
-The inherited Pillow renderer remains only as a pre-snapshot preview fallback
-and as the independent spherical-lithophane geometry generator.
+New kid-tablet lithophanes use the same vector drawing manifest as WebGL, while
+image-only stored planets retain the legacy raster-analysis fallback.
 """
 
 from __future__ import annotations
 
 import io
+import math
+import struct
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from app.domain.planet import Planet
+from app.infrastructure.manifest_lithophane import (
+    load_manifest_for_image,
+    manifest_relief_strength,
+)
 from app.infrastructure.planet_export_renderer import PillowPlanetExportRenderer
 
 
@@ -134,4 +140,50 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
 
         output = io.BytesIO()
         canvas.save(output, format="PNG", compress_level=4)
+        return output.getvalue()
+
+    def export_stl(self, planet: Planet, image_path: Path, diameter_mm: float) -> bytes:
+        """Generate manifest-faithful lithophane relief when vector intent exists."""
+        manifest = load_manifest_for_image(image_path)
+        if manifest is None:
+            return super().export_stl(planet, image_path, diameter_mm)
+
+        max_outer_radius = diameter_mm / 2.0
+        inner_radius = max_outer_radius - self.LITHOPHANE_MAX_WALL_MM
+        opening_latitude = math.radians(self.LITHOPHANE_OPENING_LATITUDE_DEGREES)
+
+        outer_rows: list[list[tuple[float, float, float]]] = []
+        inner_rows: list[list[tuple[float, float, float]]] = []
+        for lat_index in range(self.LAT_SEGMENTS + 1):
+            progress = lat_index / self.LAT_SEGMENTS
+            latitude = opening_latitude + (math.pi / 2.0 - opening_latitude) * progress
+            cos_lat = math.cos(latitude)
+            sin_lat = math.sin(latitude)
+            outer_row = []
+            inner_row = []
+            for lon_index in range(self.LON_SEGMENTS):
+                longitude = -math.pi + math.tau * lon_index / self.LON_SEGMENTS
+                artwork = manifest_relief_strength(manifest, latitude, longitude)
+                wall = self.LITHOPHANE_MIN_WALL_MM + artwork * (
+                    self.LITHOPHANE_MAX_WALL_MM - self.LITHOPHANE_MIN_WALL_MM
+                )
+                outer_radius = inner_radius + wall
+                direction = (
+                    math.sin(longitude) * cos_lat,
+                    sin_lat,
+                    math.cos(longitude) * cos_lat,
+                )
+                outer_row.append(tuple(component * outer_radius for component in direction))
+                inner_row.append(tuple(component * inner_radius for component in direction))
+            outer_rows.append(outer_row)
+            inner_rows.append(inner_row)
+
+        triangles = self._shell_triangles(outer_rows, inner_rows)
+        output = io.BytesIO()
+        header = f"Kids Galaxy {planet.id} manifest spherical lithophane".encode("ascii")[:80]
+        output.write(header.ljust(80, b"\0"))
+        output.write(struct.pack("<I", len(triangles)))
+        for a, b, c in triangles:
+            normal = self._normal(a, b, c)
+            output.write(struct.pack("<12fH", *normal, *a, *b, *c, 0))
         return output.getvalue()

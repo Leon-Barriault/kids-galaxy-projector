@@ -34,6 +34,10 @@ export class PlanetLoader {
     return payload.url || payload.texture_url || null;
   }
 
+  manifestUrlOf(payload) {
+    return typeof payload.drawing_manifest_url === 'string' ? payload.drawing_manifest_url : null;
+  }
+
   displayNameOf(payload) {
     return this.celebration.displayName(payload);
   }
@@ -47,6 +51,44 @@ export class PlanetLoader {
       if (!oldest) return;
       this.remove(oldest.id);
     }
+  }
+
+  async loadDrawingManifest(payload, entity) {
+    const url = this.manifestUrlOf(payload);
+    if (!url) return;
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) return;
+      const manifest = await response.json();
+      if (
+        manifest?.version === 1 &&
+        manifest?.coordinate_space === 'normalized-canvas-v1' &&
+        Array.isArray(manifest?.strokes)
+      ) {
+        entity.drawingManifest = manifest;
+        entity.mesh.userData.kidsGalaxyDrawingManifest = true;
+      }
+    } catch (error) {
+      console.warn('Kids Galaxy drawing manifest unavailable; using PNG fallback', payload.id, error);
+    }
+  }
+
+  loadTexture(payload, entity, textureUrl) {
+    this.textureLoader.load(
+      textureUrl,
+      (texture) => {
+        if (entity.disposed || this.kidPlanets.get(payload.id) !== entity) {
+          texture.dispose();
+          return;
+        }
+        entity.applyTexture(texture);
+        // The complete prototype-based projector pipeline has now transformed
+        // this entity. Capture that final WebGL object graph for print/PDF use.
+        this.snapshotPublisher?.schedule(entity);
+      },
+      undefined,
+      () => this.celebration.textureLoadFailed(),
+    );
   }
 
   add(payload, celebrate = false) {
@@ -67,23 +109,23 @@ export class PlanetLoader {
       typeof payload.body_color === 'string' && RGB_HEX.test(payload.body_color)
         ? payload.body_color.toLowerCase()
         : null;
+    entity.drawingManifest = null;
     this.kidPlanets.set(payload.id, entity);
 
-    this.textureLoader.load(
-      textureUrl,
-      (texture) => {
-        if (entity.disposed || this.kidPlanets.get(payload.id) !== entity) {
-          texture.dispose();
-          return;
+    const manifestUrl = this.manifestUrlOf(payload);
+    if (manifestUrl) {
+      // New vector-aware drawings wait for their authoritative sidecar so the
+      // first material ever shown already preserves the child's stroke intent.
+      this.loadDrawingManifest(payload, entity).finally(() => {
+        if (!entity.disposed && this.kidPlanets.get(payload.id) === entity) {
+          this.loadTexture(payload, entity, textureUrl);
         }
-        entity.applyTexture(texture);
-        // The complete prototype-based projector pipeline has now transformed
-        // this entity. Capture that final WebGL object graph for print/PDF use.
-        this.snapshotPublisher?.schedule(entity);
-      },
-      undefined,
-      () => this.celebration.textureLoadFailed(),
-    );
+      });
+    } else {
+      // Preserve the exact legacy timing for image-only planets. Besides being
+      // faster, this avoids shifting snapshot/delete races in existing kiosks.
+      this.loadTexture(payload, entity, textureUrl);
+    }
 
     if (celebrate) this.celebration.show(payload);
   }

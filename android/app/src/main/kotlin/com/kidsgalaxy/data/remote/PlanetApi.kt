@@ -20,6 +20,7 @@ data class UploadResponse(
     @SerializedName("ring_color") val ringColor: String? = null,
     @SerializedName("crater_color") val craterColor: String? = null,
     @SerializedName("mountain_color") val mountainColor: String? = null,
+    @SerializedName("drawing_manifest_url") val drawingManifestUrl: String? = null,
 )
 
 interface PlanetApi {
@@ -27,6 +28,7 @@ interface PlanetApi {
     @POST("api/upload")
     suspend fun uploadPlanet(
         @Part file: MultipartBody.Part,
+        @Part manifest: MultipartBody.Part,
         @Part("name") name: RequestBody,
         @Part("style") style: RequestBody,
         @Part("companions") companions: RequestBody,

@@ -10,7 +10,8 @@ imports are allowed here.
 import uuid
 
 from app.application.events import GalaxyCleared, PlanetCreated, PlanetRemoved
-from app.domain.errors import NotFoundError
+from app.domain.drawing_manifest import normalize_drawing_manifest
+from app.domain.errors import NotFoundError, ValidationError
 from app.domain.image_rules import (
     ensure_content_type_allowed,
     ensure_not_empty,
@@ -74,6 +75,7 @@ class SubmitPlanetUseCase:
         raw_crater_color: str | None = None,
         raw_mountain_color: str | None = None,
         raw_body_color: str | None = None,
+        drawing_manifest_bytes: bytes | None = None,
         max_size: int = DEFAULT_MAX_SIZE,
         max_dimension: int = DEFAULT_MAX_DIMENSION,
         target_size: int = DEFAULT_TARGET_SIZE,
@@ -85,6 +87,7 @@ class SubmitPlanetUseCase:
         ensure_size_within(len(image_bytes), max_size)
         ensure_recognised_image(image_bytes)
 
+        drawing_manifest = normalize_drawing_manifest(drawing_manifest_bytes)
         style = normalize_planet_style(raw_style)
         companions = normalize_companions(raw_companions)
         body_color = normalize_body_color(raw_body_color)
@@ -92,22 +95,39 @@ class SubmitPlanetUseCase:
         crater_color = normalize_crater_color(raw_crater_color)
         mountain_color = normalize_mountain_color(raw_mountain_color)
 
+        if drawing_manifest is not None:
+            manifest_background = drawing_manifest["background_color"]
+            if body_color is not None and body_color != manifest_background:
+                raise ValidationError("Drawing manifest background does not match body colour.")
+            body_color = manifest_background
+
         clean_png = self._image_processor.normalize_to_png(
             image_bytes,
             max_dimension=max_dimension,
             target_size=target_size,
         )
-        # New tablet clients explicitly state the planet body/background colour.
-        # Their uploaded pixels are therefore authored design input, not white
-        # paper that needs the legacy diffusion/wash treatment. Keeping the raw
-        # normalized drawing here prevents the old styler from smearing strokes
-        # or replacing the bucket colour before the 3D projector sees it.
+        # Manifest-aware tablets explicitly state which pixels are body and which
+        # paths are authored paint. Preserve the normalized raster exactly; the
+        # old surface styler exists only for legacy image-only uploads.
         if body_color is None:
             clean_png = self._surface_styler.style(clean_png)
 
         display_name = normalize_display_name(raw_name)
         planet_id = uuid.uuid4().hex[:10]
-        if style == "classic" and not companions and body_color is None:
+        if drawing_manifest is not None:
+            planet = self._repository.save_designed_with_manifest(
+                planet_id=planet_id,
+                display_name=display_name,
+                image_bytes=clean_png,
+                style=style,
+                companions=companions,
+                drawing_manifest=drawing_manifest,
+                ring_color=ring_color,
+                crater_color=crater_color,
+                mountain_color=mountain_color,
+                body_color=body_color,
+            )
+        elif style == "classic" and not companions and body_color is None:
             planet = self._repository.save(
                 planet_id=planet_id,
                 display_name=display_name,
