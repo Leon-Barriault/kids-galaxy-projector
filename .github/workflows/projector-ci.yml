@@ -46,9 +46,6 @@ jobs:
       - name: Install projector smoke dependencies
         run: |
           python -m pip install --upgrade pip
-          # The browser harness uses httpx directly as a tiny external client;
-          # the application test suite intentionally uses the separate httpx2
-          # package for Starlette TestClient compatibility.
           pip install -r pi-server/requirements-dev.txt \
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
@@ -56,21 +53,12 @@ jobs:
         run: python scripts/check_projector.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
-      # Publishing a preview must not stop the galaxy. Every earlier check here
-      # asserts scene state, and the freeze this guards against left the scene
-      # graph perfect while the renderer drew to an offscreen target - visible
-      # only in the frames actually reaching the canvas.
       - name: Verify the projector keeps animating after publishing previews
         run: python scripts/check_projector_live_after_snapshot.py
-      # One script owns planet appearance. It replaces check_latitude_band_projection,
-      # and before that check_sculpted_renderer, check_artwork_coverage,
-      # check_stroke_wrap, check_area_fill_latitude_projection and
-      # check_explicit_body_color. Each was replaced rather than repaired for the
-      # same reason: it pinned the appearance being changed. The latest of those
-      # asserted "every latitude is one colour right around the planet", which a
-      # crooked line now has to violate by design.
-      - name: Verify the child's strokes wrap the planet keeping their shape
+      - name: Verify legacy image-only drawings keep their stroke shapes
         run: python scripts/check_drawing_projection.py
+      - name: Verify tablet drawing manifests drive embossed sphere strokes
+        run: python scripts/check_manifest_stroke_projection.py
       - name: Verify tablet-selected Saturn ring colors
         run: python scripts/check_ring_color_fidelity.py
       - name: Verify astronaut WebGL options
