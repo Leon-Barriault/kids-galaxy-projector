@@ -84,14 +84,15 @@ const PLANET_RENDER_STAGES = Object.freeze([
   { name: 'visual-refinement', install: installVisualRefinementStage },
   { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
   { name: 'soft-toy-planet-surface', install: installSoftToyPlanetSurface },
-  // New kid-tablet planets carry the original vector stroke history. This stage
-  // is deliberately outermost so vector intent wins over every PNG-inference
-  // compatibility stage above it. Image-only stored planets still stop at the
-  // soft-toy fallback and keep rendering without a migration.
-  { name: 'manifest-stroke-surface', install: installManifestStrokeSurface },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
+// Keep the long-standing pipeline diagnostics stable. The manifest renderer is
+// an authoritative input adapter for new vector-aware tablet drawings rather
+// than a replacement for the image-only compatibility pipeline. Installing it
+// afterwards still makes it the outermost applyTexture wrapper, so manifest
+// intent wins synchronously whenever a sidecar is present.
+installManifestStrokeSurface();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
