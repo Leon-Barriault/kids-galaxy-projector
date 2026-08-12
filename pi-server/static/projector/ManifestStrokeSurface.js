@@ -6,18 +6,19 @@ const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
 const POLE_CLAIM_THRESHOLD = 0.22;
 const VERTICAL_ASPECT_THRESHOLD = 1.55;
-const HORIZONTAL_BAND_ASPECT_THRESHOLD = 2.25;
 const HORIZONTAL_POLE_ASPECT_THRESHOLD = 1.1;
-const DEFAULT_SHOULDER_TEXELS = 9;
-const MIN_SHOULDER_TEXELS = 7;
-const MAX_SHOULDER_TEXELS = 13;
-const SHOULDER_FLOOR = 0.28;
-const DISPLACEMENT_SCALE = 0.11;
-const BUMP_SCALE = 0.16;
-const BODY_HEIGHT = 36;
-const EDGE_SHADE = 0.76;
-const MIN_LAYER_LEVEL = 0.6;
-const MAX_LAYER_LEVEL = 0.98;
+const WRAP_ASPECT_THRESHOLD = 0.72;
+const SEAM_BLEND_FRACTION = 0.14;
+const DEFAULT_SHOULDER_TEXELS = 8;
+const MIN_SHOULDER_TEXELS = 5;
+const MAX_SHOULDER_TEXELS = 11;
+const SHOULDER_FLOOR = 0.18;
+const DISPLACEMENT_SCALE = 0.145;
+const BUMP_SCALE = 0.22;
+const BODY_HEIGHT = 26;
+const EDGE_SHADE = 0.7;
+const MIN_LAYER_LEVEL = 0.42;
+const MAX_LAYER_LEVEL = 1.0;
 const ORDER_WEIGHT = 0.35;
 const WIDTH_WEIGHT = 0.25;
 const COVERAGE_WEIGHT = 0.2;
@@ -62,15 +63,33 @@ function stableStrokeId(stroke, strokeIndex) {
 }
 
 function stableUnitHash(value) {
-  // FNV-1a keeps the tiny variation stable across reloads and independent of
-  // colour. The same authored stroke therefore receives the same relief every
-  // time, while separate same-colour strokes still retain their own identity.
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash / 0xffffffff;
+}
+
+function smoothstep(value) {
+  const t = THREE.MathUtils.clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function makePeriodic(points) {
+  if (points.length < 2) return points;
+  const firstY = points[0][1];
+  const lastY = points[points.length - 1][1];
+  const seamY = (firstY + lastY) * 0.5;
+
+  const adjusted = points.map(([x, y]) => {
+    const seamDistance = Math.min(x, 1 - x);
+    const weight = 1 - smoothstep(seamDistance / SEAM_BLEND_FRACTION);
+    return [x, THREE.MathUtils.lerp(y, seamY, weight)];
+  });
+  adjusted[0] = [0, seamY];
+  adjusted[adjusted.length - 1] = [1, seamY];
+  return adjusted;
 }
 
 function strokeProjection(stroke, strokeIndex) {
@@ -101,15 +120,17 @@ function strokeProjection(stroke, strokeIndex) {
   const verticalAspect = spanY / spanX;
   const horizontalAspect = spanX / spanY;
   const nearVertical = verticalAspect >= VERTICAL_ASPECT_THRESHOLD;
-  const horizontalBand = !nearVertical && horizontalAspect >= HORIZONTAL_BAND_ASPECT_THRESHOLD;
+  const wrapsLongitude = !nearVertical && horizontalAspect >= WRAP_ASPECT_THRESHOLD;
   const horizontalPoleCandidate =
     !nearVertical && horizontalAspect >= HORIZONTAL_POLE_ASPECT_THRESHOLD;
 
-  // The child's horizontal extent is presentation intent, not longitude. Any
-  // non-vertical path is expanded over a complete revolution. Strongly
-  // horizontal paths become latitude layers instead of a single wavy centreline;
-  // this is what makes a broad painted stripe read as a continuous toy-like band.
-  const projected = points.map(([x, y]) => [nearVertical ? x : (x - minX) / spanX, y]);
+  let projected;
+  if (wrapsLongitude) {
+    projected = makePeriodic(points.map(([x, y]) => [(x - minX) / spanX, y]));
+  } else {
+    projected = points;
+  }
+
   const widthNormalized = THREE.MathUtils.clamp(
     Number(stroke.width_normalized) || Number(stroke.width_px) / 512 || 0.02,
     0.003,
@@ -135,7 +156,7 @@ function strokeProjection(stroke, strokeIndex) {
     bandFrom: THREE.MathUtils.clamp(minY - halfWidth, 0, 1),
     bandTo: THREE.MathUtils.clamp(maxY + halfWidth, 0, 1),
     nearVertical,
-    horizontalBand,
+    wrapsLongitude,
     horizontalPoleCandidate,
     widthNormalized,
     coverageMetric,
@@ -153,8 +174,6 @@ function drawProjectedStroke(mask, projection) {
   context.lineJoin = 'round';
   context.lineWidth = Math.max(2, projection.widthNormalized * TEXTURE_HEIGHT);
 
-  // Three copies make the longitude seam continuous for both wrapped diagonal
-  // strokes and meridian strokes whose brush width overlaps 0/1.
   for (const shift of [-TEXTURE_WIDTH, 0, TEXTURE_WIDTH]) {
     context.beginPath();
     projection.points.forEach(([x, y], index) => {
@@ -180,17 +199,6 @@ function paintRows(owner, colourBuffer, colour, strokeIndex, from, to) {
       colourBuffer[texel * 3 + 2] = colour[2];
     }
   }
-}
-
-function paintHorizontalBand(owner, colourBuffer, projection) {
-  paintRows(
-    owner,
-    colourBuffer,
-    projection.colour,
-    projection.strokeIndex,
-    projection.bandFrom * (TEXTURE_HEIGHT - 1),
-    projection.bandTo * (TEXTURE_HEIGHT - 1),
-  );
 }
 
 function choosePoleOwners(projections) {
@@ -338,10 +346,11 @@ function roundedRelief(owner, profiles) {
         ownerAt(v, u - 1),
         ownerAt(v, u + 1),
       ];
-      const boundary = neighbours.some(
+      distance[texel] = neighbours.some(
         (neighbour) => neighbour !== null && neighbour !== strokeIndex,
-      );
-      distance[texel] = boundary ? 1 : far;
+      )
+        ? 1
+        : far;
     }
   }
 
@@ -383,9 +392,9 @@ function roundedRelief(owner, profiles) {
     const profile = profileByStroke[strokeIndex];
     const shoulderTexels = profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS;
     const t = Math.min(1, distance[i] / shoulderTexels);
-    const eased = t * t * (3 - 2 * t);
+    const eased = smoothstep(t);
     const rounded = SHOULDER_FLOOR + (1 - SHOULDER_FLOOR) * eased;
-    height[i] = (profile?.level || 0.8) * rounded;
+    height[i] = (profile?.level || 0.75) * rounded;
     shade[i] = EDGE_SHADE + (1 - EDGE_SHADE) * eased;
   }
   return { height, shade };
@@ -414,18 +423,14 @@ function buildManifestMaps(manifest) {
   let renderedStrokeCount = 0;
 
   projections.forEach((projection) => {
-    if (projection.horizontalBand) {
-      paintHorizontalBand(owner, colour, projection);
-    } else {
-      const alpha = drawProjectedStroke(mask, projection);
-      if (!alpha) return;
-      for (let i = 0; i < texels; i += 1) {
-        if (alpha[i * 4 + 3] < 32) continue;
-        owner[i] = projection.strokeIndex;
-        colour[i * 3] = projection.colour[0];
-        colour[i * 3 + 1] = projection.colour[1];
-        colour[i * 3 + 2] = projection.colour[2];
-      }
+    const alpha = drawProjectedStroke(mask, projection);
+    if (!alpha) return;
+    for (let i = 0; i < texels; i += 1) {
+      if (alpha[i * 4 + 3] < 32) continue;
+      owner[i] = projection.strokeIndex;
+      colour[i * 3] = projection.colour[0];
+      colour[i * 3 + 1] = projection.colour[1];
+      colour[i * 3 + 2] = projection.colour[2];
     }
     closePole(owner, colour, projection, poleOwners);
     renderedStrokeCount += 1;
@@ -477,7 +482,7 @@ function buildManifestMaps(manifest) {
   return {
     colour: colourCanvas,
     height: scalarCanvas((relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
-    roughness: scalarCanvas((relief) => 244 - relief * 58),
+    roughness: scalarCanvas((relief) => 238 - relief * 72),
     strokeCount: renderedStrokeCount,
     layerLevels: diagnostics.map((profile) => profile.level),
     strokeProfiles: diagnostics,
@@ -505,12 +510,12 @@ function applyManifestSurface(entity) {
   const previous = entity.mesh.material;
   const material = new THREE.MeshPhysicalMaterial({
     map: canvasTexture(built.colour, { srgb: true }),
-    roughness: 0.48,
+    roughness: 0.42,
     metalness: 0,
-    clearcoat: 0.56,
-    clearcoatRoughness: 0.34,
+    clearcoat: 0.46,
+    clearcoatRoughness: 0.3,
     envMap: previous?.envMap || null,
-    envMapIntensity: previous?.envMapIntensity ?? 0.72,
+    envMapIntensity: previous?.envMapIntensity ?? 0.78,
   });
   material.displacementMap = canvasTexture(built.height);
   material.displacementScale = DISPLACEMENT_SCALE;
@@ -525,7 +530,7 @@ function applyManifestSurface(entity) {
   material.userData.kidsGalaxyEmbossHeightHeuristic = 'order35-width25-coverage20-pole10-jitter10';
   material.userData.kidsGalaxyNorthPoleStroke = built.northPoleStroke;
   material.userData.kidsGalaxySouthPoleStroke = built.southPoleStroke;
-  material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-layered-on-body';
+  material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-periodic-molded-relief';
 
   entity.mesh.material = material;
   entity.mesh.userData.kidsGalaxyDrawingManifest = true;
