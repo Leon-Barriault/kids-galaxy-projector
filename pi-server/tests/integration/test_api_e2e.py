@@ -25,7 +25,7 @@ class TestHealthAndDiscovery:
         second = client.get("/api/galaxy")
         assert first.status_code == 200
         assert first.json() == second.json()
-        assert first.json()["service"] == "kids-galaxy"
+        assert first.json()["service"] == "kids-galaxy-projector"
 
     def test_configured_galaxy_name_is_reported(self, tmp_path):
         app = create_app(
