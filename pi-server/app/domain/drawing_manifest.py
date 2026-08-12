@@ -15,6 +15,7 @@ MAX_POINTS_PER_STROKE = 8192
 MAX_TOTAL_POINTS = 32768
 MAX_CANVAS_DIMENSION = 8192.0
 RGB_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+STROKE_ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def _number(value, *, field: str, minimum: float, maximum: float) -> float:
@@ -32,8 +33,16 @@ def _colour(value, *, field: str) -> str:
     return value.strip().lower()
 
 
+def _stroke_id(value, *, index: int) -> str:
+    if value is None:
+        return f"stroke-{index:04d}"
+    if not isinstance(value, str) or not STROKE_ID.fullmatch(value.strip()):
+        raise ValidationError("Invalid drawing manifest stroke ID.")
+    return value.strip()
+
+
 def normalize_drawing_manifest(raw: bytes | None) -> dict | None:
-    """Parse and canonicalise the optional tablet-authored drawing manifest."""
+    """Parse and canonicalise the tablet-authored drawing manifest."""
     if raw is None:
         return None
     if not raw or len(raw) > MAX_MANIFEST_BYTES:
@@ -72,10 +81,16 @@ def normalize_drawing_manifest(raw: bytes | None) -> dict | None:
         raise ValidationError("Invalid drawing manifest strokes.")
 
     normalized_strokes: list[dict] = []
+    seen_stroke_ids: set[str] = set()
     total_points = 0
     for index, stroke in enumerate(strokes):
         if not isinstance(stroke, dict):
             raise ValidationError("Invalid drawing manifest stroke.")
+        stroke_id = _stroke_id(stroke.get("stroke_id"), index=index)
+        if stroke_id in seen_stroke_ids:
+            raise ValidationError("Drawing manifest stroke IDs must be unique.")
+        seen_stroke_ids.add(stroke_id)
+
         colour = _colour(stroke.get("color"), field="stroke colour")
         width_px = _number(
             stroke.get("width_px"),
@@ -106,6 +121,7 @@ def normalize_drawing_manifest(raw: bytes | None) -> dict | None:
 
         normalized_strokes.append(
             {
+                "stroke_id": stroke_id,
                 "order": index,
                 "color": colour,
                 "width_px": width_px,
