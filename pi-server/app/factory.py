@@ -30,13 +30,13 @@ from app.infrastructure.clock import SystemClock
 from app.infrastructure.event_publisher import InMemoryEventPublisher
 from app.infrastructure.filesystem_repository import FileSystemPlanetRepository
 from app.infrastructure.image_processor import PillowImageProcessor
-from app.infrastructure.planet_export_renderer import PillowPlanetExportRenderer
 from app.infrastructure.rate_limiter import InMemoryRateLimiter
 from app.infrastructure.service_advertiser import (
     NullServiceAdvertiser,
     ZeroconfServiceAdvertiser,
 )
 from app.infrastructure.surface_styler import PillowSurfaceStyler
+from app.infrastructure.webgl_planet_export_renderer import WebglPlanetExportRenderer
 
 logger = logging.getLogger("kids-galaxy")
 
@@ -71,7 +71,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     image_processor = PillowImageProcessor()
     surface_styler = _styler_for(settings.surface_style)
-    export_renderer = PillowPlanetExportRenderer()
+    export_renderer = WebglPlanetExportRenderer(
+        settings.state_dir / "projector-snapshots"
+    )
     authorizer = AuthorizationPolicy(settings)
     clock = SystemClock()
     seasonal_resolver = SeasonalThemeResolver()
@@ -188,4 +190,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.galaxy = galaxy
     app.state.advertiser = advertiser
     app.state.authorizer = authorizer
+    app.state.export_renderer = export_renderer
     return app
