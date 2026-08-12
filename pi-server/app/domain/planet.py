@@ -29,6 +29,7 @@ class Planet:
     crater_color: str = DEFAULT_CRATER_COLOR
     mountain_color: str = DEFAULT_MOUNTAIN_COLOR
     body_color: str | None = None
+    has_drawing_manifest: bool = False
 
     @property
     def url(self) -> str:
@@ -37,6 +38,17 @@ class Planet:
     @property
     def metadata_filename(self) -> str:
         return PurePosixPath(self.filename).with_suffix(".json").name
+
+    @property
+    def drawing_manifest_filename(self) -> str:
+        stem = PurePosixPath(self.filename).stem
+        return f"{stem}.drawing.json"
+
+    @property
+    def drawing_manifest_url(self) -> str | None:
+        if not self.has_drawing_manifest:
+            return None
+        return f"/uploads/{self.drawing_manifest_filename}"
 
     def to_payload(self) -> dict:
         payload = {
@@ -50,6 +62,8 @@ class Planet:
         }
         if self.body_color is not None:
             payload["body_color"] = self.body_color
+        if self.drawing_manifest_url is not None:
+            payload["drawing_manifest_url"] = self.drawing_manifest_url
         if self.style == "ringed":
             payload["ring_color"] = self.ring_color
         if self.style == "cratered":
