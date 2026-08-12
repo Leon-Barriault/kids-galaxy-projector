@@ -3,15 +3,13 @@ import * as THREE from 'three';
 const SNAPSHOT_SIZE = 700;
 const SNAPSHOT_FOV_DEGREES = 40;
 const CAMERA_DISTANCE = 7.4;
-// Nearly level with the equator. This was 11/26, looking down about 23 degrees,
-// which suited a planet whose interest was sculpted lumps catching the light
-// from above. Now that a drawing arrives as latitude bands, looking down that
-// far gives the north pole a third of the frame and crushes every band below
-// the equator into the bottom edge - the child's green stripe becomes a sliver.
-// Ten degrees keeps enough elevation to read as a sphere rather than a disc
-// while leaving the bands their own share of the height.
-const CAMERA_ELEVATION_RATIO = 0.176;
-const RING_CAMERA_ELEVATION_RATIO = -1 / 2;
+// Keep the printed/exported hero almost straight-on. The live galaxy can use a
+// dramatic orbital view, but the keepsake should read like a centred product
+// photo so the kid's latitude ribbons are not compressed toward one edge.
+const CAMERA_ELEVATION_RATIO = 0.075;
+// Ringed planets still need enough vertical offset for the real Saturn ring to
+// open into an ellipse, but the old -0.5 ratio looked strongly tilted on paper.
+const RING_CAMERA_ELEVATION_RATIO = -0.24;
 const MAX_UPLOAD_ATTEMPTS = 3;
 
 /**
@@ -107,6 +105,8 @@ export class ProjectorSnapshotPublisher {
     const previousScissor = renderer.getScissor(new THREE.Vector4());
     const previousScissorTest = renderer.getScissorTest();
     const previousAutoClear = renderer.autoClear;
+    const previousClearColor = renderer.getClearColor(new THREE.Color());
+    const previousClearAlpha = renderer.getClearAlpha();
     let pixels = null;
 
     try {
@@ -114,6 +114,7 @@ export class ProjectorSnapshotPublisher {
       renderer.setViewport(0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE);
       renderer.setScissor(0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE);
       renderer.setScissorTest(false);
+      renderer.setClearColor(0x000000, 0);
       renderer.autoClear = true;
       renderer.clear(true, true, true);
       renderer.render(exportScene, camera);
@@ -130,6 +131,7 @@ export class ProjectorSnapshotPublisher {
       renderer.setViewport(previousViewport);
       renderer.setScissor(previousScissor);
       renderer.setScissorTest(previousScissorTest);
+      renderer.setClearColor(previousClearColor, previousClearAlpha);
       renderer.autoClear = previousAutoClear;
       target.dispose();
       this.disposeExportScene(exportScene);
@@ -165,8 +167,10 @@ export class ProjectorSnapshotPublisher {
 
   createExportScene(entity) {
     const scene = new THREE.Scene();
-    const sourceBackground = this.galaxyScene.scene.background;
-    scene.background = sourceBackground?.isColor ? sourceBackground.clone() : new THREE.Color(0x050818);
+    // Export only the planet object graph. A transparent background lets the
+    // print compositor place it on white paper without spending a square of ink
+    // on the projector's dark-sky backdrop.
+    scene.background = null;
 
     const planet = entity.mesh.clone(true);
     planet.position.set(0, 0, 0);
@@ -221,10 +225,8 @@ export class ProjectorSnapshotPublisher {
     const hasSaturnRing = (entity.decorations || []).some(
       (decoration) => decoration.userData?.kidsGalaxySaturnParticleRing,
     );
-    // The live Saturn ring is tilted mostly toward -Y/+Z. Looking from the
-    // normal +Y hero elevation makes that real ring nearly edge-on. Keep the
-    // same front longitude but move the export camera below the equator for
-    // ringed planets so the actual particle ring opens into a readable ellipse.
+    // Keep ringed exports a little below the equator so the ring remains an
+    // ellipse, but use a much less dramatic angle than the old product shot.
     const elevationRatio = hasSaturnRing
       ? RING_CAMERA_ELEVATION_RATIO
       : CAMERA_ELEVATION_RATIO;
@@ -239,7 +241,7 @@ export class ProjectorSnapshotPublisher {
     const canvas = document.createElement('canvas');
     canvas.width = SNAPSHOT_SIZE;
     canvas.height = SNAPSHOT_SIZE;
-    const context = canvas.getContext('2d', { alpha: false });
+    const context = canvas.getContext('2d', { alpha: true });
     if (!context) throw new Error('2D canvas is unavailable for snapshot encoding');
 
     const image = context.createImageData(SNAPSHOT_SIZE, SNAPSHOT_SIZE);
