@@ -52,10 +52,7 @@ def _projected_stroke(stroke: dict) -> tuple[list[tuple[float, float]], float, f
     span_x = max(0.0001, max_x - min_x)
     span_y = max(0.0001, max_y - min_y)
     near_vertical = span_y / span_x >= VERTICAL_ASPECT_THRESHOLD
-    if near_vertical:
-        projected = points
-    else:
-        projected = [((x - min_x) / span_x, y) for x, y in points]
+    projected = points if near_vertical else [((x - min_x) / span_x, y) for x, y in points]
 
     width = float(stroke.get("width_normalized") or 0.02)
     return projected, min_y, max_y, min(0.35, max(0.003, width))
