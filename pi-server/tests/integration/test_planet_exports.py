@@ -123,8 +123,9 @@ def test_ringed_print_preserves_projector_render_including_ring(client):
     # in the uploaded 700x700 WebGL frame. If Pillow re-renders the planet, it
     # disappears and the contract fails.
     assert sheet.getpixel((60 + 30, 145 + 30)) == (0, 255, 127)
-    # The real ring pixels are preserved in the hero panel as well.
-    assert sheet.getpixel((60 + 350, 145 + 205)) == (244, 201, 93)
+    # Sample the exposed left edge of the ring. The earlier top-centre sample
+    # sat behind the planet by design, so it correctly contained body pixels.
+    assert sheet.getpixel((60 + 60, 145 + 350)) == (244, 201, 93)
 
 
 def test_print_sheet_is_available_as_server_pdf(client):
