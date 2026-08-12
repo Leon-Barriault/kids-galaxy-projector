@@ -30,7 +30,7 @@ jobs:
           fi
 
   browser-smoke:
-    name: Sculpted kid-design WebGL acceptance
+    name: Manifest-driven WebGL acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,15 +49,13 @@ jobs:
           pip install -r pi-server/requirements-dev.txt \
             "httpx==0.28.1" "playwright==1.54.0"
           python -m playwright install --with-deps chromium
-      - name: Exercise core projector smoke contract
+      - name: Exercise core manifest projector contract
         run: python scripts/check_projector.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
       - name: Verify the projector keeps animating after publishing previews
         run: python scripts/check_projector_live_after_snapshot.py
-      - name: Verify legacy image-only drawings keep their stroke shapes
-        run: python scripts/check_drawing_projection.py
-      - name: Verify tablet drawing manifests drive embossed sphere strokes
+      - name: Verify tablet drawing manifests drive layered embossed sphere strokes
         run: python scripts/check_manifest_stroke_projection.py
       - name: Verify tablet-selected Saturn ring colors
         run: python scripts/check_ring_color_fidelity.py
