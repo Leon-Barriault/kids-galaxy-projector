@@ -45,37 +45,41 @@ def _manifest(background: str = "#ff0000") -> bytes:
     ).encode()
 
 
-class ManifestTestClient(TestClient):
-    """Keep ordinary integration requests on the current tablet wire contract.
+_ORIGINAL_TESTCLIENT_POST = TestClient.post
 
-    Individual tests stay focused on the behavior they own. Any POST to the
-    upload endpoint that supplies an image but does not explicitly provide its
-    own manifest receives a small valid manifest fixture. Tests for malformed or
-    missing manifests use ``raw_client`` instead.
-    """
 
-    def post(self, url, *args, **kwargs):
-        if url == "/api/upload" and "files" in kwargs:
-            files = kwargs["files"]
-            has_manifest = False
+def _manifest_post(self, url, *args, **kwargs):
+    """Make the modern tablet wire format the default across integration tests."""
+    if url == "/api/upload" and "files" in kwargs:
+        files = kwargs["files"]
+        if isinstance(files, dict):
+            has_manifest = "manifest" in files
+        else:
+            has_manifest = any(item[0] == "manifest" for item in files)
+
+        if not has_manifest:
+            data = kwargs.get("data") or {}
+            background = data.get("body_color", "#ff0000") if isinstance(data, dict) else "#ff0000"
+            manifest_file = (
+                "drawing-manifest.json",
+                _manifest(background),
+                "application/json",
+            )
             if isinstance(files, dict):
-                has_manifest = "manifest" in files
+                kwargs["files"] = {**files, "manifest": manifest_file}
             else:
-                has_manifest = any(item[0] == "manifest" for item in files)
+                kwargs["files"] = [*files, ("manifest", manifest_file)]
+    return _ORIGINAL_TESTCLIENT_POST(self, url, *args, **kwargs)
 
-            if not has_manifest:
-                data = kwargs.get("data") or {}
-                background = data.get("body_color", "#ff0000") if isinstance(data, dict) else "#ff0000"
-                manifest_file = (
-                    "drawing-manifest.json",
-                    _manifest(background),
-                    "application/json",
-                )
-                if isinstance(files, dict):
-                    kwargs["files"] = {**files, "manifest": manifest_file}
-                else:
-                    kwargs["files"] = [*files, ("manifest", manifest_file)]
-        return super().post(url, *args, **kwargs)
+
+# Tests that construct TestClient directly should still exercise today's wire
+# contract. The one test that deliberately omits a manifest uses RawTestClient.
+TestClient.post = _manifest_post
+
+
+class RawTestClient(TestClient):
+    def post(self, url, *args, **kwargs):
+        return _ORIGINAL_TESTCLIENT_POST(self, url, *args, **kwargs)
 
 
 @pytest.fixture
@@ -97,13 +101,13 @@ def app(settings):
 
 @pytest.fixture
 def client(app):
-    return ManifestTestClient(app)
+    return TestClient(app)
 
 
 @pytest.fixture
 def raw_client(app):
     """Unmodified HTTP client for testing the upload wire contract itself."""
-    return TestClient(app)
+    return RawTestClient(app)
 
 
 @pytest.fixture
