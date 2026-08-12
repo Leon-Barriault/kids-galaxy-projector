@@ -5,9 +5,17 @@ State as of the last commit on this branch. Written so a session started fresh
 
 ## Where things stand
 
-`origin/main` is at `ebcba0f`. Local `main` is ahead of it by the freeze fix and
-the stroke-projection change, **neither of which has been pushed** — push them or
-review them first, but do not assume the remote has them.
+`main` carries the freeze fix (`a91c697`, `481dd69`) and, on top of it, the
+stroke-projection change. The freeze was fixed twice independently, in parallel
+sessions that never saw each other: `a91c697` landed on `main` first and is the
+one that survives. The duplicate was dropped in a rebase rather than merged, so
+there is exactly one implementation in the tree — if you find yourself reading
+two promise queues in `ProjectorSnapshotPublisher`, something went wrong.
+
+None of the appearance work has been verified in a real browser. It was checked
+by running the surface module under Node with `three` and canvas stubbed, which
+proves the projection maths and that nothing throws — not what it looks like on
+the Pi. Run the loop below, and look at `artifacts/`, before trusting it.
 
 CI is still unconfirmed, and it needs a look rather than an assumption: GitHub
 shows **no check runs at all against `e3c69fb`**, and the newest run on the
@@ -97,9 +105,19 @@ A twelve-planet harness against the pre-fix file put 19 of 20 frames offscreen
 and finished bound to a disposed target.
 
 Encoding now happens after the renderer is restored, and captures run one at a
-time through a promise queue. `scripts/check_projector_live_after_snapshot.py`
-guards it by the symptom rather than the mechanism: `getRenderTarget()` must be
-null once captures settle, and two screenshots of the live canvas must differ.
+time through a promise queue (`a91c697`). Note where that queue sits: it wraps
+`captureAndPublish`, so the upload and its three retries — up to about 540 ms of
+backoff — are inside the critical section, and the next planet's capture waits on
+the previous planet's network call. That is the safe choice and it is fine for a
+gallery of twelve; if capture latency ever matters, moving the queue down to
+`capture` serialises only the GPU work and lets uploads overlap.
+
+`scripts/check_projector_live_after_snapshot.py` guards it by the symptom rather
+than the mechanism: `getRenderTarget()` must be null once captures settle, and two
+screenshots of the live canvas must differ. Both matter because every other
+projector script asserts scene state, and scene state was never wrong.
+`check_webgl_export_snapshot.py` also grew liveness checks in `481dd69`; the two
+overlap deliberately rather than by accident.
 
 **If it still freezes**, the browser console is still the fastest discriminator.
 A red error points at an exception; `WebGL context lost` would point back at
