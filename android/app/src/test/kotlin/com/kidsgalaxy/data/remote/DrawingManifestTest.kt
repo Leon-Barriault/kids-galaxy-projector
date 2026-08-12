@@ -64,10 +64,8 @@ class DrawingManifestTest {
                 ),
             )
 
-        val strokes =
-            JsonParser.parseString(DrawingManifestSerializer.toJson(drawing))
-                .asJsonObject["strokes"]
-                .asJsonArray
+        val json = JsonParser.parseString(DrawingManifestSerializer.toJson(drawing)).asJsonObject
+        val strokes = json["strokes"].asJsonArray
 
         assertEquals(2, strokes.size())
         assertEquals("#ff8800", strokes[0].asJsonObject["color"].asString)
