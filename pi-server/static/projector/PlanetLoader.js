@@ -112,14 +112,20 @@ export class PlanetLoader {
     entity.drawingManifest = null;
     this.kidPlanets.set(payload.id, entity);
 
-    // The vector manifest is authoritative for new tablet drawings. Wait for it
-    // before applying the PNG so the outermost surface stage never has to race
-    // a late metadata fetch and briefly publish the old inferred appearance.
-    this.loadDrawingManifest(payload, entity).finally(() => {
-      if (!entity.disposed && this.kidPlanets.get(payload.id) === entity) {
-        this.loadTexture(payload, entity, textureUrl);
-      }
-    });
+    const manifestUrl = this.manifestUrlOf(payload);
+    if (manifestUrl) {
+      // New vector-aware drawings wait for their authoritative sidecar so the
+      // first material ever shown already preserves the child's stroke intent.
+      this.loadDrawingManifest(payload, entity).finally(() => {
+        if (!entity.disposed && this.kidPlanets.get(payload.id) === entity) {
+          this.loadTexture(payload, entity, textureUrl);
+        }
+      });
+    } else {
+      // Preserve the exact legacy timing for image-only planets. Besides being
+      // faster, this avoids shifting snapshot/delete races in existing kiosks.
+      this.loadTexture(payload, entity, textureUrl);
+    }
 
     if (celebrate) this.celebration.show(payload);
   }
