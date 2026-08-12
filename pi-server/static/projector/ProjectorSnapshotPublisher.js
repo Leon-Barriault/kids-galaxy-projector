@@ -25,6 +25,13 @@ export class ProjectorSnapshotPublisher {
     this.galaxyScene = galaxyScene;
     this.renderer = galaxyScene.renderer;
     this.pending = new Map();
+    // Every snapshot temporarily borrows the *live* WebGLRenderer. Captures must
+    // never overlap: each capture saves renderer state and later restores it, so
+    // overlapping captures can restore another capture's off-screen target and
+    // leave the projector rendering forever into a disposed 700x700 framebuffer.
+    // Serialising the whole capture/encode step also gives the animation loop
+    // time between planets while PNG encoding runs asynchronously.
+    this.captureQueue = Promise.resolve();
   }
 
   schedule(entity) {
@@ -39,13 +46,20 @@ export class ProjectorSnapshotPublisher {
         if (entity.disposed) return;
         const timer = window.setTimeout(() => {
           this.pending.delete(entity.id);
-          this.captureAndPublish(entity).catch((error) => {
+          this.enqueueCaptureAndPublish(entity).catch((error) => {
             console.warn('Kids Galaxy projector snapshot failed', entity.id, error);
           });
         }, 60);
         this.pending.set(entity.id, timer);
       });
     });
+  }
+
+  enqueueCaptureAndPublish(entity) {
+    const run = this.captureQueue.then(() => this.captureAndPublish(entity));
+    // A failed planet must not poison the queue for every planet after it.
+    this.captureQueue = run.catch(() => {});
+    return run;
   }
 
   async captureAndPublish(entity) {
@@ -78,7 +92,7 @@ export class ProjectorSnapshotPublisher {
     throw lastError || new Error('snapshot upload failed');
   }
 
-  async capture(entity) {
+  capture(entity) {
     const exportScene = this.createExportScene(entity);
     const camera = this.createExportCamera(entity);
     const target = new THREE.WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE, {
@@ -93,6 +107,7 @@ export class ProjectorSnapshotPublisher {
     const previousScissor = renderer.getScissor(new THREE.Vector4());
     const previousScissorTest = renderer.getScissorTest();
     const previousAutoClear = renderer.autoClear;
+    let pixels = null;
 
     try {
       renderer.setRenderTarget(target);
@@ -103,10 +118,14 @@ export class ProjectorSnapshotPublisher {
       renderer.clear(true, true, true);
       renderer.render(exportScene, camera);
 
-      const pixels = new Uint8Array(SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4);
+      pixels = new Uint8Array(SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4);
       renderer.readRenderTargetPixels(target, 0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE, pixels);
-      return await this.pixelsToPng(pixels);
     } finally {
+      // Restore the live framebuffer *before* any asynchronous PNG encoding.
+      // canvas.toBlob() can take long enough for multiple animation frames on a
+      // kiosk. Keeping the off-screen target bound until its callback completes
+      // makes those frames invisible and, with overlapping captures, allowed
+      // stale/disposed targets to be restored out of order.
       renderer.setRenderTarget(previousTarget);
       renderer.setViewport(previousViewport);
       renderer.setScissor(previousScissor);
@@ -115,6 +134,9 @@ export class ProjectorSnapshotPublisher {
       target.dispose();
       this.disposeExportScene(exportScene);
     }
+
+    if (!pixels) return Promise.resolve(null);
+    return this.pixelsToPng(pixels);
   }
 
   /**
