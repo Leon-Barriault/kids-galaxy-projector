@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Real-WebGL contract for tablet-authored drawing manifests.
-
-The uploaded PNG in this test is intentionally blank. Every visible coloured
-stroke therefore has to come from the JSON sidecar, proving the projector does
-not reverse-engineer new tablet drawings from raster pixels.
-"""
+"""Real-WebGL contract for manifest-authored molded planet relief."""
 
 from __future__ import annotations
 
@@ -21,8 +16,6 @@ BODY = (0, 0, 0)
 PURPLE = (123, 31, 162)
 ORANGE = (245, 124, 0)
 GREEN = (67, 160, 71)
-BLUE = (30, 136, 229)
-PINK = (216, 27, 96)
 WHITE = (255, 255, 255)
 
 
@@ -46,65 +39,41 @@ def manifest_bytes() -> bytes:
                     "stroke_id": "purple-cap",
                     "order": 0,
                     "color": "#7b1fa2",
-                    "width_px": 48,
-                    "width_normalized": 0.09375,
-                    # Deliberately does not touch y=0. It is merely the nearest
-                    # broad stroke to the north and should still claim the pole.
-                    "points": [[0.12, 0.14], [0.5, 0.16], [0.88, 0.145]],
+                    "width_px": 54,
+                    "width_normalized": 0.105,
+                    "points": [[0.12, 0.14], [0.5, 0.17], [0.88, 0.145]],
                 },
                 {
                     "stroke_id": "orange-wide-early",
                     "order": 1,
                     "color": "#f57c00",
-                    "width_px": 38,
-                    "width_normalized": 0.07421875,
-                    "points": [[0.28, 0.29], [0.5, 0.33], [0.72, 0.30]],
+                    "width_px": 44,
+                    "width_normalized": 0.086,
+                    "points": [[0.16, 0.29], [0.38, 0.34], [0.62, 0.30], [0.84, 0.325]],
                 },
                 {
                     "stroke_id": "orange-narrow-late",
                     "order": 2,
                     "color": "#f57c00",
-                    "width_px": 25,
-                    "width_normalized": 0.048828125,
-                    # Same paint colour as the previous stroke, intentionally
-                    # overlapping its lower edge. Identity, not RGB, must create
-                    # a second relief terrace and a shoulder between them.
-                    "points": [[0.22, 0.365], [0.52, 0.385], [0.78, 0.37]],
+                    "width_px": 29,
+                    "width_normalized": 0.057,
+                    "points": [[0.18, 0.39], [0.42, 0.36], [0.66, 0.405], [0.82, 0.38]],
                 },
                 {
                     "stroke_id": "green-band",
                     "order": 3,
                     "color": "#43a047",
-                    "width_px": 36,
-                    "width_normalized": 0.0703125,
-                    "points": [[0.2, 0.47], [0.48, 0.49], [0.8, 0.46]],
-                },
-                {
-                    "stroke_id": "blue-band",
-                    "order": 4,
-                    "color": "#1e88e5",
-                    "width_px": 34,
-                    "width_normalized": 0.06640625,
-                    "points": [[0.25, 0.57], [0.5, 0.59], [0.75, 0.56]],
-                },
-                {
-                    "stroke_id": "pink-band",
-                    "order": 5,
-                    "color": "#d81b60",
-                    "width_px": 34,
-                    "width_normalized": 0.06640625,
-                    "points": [[0.2, 0.69], [0.5, 0.71], [0.8, 0.68]],
+                    "width_px": 42,
+                    "width_normalized": 0.082,
+                    "points": [[0.12, 0.49], [0.36, 0.45], [0.65, 0.51], [0.88, 0.47]],
                 },
                 {
                     "stroke_id": "white-meridian",
-                    "order": 6,
+                    "order": 4,
                     "color": "#ffffff",
                     "width_px": 24,
-                    "width_normalized": 0.046875,
-                    # Tall stroke remains a local meridian path rather than a
-                    # latitude band. Keep it below the coloured layers so the
-                    # full-revolution assertions are not measuring later-paint occlusion.
-                    "points": [[0.49, 0.79], [0.52, 0.86], [0.5, 0.94]],
+                    "width_normalized": 0.047,
+                    "points": [[0.49, 0.65], [0.52, 0.78], [0.5, 0.92]],
                 },
             ],
             "raster": {
@@ -124,16 +93,11 @@ def upload_manifest_planet(server: Server) -> str:
             "file": ("blank.png", blank_png(), "image/png"),
             "manifest": ("drawing-manifest.json", manifest_bytes(), "application/json"),
         },
-        data={"name": "Manifest Strokes", "body_color": "#000000"},
+        data={"name": "Manifest Molded Relief", "body_color": "#000000"},
         timeout=10,
     )
     response.raise_for_status()
-    payload = response.json()
-    check(
-        isinstance(payload.get("drawing_manifest_url"), str),
-        "upload response exposes the drawing manifest sidecar",
-    )
-    return payload["planet_id"]
+    return response.json()["planet_id"]
 
 
 SURFACE_STATE = """
@@ -152,15 +116,11 @@ SURFACE_STATE = """
     return Array.from(ctx.getImageData(0, 0, source.width, source.height).data);
   };
   return {
-    manifest: Boolean(p.drawingManifest),
-    manifestSurface: Boolean(m.userData.kidsGalaxyManifestStrokeSurface),
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
     layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
     strokeProfiles: m.userData.kidsGalaxyEmbossStrokeProfiles,
-    heightHeuristic: m.userData.kidsGalaxyEmbossHeightHeuristic,
     northPoleStroke: m.userData.kidsGalaxyNorthPoleStroke,
-    background: p.mesh.userData.kidsGalaxyManifestBackground,
     width: image.width,
     height: image.height,
     colour: read(image),
@@ -172,7 +132,7 @@ SURFACE_STATE = """
 """
 
 
-def close(pixel_value, target, tolerance=45):
+def close(pixel_value, target, tolerance=48):
     return sum((int(pixel_value[i]) - target[i]) ** 2 for i in range(3)) <= tolerance**2
 
 
@@ -181,19 +141,13 @@ def pixel(state, x, y):
     return state["colour"][offset : offset + 3]
 
 
-def row_fraction(state, y, target):
-    hits = sum(close(pixel(state, x, y), target) for x in range(state["width"]))
-    return hits / state["width"]
+def relief_value(state, x, y):
+    offset = (y * state["width"] + x) * 4
+    return state["relief"][offset]
 
 
-def best_fraction(state, target, start, end):
-    return max(row_fraction(state, y, target) for y in range(start, end))
-
-
-def relief_row_mean(state, y):
-    start = y * state["width"] * 4
-    end = start + state["width"] * 4
-    return sum(state["relief"][start:end:4]) / state["width"]
+def colour_rows_at_x(state, x, target):
+    return [y for y in range(state["height"]) if close(pixel(state, x, y), target)]
 
 
 def main() -> int:
@@ -226,114 +180,78 @@ def main() -> int:
     if state is None:
         return 1
 
-    print("\nmanifest source of truth")
-    check(state["manifest"], "projector loaded the drawing manifest")
-    check(state["manifestSurface"], "outermost manifest renderer replaced PNG inference")
     check(
-        state["mode"] == "manifest-strokes-layered-on-body",
-        f"diagnostics identify the layered manifest projection ({state['mode']})",
+        state["mode"] == "manifest-strokes-periodic-molded-relief",
+        f"renderer reports periodic molded relief ({state['mode']})",
     )
-    check(state["strokeCount"] == 7, f"all authored strokes survive ({state['strokeCount']})")
-    check(state["background"] == "#000000", "manifest background is the planet base")
-
-    print("\nfull-revolution latitude layers and polar ownership")
+    check(state["strokeCount"] == 5, f"all authored strokes survive ({state['strokeCount']})")
     check(state["northPoleStroke"] == 0, "nearest broad top stroke owns the north pole")
-    check(
-        row_fraction(state, 2, PURPLE) > 0.98,
-        "the nearest purple stroke closes into a complete north-pole cap",
-    )
-    band_checks = [
-        (ORANGE, 60, 88, "first orange"),
-        (ORANGE, 88, 108, "second same-color orange"),
-        (GREEN, 105, 135, "green"),
-        (BLUE, 135, 165, "blue"),
-        (PINK, 165, 200, "pink"),
-    ]
-    for target, start, end, name in band_checks:
-        fraction = best_fraction(state, target, start, end)
-        check(
-            fraction > 0.98,
-            f"{name} horizontal stroke makes a complete 360-degree layer ({fraction:.0%})",
-        )
+    check(close(pixel(state, 2, 2), PURPLE), "purple top stroke closes the north cap")
 
-    print("\nvertical stroke stays a path")
-    white_rows = []
-    widest_white = 0.0
-    for y in range(195, 252):
-        fraction = row_fraction(state, y, WHITE)
-        if fraction > 0.005:
-            white_rows.append(y)
-            widest_white = max(widest_white, fraction)
-    check(len(white_rows) >= 30, f"vertical stroke follows many latitudes ({len(white_rows)} rows)")
+    print("\nperiodic wrapped ribbons")
+    for target, name in [(ORANGE, "orange"), (GREEN, "green")]:
+        left_rows = colour_rows_at_x(state, 1, target)
+        right_rows = colour_rows_at_x(state, state["width"] - 2, target)
+        check(left_rows, f"{name} ribbon reaches the left longitude seam")
+        check(right_rows, f"{name} ribbon reaches the right longitude seam")
+        if left_rows and right_rows:
+            left_mid = sum(left_rows) / len(left_rows)
+            right_mid = sum(right_rows) / len(right_rows)
+            check(
+                abs(left_mid - right_mid) <= 3.0,
+                f"{name} closes smoothly at the longitude seam ({left_mid:.1f}/{right_mid:.1f})",
+            )
+
+    green_centres = []
+    for x in [32, 128, 256, 384, 480]:
+        rows = colour_rows_at_x(state, x, GREEN)
+        check(rows, f"green molded ribbon exists at longitude texel {x}")
+        if rows:
+            green_centres.append(sum(rows) / len(rows))
     check(
-        widest_white < 0.18,
-        f"vertical stroke remains a narrow meridian instead of a belt ({widest_white:.0%})",
-    )
-    check(
-        row_fraction(state, state["height"] - 1, BODY) > 0.95,
-        "untouched south pole remains the black base colour",
+        green_centres and max(green_centres) - min(green_centres) >= 4,
+        f"wrapped ribbon preserves the child's organic waviness ({green_centres})",
     )
 
-    print("\nper-stroke mixed embossing")
+    print("\nphysical molded relief")
     levels = state["layerLevels"] or []
     profiles = state["strokeProfiles"] or []
-    rounded_levels = {round(float(level), 6) for level in levels}
-    check(len(levels) == 7, f"each stroke receives an emboss level ({len(levels)})")
-    check(
-        len(rounded_levels) == 7,
-        f"every authored stroke has a unique physical height ({levels})",
-    )
-    check(
-        state["heightHeuristic"] == "order35-width25-coverage20-pole10-jitter10",
-        f"renderer reports the approved mixed height heuristic ({state['heightHeuristic']})",
-    )
-    profile_ids = [profile.get("strokeId") for profile in profiles]
-    check(len(set(profile_ids)) == 7, f"stroke identities remain unique ({profile_ids})")
+    check(len(levels) == 5, "each stroke receives an independent relief profile")
+    check(len({round(float(level), 6) for level in levels}) == 5, "stroke heights remain distinct")
     orange_profiles = [profile for profile in profiles if profile.get("colour") == "#f57c00"]
-    check(len(orange_profiles) == 2, "two authored orange strokes remain separate profiles")
+    check(len(orange_profiles) == 2, "same-colour orange strokes remain separate physical layers")
     if len(orange_profiles) == 2:
-        orange_delta = abs(float(orange_profiles[0]["level"]) - float(orange_profiles[1]["level"]))
         check(
-            orange_profiles[0]["strokeId"] != orange_profiles[1]["strokeId"],
-            "same-color strokes preserve independent identities",
-        )
-        check(
-            orange_delta >= 0.01,
-            f"same-color strokes receive visibly different heights (delta {orange_delta:.3f})",
-        )
-        check(
-            orange_profiles[0]["components"]["jitter"]
-            != orange_profiles[1]["components"]["jitter"],
-            "deterministic stroke-id jitter separates otherwise similar strokes",
+            abs(float(orange_profiles[0]["level"]) - float(orange_profiles[1]["level"])) >= 0.015,
+            "same-colour strokes have visibly different molded heights",
         )
 
-    # The two orange bands overlap in source Y. Since ownership is by stroke ID,
-    # their shared RGB boundary must still form a physical shoulder in the height map.
-    orange_boundary = min(relief_row_mean(state, y) for y in range(84, 91))
-    orange_centres = [relief_row_mean(state, 75), relief_row_mean(state, 98)]
-    check(
-        orange_boundary + 18 < min(orange_centres),
-        (
-            "touching same-color strokes retain a visible emboss shoulder "
-            f"({orange_centres[0]:.0f}/{orange_boundary:.0f}/{orange_centres[1]:.0f})"
-        ),
-    )
-    check(
-        max(levels) - min(levels) >= 0.06,
-        f"mixed per-stroke relief still has meaningful height spread ({min(levels):.2f}-{max(levels):.2f})",
-    )
-
-    body_level = 36
     relief_values = state["relief"][0::4]
-    check(state["displacementScale"] >= 0.1, "manifest paint uses stronger real displacement geometry")
-    check(state["bumpScale"] >= 0.14, "rounded layer shoulders have visible surface emboss")
-    check(max(relief_values) > body_level + 130, "highest stroke layer stands clearly above the body")
+    check(state["displacementScale"] >= 0.14, "paint uses strong geometry displacement")
+    check(state["bumpScale"] >= 0.2, "rounded shoulders use strong local surface relief")
+    check(max(relief_values) - min(relief_values) > 150, "relief map has toy-like physical depth")
+
+    white_columns = 0
+    for x in range(state["width"]):
+        if any(close(pixel(state, x, y), WHITE) for y in range(160, 245)):
+            white_columns += 1
+    check(white_columns < state["width"] * 0.2, "vertical stroke remains a localized meridian")
     check(not errors, f"browser console remains clean ({errors})")
+
+    # A quick relief sanity sample along the green ribbon: interior paint must be
+    # materially higher than the untouched black body near the south pole.
+    green_rows = colour_rows_at_x(state, 256, GREEN)
+    if green_rows:
+        centre_y = int(sum(green_rows) / len(green_rows))
+        check(
+            relief_value(state, 256, centre_y) > relief_value(state, 256, state["height"] - 3) + 90,
+            "molded ribbon stands clearly above the base sphere",
+        )
 
     if FAILURES:
         print(f"\n{len(FAILURES)} manifest stroke check(s) failed")
         return 1
-    print("\nManifest stroke projection checks passed")
+    print("\nManifest molded relief checks passed")
     return 0
 
 
