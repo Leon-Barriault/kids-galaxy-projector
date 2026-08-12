@@ -42,6 +42,7 @@ from app.application.use_cases import (
     ListRecentPlanetsUseCase,
     SubmitPlanetUseCase,
 )
+from app.domain.drawing_manifest import MAX_MANIFEST_BYTES
 from app.domain.errors import DomainError, NotFoundError, RateLimitedError, ValidationError
 from app.domain.galaxy import Galaxy
 from app.domain.image_rules import ensure_size_within
@@ -167,9 +168,6 @@ def build_router(
     async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
         return list_recent_planets.execute(limit=limit)
 
-    # The Pi is authoritative for all visual exports. The projector browser
-    # publishes the exact finalized Three.js hero image; manager clients only
-    # consume the resulting server-side preview/print/PDF resources.
     @router.put(
         "/api/admin/planets/{planet_id}/rendered-preview.png",
         dependencies=[Depends(projector_only)],
@@ -185,11 +183,6 @@ def build_router(
             raise HTTPException(status_code=400, detail=str(error)) from error
         return {"status": "stored", "planet_id": planet.id, "source": "projector-webgl"}
 
-    # Every export below is manager-only. They are "/api/admin/..." resources
-    # that hand back a child's artwork rendered for print, so an unauthenticated
-    # caller who guesses or scrapes a planet id must not be able to pull them.
-    # The rendering itself is 100-800 ms of Pillow/NumPy work, so it runs in a
-    # worker thread; called inline it stalls the SSE loop for every projector.
     @router.get(
         "/api/admin/planets/{planet_id}/preview.png",
         dependencies=[Depends(manager_only)],
@@ -271,6 +264,7 @@ def build_router(
     async def upload_planet(
         request: Request,
         file: UploadFile = File(...),
+        manifest: UploadFile | None = File(None),
         name: str = Form("My Planet"),
         style: str = Form("classic"),
         companions: str = Form(""),
@@ -282,6 +276,13 @@ def build_router(
         if file.size is not None:
             _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
         content = await file.read(settings.max_file_size + 1)
+
+        manifest_content = None
+        if manifest is not None:
+            if manifest.size is not None and manifest.size > MAX_MANIFEST_BYTES:
+                raise HTTPException(status_code=413, detail="Drawing manifest is too large")
+            manifest_content = await manifest.read(MAX_MANIFEST_BYTES + 1)
+
         try:
             planet = submit_planet.execute(
                 image_bytes=content,
@@ -293,6 +294,7 @@ def build_router(
                 raw_ring_color=ring_color,
                 raw_crater_color=crater_color,
                 raw_mountain_color=mountain_color,
+                drawing_manifest_bytes=manifest_content,
                 client_key=client_key(request, authorizer),
                 max_size=settings.max_file_size,
                 max_dimension=settings.max_dimension,
@@ -322,6 +324,8 @@ def build_router(
         }
         if planet.body_color is not None:
             response["body_color"] = planet.body_color
+        if planet.drawing_manifest_url is not None:
+            response["drawing_manifest_url"] = planet.drawing_manifest_url
         return response
 
     @router.delete("/api/planets", dependencies=[Depends(manager_only)])
