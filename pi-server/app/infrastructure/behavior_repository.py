@@ -25,6 +25,11 @@ class JsonBehaviorRepository(BehaviorRepository):
             return GalaxyBehaviorSettings()
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                # Valid JSON of the wrong shape - `null` from a truncated
+                # write, `[]` from a hand edit - parses cleanly and then dies
+                # on `.get` with an AttributeError the clause below never saw.
+                return GalaxyBehaviorSettings()
             raw_themes = raw.get(
                 "enabled_themes",
                 [theme.value for theme in DEFAULT_ENABLED_THEMES],
@@ -52,9 +57,12 @@ class JsonBehaviorRepository(BehaviorRepository):
                 ),
                 enabled_themes=tuple(GalaxyTheme(value) for value in raw_themes),
             )
-        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError):
             # A power loss during a hand-edited file or old incompatible state
-            # must not prevent the projector from starting.
+            # must not prevent the projector from starting. This file is read on
+            # every /api/behavior call, so anything that escapes here is not a
+            # one-off failure - it is a 500 that repeats until someone finds and
+            # deletes the file on the box.
             return GalaxyBehaviorSettings()
 
     def save(self, settings: GalaxyBehaviorSettings) -> None:

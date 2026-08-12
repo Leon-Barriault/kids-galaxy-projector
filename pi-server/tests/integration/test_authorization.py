@@ -91,6 +91,45 @@ def test_direct_trusted_client_is_read_only_projector(tmp_path):
     assert client.delete("/api/planets").status_code == 403
 
 
+def test_planet_exports_are_manager_only(tmp_path, make_png_bytes):
+    """
+    The /api/admin/planets/{id}/... exports hand back a child's artwork sized
+    for print and for a 3D printer. They shipped with no `dependencies` at all,
+    so anyone who could reach the port could pull them with a guessed id while
+    every neighbouring route was locked down.
+
+    Projector clients are covered too: the projector pushes its render up, it
+    has no reason to pull print sheets back down.
+    """
+    client = secure_client(tmp_path)
+    upload = client.post(
+        "/api/upload",
+        headers=headers("kid"),
+        files={"file": ("planet.png", make_png_bytes(), "image/png")},
+        data={"name": "Private World"},
+    )
+    planet_id = upload.json()["planet_id"]
+    exports = (
+        f"/api/admin/planets/{planet_id}/preview.png",
+        f"/api/admin/planets/{planet_id}/print.png",
+        f"/api/admin/planets/{planet_id}/print.pdf",
+        f"/api/admin/planets/{planet_id}/model.stl",
+    )
+
+    for url in exports:
+        # No role header at all: the direct-trusted-client projector identity.
+        assert client.get(url).status_code == 403, url
+        assert client.get(url, headers=headers("kid")).status_code == 403, url
+        assert client.get(url, headers=headers("projector")).status_code == 403, url
+
+    # A manager still gets through. print/pdf answer 409 until the projector
+    # publishes its WebGL frame, which is an authorized answer, not a refusal.
+    assert client.get(exports[0], headers=headers("manager")).status_code == 200
+    assert client.get(exports[3], headers=headers("manager")).status_code == 200
+    for url in exports[1:3]:
+        assert client.get(url, headers=headers("manager")).status_code == 409, url
+
+
 def test_unverified_forwarded_role_is_rejected(tmp_path):
     client = secure_client(tmp_path)
     response = client.get(

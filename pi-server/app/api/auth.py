@@ -15,6 +15,7 @@ from app.config import Settings
 ROLE_HEADER = "x-kids-galaxy-role"
 VERIFIED_HEADER = "x-kids-galaxy-client-verified"
 PROXY_HEADER = "x-kids-galaxy-proxy"
+CLIENT_ID_HEADER = "x-kids-galaxy-client-id"
 PROXY_MARKER = "mtls-gateway"
 
 
@@ -32,6 +33,37 @@ class AuthorizationPolicy:
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def forwarded_by_trusted_gateway(self, request: Request) -> bool:
+        """
+        Whether this request arrived through the local mTLS gateway.
+
+        Callers use this to decide if gateway-supplied headers may be believed.
+        It is deliberately independent of `enabled`: the question "did this come
+        from the proxy on loopback" has the same answer either way, and the
+        peer-address check is what makes it unspoofable.
+        """
+        host = request.client.host if request.client else ""
+        return (
+            host in self._trusted_proxy_hosts
+            and request.headers.get(PROXY_HEADER) == PROXY_MARKER
+        )
+
+    def client_identity(self, request: Request) -> str | None:
+        """
+        A stable per-client identity forwarded by the gateway, when there is one.
+
+        Behind the proxy every tablet shares one peer address, so anything keyed
+        on the peer address alone (the upload cooldown) silently becomes global.
+        The gateway forwards the client certificate serial, which is unique per
+        issued tablet certificate and carries no personal data.
+        """
+        if not self.forwarded_by_trusted_gateway(request):
+            return None
+        forwarded = (request.headers.get(CLIENT_ID_HEADER) or "").strip()
+        # Certificates are optional at the edge; an anonymous client simply has
+        # no identity to offer and falls back to sharing the peer-address bucket.
+        return forwarded[:128] or None
 
     def role_for(self, request: Request) -> ClientRole | None:
         """Resolve a role only from a trusted local transport boundary."""

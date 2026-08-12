@@ -58,6 +58,31 @@ def test_corrupt_state_falls_back_instead_of_blocking_projector_start(tmp_path):
     assert JsonBehaviorRepository(tmp_path).load() == GalaxyBehaviorSettings()
 
 
+def test_valid_json_that_is_not_an_object_falls_back(tmp_path):
+    """
+    Regression: the fallback only caught malformed JSON. A file holding valid
+    JSON of the wrong *shape* - `null` after a truncated write, `[]` from a
+    hand edit - parsed fine and then died on `.get`, raising AttributeError
+    past the except clause. Because the file is on disk it happened on every
+    subsequent request too: /api/behavior returned 500 permanently and the
+    projector never got its settings, with no way back but deleting the file.
+    """
+    state = tmp_path / "galaxy_behavior.json"
+    for content in ("null", "[]", '"manual"', "42", '["mode","manual"]'):
+        state.write_text(content, encoding="utf-8")
+
+        assert JsonBehaviorRepository(tmp_path).load() == GalaxyBehaviorSettings(), content
+
+
+def test_object_with_wrong_value_types_falls_back(tmp_path):
+    """`mode` as a list reaches BehaviorMode(...) and must not escape either."""
+    (tmp_path / "galaxy_behavior.json").write_text(
+        '{"mode":["manual"],"enabled_themes":"halloween"}', encoding="utf-8"
+    )
+
+    assert JsonBehaviorRepository(tmp_path).load() == GalaxyBehaviorSettings()
+
+
 def test_out_of_range_persisted_speed_falls_back_to_defaults(tmp_path):
     (tmp_path / "galaxy_behavior.json").write_text(
         '{"mode":"manual","manual_theme":"halloween","planet_speed":99}',

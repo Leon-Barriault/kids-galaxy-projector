@@ -23,6 +23,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api.auth import AuthorizationPolicy, ClientRole
 from app.api.behavior_mapper import behavior_settings_to_payload, behavior_to_payload
@@ -64,8 +65,28 @@ def _status_for(error: DomainError) -> int:
     return 500
 
 
-def client_key(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+def client_key(request: Request, authorizer: AuthorizationPolicy | None = None) -> str:
+    """
+    The identity the upload cooldown is keyed on.
+
+    Behind the mTLS gateway every tablet connects from the proxy's loopback
+    address, so keying on the peer address alone collapses the whole classroom
+    into one bucket: the first kid to send a planet locks out everyone else for
+    the cooldown, and it reads as a mysterious intermittent failure rather than
+    as rate limiting. When the gateway forwards a client certificate serial we
+    key on that instead.
+
+    The forwarded value is only believed when the request genuinely came from a
+    trusted proxy host carrying the gateway marker, so a client cannot mint its
+    own key to escape its cooldown. With no authorizer - or no gateway - this is
+    the original peer-address behaviour.
+    """
+    peer = request.client.host if request.client else "unknown"
+    if authorizer is not None:
+        identity = authorizer.client_identity(request)
+        if identity:
+            return f"cert:{identity}"
+    return peer
 
 
 def _behavior_state_payload(state) -> dict:
@@ -172,11 +193,21 @@ def build_router(
             raise HTTPException(status_code=400, detail=str(error)) from error
         return {"status": "stored", "planet_id": planet.id, "source": "projector-webgl"}
 
-    @router.get("/api/admin/planets/{planet_id}/preview.png")
+    # Every export below is manager-only. They are "/api/admin/..." resources
+    # that hand back a child's artwork rendered for print, so an unauthenticated
+    # caller who guesses or scrapes a planet id must not be able to pull them.
+    # The rendering itself is 100-800 ms of Pillow/NumPy work, so it runs in a
+    # worker thread; called inline it stalls the SSE loop for every projector.
+    @router.get(
+        "/api/admin/planets/{planet_id}/preview.png",
+        dependencies=[Depends(manager_only)],
+    )
     async def preview_planet(planet_id: str):
         planet, image_path = export_target(planet_id)
         source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
-        content = export_renderer.render_preview(planet, image_path)
+        content = await run_in_threadpool(
+            export_renderer.render_preview, planet, image_path
+        )
         return Response(
             content=content,
             media_type="image/png",
@@ -186,11 +217,16 @@ def build_router(
             },
         )
 
-    @router.get("/api/admin/planets/{planet_id}/print.png")
+    @router.get(
+        "/api/admin/planets/{planet_id}/print.png",
+        dependencies=[Depends(manager_only)],
+    )
     async def print_planet_png(planet_id: str):
         planet, image_path = export_target(planet_id)
         require_projector_snapshot(planet)
-        content = export_renderer.render_print_sheet(planet, image_path)
+        content = await run_in_threadpool(
+            export_renderer.render_print_sheet, planet, image_path
+        )
         return Response(
             content=content,
             media_type="image/png",
@@ -200,11 +236,16 @@ def build_router(
             },
         )
 
-    @router.get("/api/admin/planets/{planet_id}/print.pdf")
+    @router.get(
+        "/api/admin/planets/{planet_id}/print.pdf",
+        dependencies=[Depends(manager_only)],
+    )
     async def print_planet_pdf(planet_id: str):
         planet, image_path = export_target(planet_id)
         require_projector_snapshot(planet)
-        content = export_renderer.render_print_pdf(planet, image_path)
+        content = await run_in_threadpool(
+            export_renderer.render_print_pdf, planet, image_path
+        )
         return Response(
             content=content,
             media_type="application/pdf",
@@ -214,13 +255,18 @@ def build_router(
             },
         )
 
-    @router.get("/api/admin/planets/{planet_id}/model.stl")
+    @router.get(
+        "/api/admin/planets/{planet_id}/model.stl",
+        dependencies=[Depends(manager_only)],
+    )
     async def export_planet_stl(
         planet_id: str,
         diameter_mm: float = Query(default=80.0, ge=40.0, le=200.0),
     ):
         planet, image_path = export_target(planet_id)
-        content = export_renderer.export_stl(planet, image_path, diameter_mm)
+        content = await run_in_threadpool(
+            export_renderer.export_stl, planet, image_path, diameter_mm
+        )
         return Response(
             content=content,
             media_type="application/sla",
@@ -255,7 +301,7 @@ def build_router(
                 raw_ring_color=ring_color,
                 raw_crater_color=crater_color,
                 raw_mountain_color=mountain_color,
-                client_key=client_key(request),
+                client_key=client_key(request, authorizer),
                 max_size=settings.max_file_size,
                 max_dimension=settings.max_dimension,
                 target_size=settings.texture_size,
@@ -265,7 +311,7 @@ def build_router(
 
         logger.info(
             "Planet received from %s: %s (%s, %s)",
-            client_key(request),
+            client_key(request, authorizer),
             planet.filename,
             planet.display_name,
             planet.style,

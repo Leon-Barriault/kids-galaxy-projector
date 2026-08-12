@@ -195,6 +195,52 @@ def test_stl_export_is_spherical_lithophane(client):
     assert maximum_y > 37.5
 
 
+def test_stl_signed_volume_is_positive(client, upload_planet):
+    """
+    A mesh wound inside-out passes every other check in this file: the triangle
+    count, the radii, the pole clipping and the manifold edge pairing are all
+    blind to winding. Slicers are not - they read the normals, decide the solid
+    is the infinite space *outside* the globe, and either refuse the file or
+    print it hollowed inside out.
+
+    Signed volume via the divergence theorem (sum of tetrahedra with the
+    origin) is the one measurement that cannot come out right on a backwards
+    mesh: flip every triangle and the sign flips with it.
+    """
+    planet = upload_planet(name="Wound Right")
+
+    response = client.get(
+        f"/api/admin/planets/{planet['planet_id']}/model.stl",
+        params={"diameter_mm": 80.0},
+    )
+
+    assert response.status_code == 200
+    triangle_count = struct.unpack_from("<I", response.content, 80)[0]
+
+    signed_volume = 0.0
+    for triangle in range(triangle_count):
+        offset = 84 + triangle * 50
+        nx, ny, nz = struct.unpack_from("<3f", response.content, offset)
+        ax, ay, az, bx, by, bz, cx, cy, cz = struct.unpack_from(
+            "<9f", response.content, offset + 12
+        )
+        signed_volume += (
+            ax * (by * cz - bz * cy)
+            - ay * (bx * cz - bz * cx)
+            + az * (bx * cy - by * cx)
+        ) / 6.0
+        # The cached facet normal must agree with the vertex winding, or
+        # slicers that trust the header disagree with slicers that recompute.
+        ux, uy, uz = bx - ax, by - ay, bz - az
+        vx, vy, vz = cx - ax, cy - ay, cz - az
+        wound = (uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx)
+        assert nx * wound[0] + ny * wound[1] + nz * wound[2] >= 0.0
+
+    # A hollow 80 mm globe: the enclosed solid is the wall between the outer
+    # relief surface and the inner cavity, so this is far below a full sphere.
+    assert signed_volume > 1_000.0
+
+
 def test_export_rejects_unknown_planet(client):
     preview_response = client.get("/api/admin/planets/missing/preview.png")
     print_response = client.get("/api/admin/planets/missing/print.png")

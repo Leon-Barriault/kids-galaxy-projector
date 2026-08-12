@@ -364,6 +364,17 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         outer_rows: list[list[tuple[float, float, float]]],
         inner_rows: list[list[tuple[float, float, float]]],
     ) -> list[tuple[tuple[float, float, float], ...]]:
+        """
+        Emit the hollow lithophane shell, wound so every normal points out of
+        the solid.
+
+        Winding is the whole game here and it is invisible to the eye: the mesh
+        was watertight and 2-manifold with every triangle backwards, so it
+        looked correct in every check that counted vertices or measured radii,
+        and slicers reported "inverted normals" on a solid whose signed volume
+        was negative. `test_stl_signed_volume_is_positive` is the guard - it is
+        the one measurement that cannot be satisfied by a backwards mesh.
+        """
         triangles: list[tuple[tuple[float, float, float], ...]] = []
         last_lat = len(outer_rows) - 1
         for lat in range(last_lat):
@@ -378,8 +389,12 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
                 ic = inner_rows[lat + 1][nxt]
                 id_ = inner_rows[lat][nxt]
                 if lat != last_lat - 1:
-                    triangles.extend(((oa, ob, od), (od, ob, oc)))
-                    triangles.extend(((ia, id_, ib), (id_, ic, ib)))
+                    # Counter-clockwise seen from outside, so _normal's
+                    # right-hand rule points away from the solid. The outer
+                    # shell faces out; the inner shell faces into the cavity,
+                    # which is also "away from the solid".
+                    triangles.extend(((oa, od, ob), (od, oc, ob)))
+                    triangles.extend(((ia, ib, id_), (id_, ib, ic)))
 
         for lon in range(self.LON_SEGMENTS):
             nxt = (lon + 1) % self.LON_SEGMENTS
@@ -387,15 +402,19 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             on = outer_rows[0][nxt]
             ia = inner_rows[0][lon]
             inn = inner_rows[0][nxt]
-            triangles.extend(((oa, on, ia), (on, inn, ia)))
+            triangles.extend(((oa, ia, on), (on, ia, inn)))
 
         outer_pole = outer_rows[-1][0]
         inner_pole = inner_rows[-1][0]
         ring_index = len(outer_rows) - 2
         for lon in range(self.LON_SEGMENTS):
             nxt = (lon + 1) % self.LON_SEGMENTS
-            triangles.append((outer_rows[ring_index][lon], outer_pole, outer_rows[ring_index][nxt]))
-            triangles.append((inner_rows[ring_index][nxt], inner_pole, inner_rows[ring_index][lon]))
+            triangles.append(
+                (outer_rows[ring_index][lon], outer_rows[ring_index][nxt], outer_pole)
+            )
+            triangles.append(
+                (inner_rows[ring_index][nxt], inner_rows[ring_index][lon], inner_pole)
+            )
         return triangles
 
     @staticmethod
