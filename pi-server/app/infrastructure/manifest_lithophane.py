@@ -89,7 +89,10 @@ def _projected_stroke(stroke: dict, stroke_index: int) -> dict | None:
     width = min(0.35, max(0.003, float(stroke.get("width_normalized") or 0.02)))
     half_width = width * 0.5
     path_length = sum(
-        math.hypot(points[index][0] - points[index - 1][0], points[index][1] - points[index - 1][1])
+        math.hypot(
+            points[index][0] - points[index - 1][0],
+            points[index][1] - points[index - 1][1],
+        )
         for index in range(1, len(points))
     )
     coverage_metric = min(
@@ -119,7 +122,11 @@ def _projected_stroke(stroke: dict, stroke_index: int) -> dict | None:
 
 
 def _choose_pole_owners(projections: list[dict]) -> dict[str, int]:
-    candidates = [projection for projection in projections if projection["horizontal_pole_candidate"]]
+    candidates = [
+        projection
+        for projection in projections
+        if projection["horizontal_pole_candidate"]
+    ]
     north_candidates = [
         projection
         for projection in candidates
