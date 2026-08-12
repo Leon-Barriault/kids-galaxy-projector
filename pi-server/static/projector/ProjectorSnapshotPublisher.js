@@ -3,7 +3,14 @@ import * as THREE from 'three';
 const SNAPSHOT_SIZE = 700;
 const SNAPSHOT_FOV_DEGREES = 40;
 const CAMERA_DISTANCE = 7.4;
-const CAMERA_ELEVATION_RATIO = 11 / 26;
+// Nearly level with the equator. This was 11/26, looking down about 23 degrees,
+// which suited a planet whose interest was sculpted lumps catching the light
+// from above. Now that a drawing arrives as latitude bands, looking down that
+// far gives the north pole a third of the frame and crushes every band below
+// the equator into the bottom edge - the child's green stripe becomes a sliver.
+// Ten degrees keeps enough elevation to read as a sphere rather than a disc
+// while leaving the bands their own share of the height.
+const CAMERA_ELEVATION_RATIO = 0.176;
 const RING_CAMERA_ELEVATION_RATIO = -1 / 2;
 const MAX_UPLOAD_ATTEMPTS = 3;
 

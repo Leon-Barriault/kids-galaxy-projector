@@ -19,6 +19,7 @@ about, so they could not be repaired - only replaced.
 from __future__ import annotations
 
 import io
+import math
 import sys
 
 from PIL import Image, ImageDraw
@@ -29,8 +30,11 @@ from check_projector import FAILURES, Server, check, chromium_executable, wait_f
 CANVAS = 512
 BODY = "#f2f2f2"
 BODY_RGB = (242, 242, 242)
+# Body level in the height map, matching BODY_HEIGHT in SoftToyPlanetSurface.js.
+BODY_LEVEL = 40
 # Outermost first, which is also topmost: this is the order they must come back.
-ARCS = (("#7b3fb5", 40), ("#e8862f", 96), ("#f0d040", 152), ("#4fae54", 208))
+# Concentric semicircles, outermost first - which is also topmost.
+ARCS = (("#7b3fb5", 220), ("#e8862f", 170), ("#f0d040", 120), ("#4fae54", 70))
 
 
 def rainbow_disc() -> bytes:
@@ -38,12 +42,20 @@ def rainbow_disc() -> bytes:
     image = Image.new("RGB", (CANVAS, CANVAS), BODY)
     strokes = Image.new("RGB", (CANVAS, CANVAS), BODY)
     draw = ImageDraw.Draw(strokes)
-    for colour, inset in ARCS:
-        top = inset + 40
-        # arc(180..360) is the upper half, so the dome's flat bottom lands at
-        # (top + bottom) / 2. Anchoring that at 390 of 512 leaves real unpainted
-        # canvas below the drawing, which is what must return as body colour.
-        draw.arc((inset, top, CANVAS - inset, 780 - top), start=180, end=360, fill=colour, width=46)
+    centre_x, centre_y = CANVAS // 2, 390
+    for colour, radius in ARCS:
+        # True semicircles. Tall narrow ellipses would make the innermost colour
+        # the nearest paint to the centre across a huge vertical range, letting
+        # green swallow a third of the planet - a property of the drawing, not
+        # of the mapping. Centring at y=390 also leaves real unpainted canvas
+        # below the dome, which must come back as the south pole.
+        draw.arc(
+            (centre_x - radius, centre_y - radius, centre_x + radius, centre_y + radius),
+            start=180,
+            end=360,
+            fill=colour,
+            width=44,
+        )
 
     mask = Image.new("L", (CANVAS, CANVAS), 0)
     ImageDraw.Draw(mask).ellipse((0, 0, CANVAS - 1, CANVAS - 1), fill=255)
@@ -82,8 +94,26 @@ SURFACE_STATE = """
     metalness: material.metalness,
     clearcoat: material.clearcoat || 0,
     hasPaintRelief: Boolean(material.bumpMap) && material.bumpScale > 0,
+    reliefColumn: (() => {
+      // The displacement map is the band thickness profile. Read one column of
+      // it to see how many distinct thicknesses the bands were actually given.
+      const relief = material.displacementMap?.image;
+      if (!relief) return [];
+      const c = document.createElement('canvas');
+      c.width = relief.width;
+      c.height = relief.height;
+      const ctx = c.getContext('2d', {alpha: false, willReadFrequently: true});
+      ctx.drawImage(relief, 0, 0);
+      const data = ctx.getImageData(0, 0, 1, c.height).data;
+      const out = [];
+      for (let y = 0; y < c.height; y += 1) out.push(data[y * 4]);
+      return out;
+    })(),
     environmentLit: Boolean(material.envMap),
     sculptedVisible: (planet.sculptedArtworkGroup?.children || []).filter((m) => m.visible).length,
+    physical: material.type === 'MeshPhysicalMaterial',
+    embossed: Boolean(material.displacementMap) && material.displacementScale > 0,
+    textureWidth: image.width,
     height: canvas.height,
     front: columnAt(0),
     side: columnAt(Math.floor(canvas.width / 2)),
@@ -93,8 +123,25 @@ SURFACE_STATE = """
 
 
 def nearest(rgb, palette):
+    """
+    Classify a rendered pixel by colour direction, not by absolute distance.
+
+    Band edges are darkened to give each pad a contact shadow, and that darkening
+    is a uniform multiply across all three channels. Absolute distance is not
+    invariant to it: yellow at 78% measures nearer to full orange than to full
+    yellow, so a shaded yellow shoulder was being reported as an extra orange
+    band between yellow and green. Normalising to unit length divides the
+    multiply straight out, which is exactly the property needed here.
+    """
+
+    def unit(colour):
+        length = math.sqrt(sum(channel * channel for channel in colour)) or 1.0
+        return [channel / length for channel in colour]
+
+    target = unit(rgb)
+
     def distance(candidate):
-        return sum((a - b) ** 2 for a, b in zip(rgb, candidate, strict=True))
+        return sum((a - b) ** 2 for a, b in zip(target, unit(candidate), strict=True))
 
     return min(palette, key=lambda entry: distance(palette[entry]))
 
@@ -158,20 +205,65 @@ def main() -> int:
     # Thin transitional slivers between bands are anti-aliasing, not bands.
     counts = {name: rows.count(name) for name in set(rows)}
     significant = [name for name in sequence if counts[name] >= state["height"] * 0.04]
-    expected = ["body", "#7b3fb5", "#e8862f", "#f0d040", "#4fae54", "body"]
+    expected = ["#7b3fb5", "#e8862f", "#f0d040", "#4fae54", "body"]
     check(
         significant == expected,
         f"north to south reads {' -> '.join(significant)}",
     )
-    check(rows[0] == "body", "the north pole keeps the body colour above the drawing")
+    # The topmost band owns the cap. Arcing paint over the top of the disc leaves
+    # a sliver of untouched canvas above the apex, and a child reads that arc as
+    # the top of their planet - a purple stripe under a cap of background is not
+    # what they drew.
+    check(rows[0] == "#7b3fb5", "the topmost band covers the whole north pole")
     check(rows[-1] == "body", "unpainted canvas below the drawing returns as the south pole")
 
-    print("\nsoft matte finish")
-    check(state["roughness"] >= 0.8, f"planet body is matte (roughness {state['roughness']})")
+    print("\nmoulded painted-toy finish")
+    # A fully matte body came back as "the plastic rendering is lost". The look
+    # wanted is a painted toy, which needs a coat - broad and soft, not a glassy
+    # pinpoint, so roughness stays mid and the clearcoat is roughened too.
+    check(0.35 <= state["roughness"] <= 0.7, f"body holds a soft sheen (roughness {state['roughness']})")
     check(state["metalness"] == 0, "planet body is not metallic")
-    check(state["clearcoat"] == 0, "planet body carries no gloss coat")
+    check(state["clearcoat"] > 0, "planet body carries a painted-toy coat")
+    check(state["physical"], "body material still supports the sheen properties other stages set")
     check(state["hasPaintRelief"], "painted bands stand off the body")
+    # Relief the eye can check on the outline, not only in the shading.
+    check(state["embossed"], "painted bands are embossed into the geometry")
     check(state["environmentLit"], "planet body picks up soft image-based light")
+
+    print("\nbands are embossed at their own thicknesses")
+    relief = state["reliefColumn"]
+    check(bool(relief), "the band thickness profile is readable")
+    if relief:
+        # Group the profile into runs and take each run's peak. A single
+        # thickness for all paint reads as one sticker wrapped round the ball;
+        # the reference planets are pads laid on at different thicknesses.
+        peaks = []
+        current = []
+        for value in relief:
+            if value > BODY_LEVEL + 6:
+                current.append(value)
+            elif current:
+                peaks.append(max(current))
+                current = []
+        if current:
+            peaks.append(max(current))
+        tiers = {round(peak / 12) for peak in peaks}
+        check(len(peaks) >= 3, f"each band gets its own raised pad ({len(peaks)} found)")
+        check(len(tiers) >= 2, f"pads sit at more than one thickness ({len(tiers)} tiers)")
+        # A pad with no shoulder is a cliff; the references round every edge.
+        shoulders = sum(
+            1
+            for index in range(1, len(relief))
+            if BODY_LEVEL + 6 < relief[index] < max(relief) - 12
+        )
+        check(shoulders >= 8, f"pad edges are bevelled rather than square ({shoulders} rows)")
+
+    print("\ncost")
+    # Bands are constant in longitude, so a wide texture stores the same colour
+    # thousands of times per row. Twelve planets at 1024 wide was 72 MB of canvas
+    # and as much again in texture memory, for no visible difference.
+    check(state["textureWidth"] <= 16, f"band texture stays narrow ({state['textureWidth']} px)")
+
 
     print("\nconsole")
     check(not errors, f"no browser console errors ({errors[:3]})")

@@ -83,26 +83,22 @@ def _two_tone(draw: ImageDraw.ImageDraw) -> None:
 
 def _rainbow_arcs(draw: ImageDraw.ImageDraw) -> None:
     """
-    The shape a child actually draws: nested rainbow arcs over a plain body.
+    The shape a child actually draws: concentric rainbow semicircles.
 
-    This is the case that exposed the mapping. Read as latitude bands it must
-    come out as a purple cap over orange, yellow and green rings with the body
-    colour left at the south pole - the vertical order of the drawing, in the
-    vertical order of the planet.
+    These must be true semicircles - equal horizontal and vertical radii. An
+    earlier version used tall narrow ellipses, which made the innermost colour
+    the nearest paint to the centre over a huge vertical range and let green
+    swallow a third of the planet. That was the test drawing misleading the
+    test, not the mapping misbehaving.
     """
-    bands = (("#7b3fb5", 40), ("#e8862f", 96), ("#f0d040", 152), ("#4fae54", 208))
-    for colour, inset in bands:
-        top = inset + 40
-        # arc(180..360) draws the upper half, so the dome's flat bottom lands at
-        # (top + bottom) / 2. Anchoring that at 390 of 512 leaves real unpainted
-        # canvas below it - which is what must come back as body colour at the
-        # south pole, and would be hidden if the arcs ran off the bottom edge.
+    centre_x, centre_y = CANVAS // 2, 390
+    for colour, radius in (("#7b3fb5", 220), ("#e8862f", 170), ("#f0d040", 120), ("#4fae54", 70)):
         draw.arc(
-            (inset, top, CANVAS - inset, 780 - top),
+            (centre_x - radius, centre_y - radius, centre_x + radius, centre_y + radius),
             start=180,
             end=360,
             fill=colour,
-            width=46,
+            width=44,
         )
 
 

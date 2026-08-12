@@ -339,17 +339,27 @@ def main() -> int:
             state["projectionMode"] == "drawing-rows-as-latitude-bands",
             "the drawing's rows become latitude bands right around the planet",
         )
-        check(not state["baseHasDisplacement"], "paint does not inflate the base sphere")
+        # The sculpted pipeline this replaced did emboss the child's marks, and a
+        # bump map alone leaves the silhouette perfectly round - paint then reads
+        # as printed on rather than laid on, which is the moulded look the
+        # reference images have. The band mask is a function of latitude, so real
+        # radial displacement costs one texture read per vertex and none per pixel.
+        check(state["baseHasDisplacement"], "painted bands are embossed into the body")
         check(state["sculptedPatchesVisible"] == 0, "superseded sculpted slabs stay hidden")
         check(state["legacyShellsHidden"], "superseded alpha-shell accents stay hidden")
 
-        print("\nsoft matte finish")
-        # A tight specular highlight is the single strongest cue that something
-        # is cheap plastic, which is what clearcoat on a near-mirror roughness
-        # was producing. These bounds are the look, not an implementation note.
-        check(state["roughness"] >= 0.8, f"planet body is matte (roughness {state['roughness']})")
+        print("\nmoulded painted-toy finish")
+        # The look is a painted moulded toy, so the body keeps a coat - but a
+        # broad soft one. The old body ran roughness 0.23 under clearcoat 0.24,
+        # whose pinpoint highlight reads as cheap plastic; a fully matte body
+        # loses the moulded look entirely. Mid roughness with a roughened coat
+        # is the band between those two, and both bounds are the look itself.
+        check(
+            0.35 <= state["roughness"] <= 0.7,
+            f"body holds a soft sheen (roughness {state['roughness']})",
+        )
         check(state["metalness"] == 0, "planet body is not metallic")
-        check(state["clearcoat"] == 0, "planet body carries no gloss coat")
+        check(state["clearcoat"] > 0, "planet body carries a painted-toy coat")
         check(state["environmentLit"], "planet body picks up soft image-based light")
         # Paint sitting on the body, not printed into it: the child's colours are
         # raised and finished differently from the ball underneath.
