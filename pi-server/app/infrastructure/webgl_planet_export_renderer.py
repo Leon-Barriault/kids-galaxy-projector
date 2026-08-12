@@ -2,9 +2,9 @@
 
 The projector browser is the only renderer that knows the complete final planet
 object graph. It uploads a hero PNG after the Three.js pipeline has finished;
-this adapter persists that image and uses it verbatim for preview/print/PDF.
-New kid-tablet lithophanes use the same vector drawing manifest as WebGL, while
-image-only stored planets retain the legacy raster-analysis fallback.
+this adapter persists that image for previews and uses its planet pixels on the
+print sheet. New kid-tablet lithophanes use the same vector drawing manifest as
+WebGL, while image-only stored planets retain the legacy raster-analysis fallback.
 """
 
 from __future__ import annotations
@@ -27,6 +27,11 @@ from app.infrastructure.planet_export_renderer import PillowPlanetExportRenderer
 class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
     SNAPSHOT_SIZE = 700
     MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024
+    DRAWING_GUIDE_SIZE = 620
+    DRAWING_GUIDE_MARGIN = 55
+    DRAWING_GUIDE_STROKE_WIDTH = 6
+    DRAWING_GUIDE_COLOR = "#64B5F6"
+    PRINT_BACKGROUND_THRESHOLD = 28
 
     def __init__(self, snapshot_dir: Path) -> None:
         self.snapshot_dir = snapshot_dir
@@ -77,23 +82,42 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             return snapshot.read_bytes()
         return super().render_preview(planet, image_path)
 
+    def _print_hero(self, hero: Image.Image) -> Image.Image:
+        """Put the isolated planet on paper-white, including older dark snapshots."""
+        rgba = hero.convert("RGBA")
+        prepared = Image.new("RGB", rgba.size, "white")
+        prepared.paste(rgba, (0, 0), rgba)
+
+        corner = prepared.getpixel((0, 0))
+        if any(abs(channel - 255) > 8 for channel in corner):
+            ImageDraw.floodfill(
+                prepared,
+                (0, 0),
+                (255, 255, 255),
+                thresh=self.PRINT_BACKGROUND_THRESHOLD,
+            )
+        return prepared
+
+    def _drawing_outline(self) -> Image.Image:
+        """Return the same simple soft-blue planet guide used by the kid tablet."""
+        size = self.DRAWING_GUIDE_SIZE
+        margin = self.DRAWING_GUIDE_MARGIN
+        drawing = Image.new("RGB", (size, size), "white")
+        ImageDraw.Draw(drawing).ellipse(
+            (margin, margin, size - margin, size - margin),
+            outline=self.DRAWING_GUIDE_COLOR,
+            width=self.DRAWING_GUIDE_STROKE_WIDTH,
+        )
+        return drawing
+
     def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
         """
-        Compose the print sheet, preferring the projector's own WebGL frame.
+        Compose a kid-friendly print sheet, preferring the projector WebGL frame.
 
-        This used to raise when no snapshot existed, which the API turned into a
-        permanent 409. That made printing depend on the projector browser having
-        loaded *this* planet since it last started, and there are ordinary ways
-        for that never to happen: nobody has the projector page open; the
-        projector holds twelve planets while the manager lists thirty, so
-        everything past the twelfth can never be snapshotted; or the manager
-        prints in the second between upload and the projector's capture.
-
-        A parent printing their child's planet should never be told "409". So
-        the server-side render - already trusted enough to be the preview
-        fallback - is the fallback here too, and the sheet says which one the
-        reader is holding rather than quietly passing off an approximation as
-        the real render.
+        The left side is the child's rendered planet on paper-white. The right
+        side is deliberately only a blank planet outline: printing the tablet's
+        dark drawing background wastes ink and leaves little useful space for a
+        child who wants to colour or redraw the planet on paper.
         """
         source = Image.open(image_path).convert("RGB")
         hero = self._projector_snapshot(planet)
@@ -107,8 +131,8 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             provenance = "server render"
             footer = "Kids Galaxy Projector · rendered by the galaxy server"
 
-        drawing = source.copy()
-        drawing.thumbnail((620, 620), Image.Resampling.LANCZOS)
+        hero = self._print_hero(hero)
+        drawing = self._drawing_outline()
         hero.thumbnail((700, 700), Image.Resampling.LANCZOS)
 
         canvas = Image.new("RGB", (self.PRINT_WIDTH, self.PRINT_HEIGHT), "white")
@@ -117,11 +141,11 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         label_font = self._font(22)
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
         draw.text((70, 92), heading, fill="#4b5563", font=label_font)
-        draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
+        draw.text((895, 92), "Draw your planet", fill="#4b5563", font=label_font)
 
         hero_x = 60 + (700 - hero.width) // 2
         hero_y = 145 + (700 - hero.height) // 2
-        canvas.paste(hero, (hero_x, hero_y), hero)
+        canvas.paste(hero, (hero_x, hero_y))
 
         x = 895 + (620 - drawing.width) // 2
         y = 145 + (620 - drawing.height) // 2
@@ -140,6 +164,14 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
 
         output = io.BytesIO()
         canvas.save(output, format="PNG", compress_level=4)
+        return output.getvalue()
+
+    def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
+        """Return the Pi-rendered print sheet as a one-page PDF for Android printing."""
+        png = self.render_print_sheet(planet, image_path)
+        sheet = Image.open(io.BytesIO(png)).convert("RGB")
+        output = io.BytesIO()
+        sheet.save(output, format="PDF", resolution=150.0)
         return output.getvalue()
 
     def export_stl(self, planet: Planet, image_path: Path, diameter_mm: float) -> bytes:

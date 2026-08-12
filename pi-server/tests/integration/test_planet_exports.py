@@ -172,6 +172,23 @@ def test_ringed_print_preserves_projector_render_including_ring(client):
     assert sheet.getpixel((60 + 60, 145 + 350)) == (244, 201, 93)
 
 
+def test_print_sheet_uses_white_paper_and_blank_planet_guide(client):
+    planet = _upload_designed_planet(client, name="Kid Keepsake")
+    _store_projector_snapshot(client, planet["planet_id"])
+
+    response = client.get(f"/api/admin/planets/{planet['planet_id']}/print.png")
+
+    assert response.status_code == 200
+    sheet = Image.open(io.BytesIO(response.content)).convert("RGB")
+    # Older stored WebGL snapshots had an opaque #050818 sky. The print path
+    # must lift that connected background to paper-white instead of spending ink.
+    assert sheet.getpixel((60 + 5, 145 + 5)) == (255, 255, 255)
+    # The right side is a blank version of the tablet's soft-blue planet guide,
+    # not the child's filled source bitmap. Its centre remains white for drawing.
+    assert sheet.getpixel((895 + 310, 145 + 310)) == (255, 255, 255)
+    assert sheet.getpixel((895 + 310, 145 + 55)) == (100, 181, 246)
+
+
 def test_print_sheet_is_available_as_server_pdf(client):
     planet = _upload_designed_planet(client, name="Print PDF")
     _store_projector_snapshot(client, planet["planet_id"])

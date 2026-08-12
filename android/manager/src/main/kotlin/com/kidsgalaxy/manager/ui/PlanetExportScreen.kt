@@ -16,9 +16,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -28,8 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.PlanetDto
@@ -110,9 +116,11 @@ fun PlanetExportActions(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val client = remember(galaxy.baseUrl) { PlanetExportClient(context, galaxy.baseUrl) }
+    val stlPreparingDescription = stringResource(R.string.stl_preparing_accessibility)
     var pendingPrintPdf by remember { mutableStateOf<ByteArray?>(null) }
     var pendingPrintFailureDetail by remember { mutableStateOf<String?>(null) }
     var pendingStl by remember { mutableStateOf<ByteArray?>(null) }
+    var isStlPreparing by remember { mutableStateOf(false) }
 
     val printFallbackLauncher =
         rememberLauncherForActivityResult(
@@ -207,22 +215,44 @@ fun PlanetExportActions(
             )
         }
         IconButton(
+            enabled = !isStlPreparing,
             onClick = {
-                scope.launch {
-                    try {
-                        pendingStl = client.stl(planet.id)
-                        stlLauncher.launch(stlFilename(planet))
-                    } catch (error: Exception) {
-                        pendingStl = null
-                        showExportError(context, error)
+                if (!isStlPreparing) {
+                    isStlPreparing = true
+                    Toast
+                        .makeText(
+                            context,
+                            context.getString(R.string.stl_preparing),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    scope.launch {
+                        try {
+                            pendingStl = client.stl(planet.id)
+                            stlLauncher.launch(stlFilename(planet))
+                        } catch (error: Exception) {
+                            pendingStl = null
+                            showExportError(context, error)
+                        } finally {
+                            isStlPreparing = false
+                        }
                     }
                 }
             },
         ) {
-            Icon(
-                Icons.Default.Download,
-                contentDescription = stringResource(R.string.download_stl),
-            )
+            if (isStlPreparing) {
+                CircularProgressIndicator(
+                    modifier =
+                        Modifier
+                            .size(24.dp)
+                            .semantics { contentDescription = stlPreparingDescription },
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = stringResource(R.string.download_stl),
+                )
+            }
         }
     }
 }

@@ -5,6 +5,8 @@
     <string name="export_hint">Print the Pi-rendered planet or save an 80 mm spherical lithophane STL.</string>
     <string name="print_planet">Print</string>
     <string name="download_stl">STL</string>
+    <string name="stl_preparing">Preparing the 3D model… This can take a little while on the Raspberry Pi.</string>
+    <string name="stl_preparing_accessibility">Preparing STL</string>
     <string name="print_named">Print %1$s</string>
     <string name="export_stl_named">Export %1$s as an 80 mm spherical lithophane STL</string>
     <string name="export_failed">Could not prepare this export. Please try again.</string>

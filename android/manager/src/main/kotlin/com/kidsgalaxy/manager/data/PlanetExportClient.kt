@@ -17,15 +17,24 @@ class PlanetExportClient(
     baseUrl: String,
 ) {
     companion object {
-        private const val EXPORT_READ_TIMEOUT_SECONDS = 60L
+        private const val PRINT_READ_TIMEOUT_SECONDS = 60L
+        private const val STL_READ_TIMEOUT_SECONDS = 300L
+        private const val BINARY_STL_HEADER_BYTES = 84
+        private const val BINARY_STL_TRIANGLE_BYTES = 50L
         private val PDF_SIGNATURE = "%PDF".encodeToByteArray()
     }
 
-    private val api =
+    private val printApi =
         ApiFactory.create(
             context.applicationContext,
             baseUrl,
-            readTimeoutSeconds = EXPORT_READ_TIMEOUT_SECONDS,
+            readTimeoutSeconds = PRINT_READ_TIMEOUT_SECONDS,
+        )
+    private val stlApi =
+        ApiFactory.create(
+            context.applicationContext,
+            baseUrl,
+            readTimeoutSeconds = STL_READ_TIMEOUT_SECONDS,
         )
 
     /**
@@ -40,7 +49,7 @@ class PlanetExportClient(
      * render instead, and says which one it sent in X-Kids-Galaxy-Render-Source.
      */
     suspend fun printPdf(planetId: String): ByteArray {
-        val response = api.printPdf(planetId)
+        val response = printApi.printPdf(planetId)
 
         if (!response.isSuccessful) {
             throw PlanetExportHttpException(response.code(), "Print")
@@ -58,11 +67,32 @@ class PlanetExportClient(
         planetId: String,
         diameterMm: Double = 80.0,
     ): ByteArray {
-        val response = api.exportStl(planetId, diameterMm)
+        val response = stlApi.exportStl(planetId, diameterMm)
         if (!response.isSuccessful) {
             throw PlanetExportHttpException(response.code(), "STL")
         }
-        return requireNotNull(response.body()) { "Galaxy server returned an empty STL export" }.bytes()
+        val bytes =
+            requireNotNull(response.body()) { "Galaxy server returned an empty STL export" }
+                .bytes()
+        if (!bytes.isValidBinaryStl()) {
+            throw PlanetExportPayloadException("STL", "binary STL structure is invalid")
+        }
+        return bytes
+    }
+
+    private fun ByteArray.isValidBinaryStl(): Boolean {
+        if (size < BINARY_STL_HEADER_BYTES) return false
+
+        var triangleCount = 0L
+        repeat(4) { byteOffset ->
+            triangleCount =
+                triangleCount or
+                ((this[80 + byteOffset].toLong() and 0xffL) shl (byteOffset * 8))
+        }
+        if (triangleCount <= 0L) return false
+
+        val expectedSize = BINARY_STL_HEADER_BYTES + triangleCount * BINARY_STL_TRIANGLE_BYTES
+        return expectedSize == size.toLong()
     }
 }
 
