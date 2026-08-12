@@ -91,6 +91,7 @@ class Server:
         self.state = self.root / "state"
         self.base = f"http://127.0.0.1:{self.port}"
         self._process: subprocess.Popen | None = None
+        self._log = None
 
     def __enter__(self) -> "Server":
         # Inherit the real environment and override only what this server needs.
@@ -106,27 +107,52 @@ class Server:
             "STATIC_DIR": str(SERVER_DIR / "static"),
             "RATE_LIMIT_SECONDS": "0",
             "ENVIRONMENT": "development",
+            # A disposable test server has no business announcing itself to the
+            # network, and on Windows Zeroconf registration blocks the lifespan
+            # startup outright - uvicorn sits at "Waiting for application
+            # startup" until the probe below gives up. Leaving it on also meant
+            # every local run of these contracts broadcast a phantom "Kids
+            # Galaxy" service to the LAN.
+            "ADVERTISE": "false",
         }
+        # Keep the server's own output. It used to go to DEVNULL, so anything
+        # that stopped it starting - a port clash, a failed import, a lifespan
+        # that never completes - surfaced only as "server did not start".
+        self._log = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed in __exit__
+            mode="w+", suffix=".log", prefix="kg-server-", delete=False
+        )
         self._process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "main:app", "--port", str(self.port)],
             cwd=SERVER_DIR,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self._log,
+            stderr=subprocess.STDOUT,
         )
         deadline = time.time() + 30
         while time.time() < deadline:
+            if self._process.poll() is not None:
+                break
             try:
                 if httpx.get(f"{self.base}/health", timeout=1).status_code == 200:
                     return self
             except httpx.HTTPError:
                 time.sleep(0.2)
-        raise RuntimeError("server did not start")
+
+        self._log.flush()
+        detail = Path(self._log.name).read_text(encoding="utf-8", errors="replace").strip()
+        raise RuntimeError(
+            "server did not start"
+            + (f"; last output:\n{detail[-2000:]}" if detail else " and logged nothing")
+        )
 
     def __exit__(self, *_exc: object) -> None:
         if self._process:
             self._process.terminate()
             self._process.wait(timeout=10)
+        if self._log:
+            self._log.close()
+            Path(self._log.name).unlink(missing_ok=True)
+            self._log = None
         shutil.rmtree(self.root, ignore_errors=True)
 
     def upload(
