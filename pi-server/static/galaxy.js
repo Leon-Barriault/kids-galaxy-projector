@@ -27,6 +27,7 @@ import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMas
 import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
 import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
+import { installManifestStrokeSurface } from './projector/ManifestStrokeSurface.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { installPlanetRenderPipeline } from './projector/PlanetRenderPipeline.js';
@@ -49,16 +50,6 @@ import { installVisualRefinement } from './projector/VisualRefinement.js';
 
 const GALLERY_SIZE = 12;
 
-// Kid drawings keep their authored shapes/colours as molded planet-wide traits.
-// New tablets explicitly send the bucket/background colour as the planet body.
-// SculptedArtworkGeometry reads that colour directly: matching pixels are the
-// body and every other kid-selected colour is artwork, regardless of area.
-// Older stored planets without body_color remain on the legacy inference path.
-//
-// Order is part of the rendering contract. The legacy installers still extend
-// PlanetEntity at runtime, so every stage is declared here as data and installed
-// through one composition point. Move a stage only with projector acceptance
-// coverage proving the resulting behavior is intentional.
 function installVisualRefinementStage() {
   installVisualRefinement();
   installFriendlyAstronautOptions();
@@ -67,9 +58,6 @@ function installVisualRefinementStage() {
 function installSphericalStrokeProjectionStage() {
   installStrokeWrapProjection();
   installStrokeLatitudeProjection();
-  // Filled compositions are fundamentally different from thin brush strokes.
-  // Run this last inside the stable projection stage so large source regions
-  // keep their real canvas latitude instead of being recentered as sculpted blobs.
   installAreaFillSphericalProjection();
 }
 
@@ -92,19 +80,15 @@ const PLANET_RENDER_STAGES = Object.freeze([
   { name: 'dominant-ribbon-finish', install: installDominantRibbonFinish },
   { name: 'reference-planet-upgrade', install: installReferencePlanetUpgrade },
   { name: 'themed-galaxy-environment', install: installThemedGalaxyEnvironment },
-  // Outermost for the final body material. No colour inference happens here:
-  // the core sculptor has already separated body pixels from authored traits.
   { name: 'explicit-body-color', install: installExplicitBodyColor },
-  // Reshapes authoritative sculpted art, deepens installed crater geometry,
-  // then replaces the older dark-visor astronaut with selectable friendly models.
   { name: 'visual-refinement', install: installVisualRefinementStage },
-  // Deliberately last for new tablet planets: thin marks keep their 480-degree
-  // winding and controlled latitude treatment. Large filled regions instead
-  // preserve source canvas Y all the way from north pole to south pole.
   { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
-  // Outermost. Everything above turns the drawing into extruded patch meshes;
-  // this paints it onto the body instead. Kept last so it sees the final entity.
   { name: 'soft-toy-planet-surface', install: installSoftToyPlanetSurface },
+  // New kid-tablet planets carry the original vector stroke history. This stage
+  // is deliberately outermost so vector intent wins over every PNG-inference
+  // compatibility stage above it. Image-only stored planets still stop at the
+  // soft-toy fallback and keep rendering without a migration.
+  { name: 'manifest-stroke-surface', install: installManifestStrokeSurface },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
@@ -139,16 +123,6 @@ const planetLoader = new PlanetLoader({
   snapshotPublisher,
 });
 
-// THREE.Timer, not THREE.Clock: Clock is deprecated as of three r185 and warns
-// on every load. Timer has to be advanced once per frame before it is read,
-// where Clock computed elapsed time on demand - so update() leads the frame.
-//
-// Deliberately not calling timer.connect(document). That opts into pausing while
-// the page is hidden, which sounds right for a kiosk but is a new way for the
-// galaxy to stop dead - on a projector running in an unfocused or offscreen
-// window, "hidden" is not always what you would guess. Clock never paused, so
-// not connecting keeps behaviour identical and this stays a warning fix rather
-// than a behaviour change smuggled in beside one.
 const timer = new THREE.Timer();
 
 function animate() {
