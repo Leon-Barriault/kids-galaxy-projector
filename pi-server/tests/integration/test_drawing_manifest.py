@@ -14,7 +14,8 @@ def _png() -> bytes:
     return buffer.getvalue()
 
 
-def _manifest(background: str = "#ffffff") -> bytes:
+def _manifest(background: str = "#ffffff", *, duplicate_ids: bool = False) -> bytes:
+    second_id = "purple-top" if duplicate_ids else "green-meridian"
     return json.dumps(
         {
             "version": 1,
@@ -24,6 +25,7 @@ def _manifest(background: str = "#ffffff") -> bytes:
             "background_explicit": True,
             "strokes": [
                 {
+                    "stroke_id": "purple-top",
                     "order": 0,
                     "color": "#7b1fa2",
                     "width_px": 18,
@@ -31,6 +33,7 @@ def _manifest(background: str = "#ffffff") -> bytes:
                     "points": [[0.08, 0.12], [0.5, 0.1], [0.92, 0.14]],
                 },
                 {
+                    "stroke_id": second_id,
                     "order": 1,
                     "color": "#43a047",
                     "width_px": 14,
@@ -77,11 +80,57 @@ def test_manifest_is_stored_and_exposed_with_planet_payload(client: TestClient):
     canonical = stored.json()
     assert canonical["background_color"] == "#ffffff"
     assert [stroke["color"] for stroke in canonical["strokes"]] == ["#7b1fa2", "#43a047"]
+    assert [stroke["stroke_id"] for stroke in canonical["strokes"]] == [
+        "purple-top",
+        "green-meridian",
+    ]
     assert canonical["strokes"][0]["points"][0] == [0.08, 0.12]
 
     gallery = client.get("/api/planets?limit=12").json()["planets"]
     planet = next(item for item in gallery if item["id"] == payload["planet_id"])
     assert planet["drawing_manifest_url"] == payload["drawing_manifest_url"]
+
+
+def test_missing_stroke_ids_are_canonicalized_for_manifest_v1(client: TestClient):
+    manifest = json.loads(_manifest())
+    for stroke in manifest["strokes"]:
+        stroke.pop("stroke_id")
+
+    response = client.post(
+        "/api/upload",
+        files={
+            "file": ("planet.png", _png(), "image/png"),
+            "manifest": (
+                "drawing-manifest.json",
+                json.dumps(manifest).encode(),
+                "application/json",
+            ),
+        },
+        data={"name": "Canonical IDs", "body_color": "#ffffff"},
+    )
+    assert response.status_code == 200, response.text
+    canonical = client.get(response.json()["drawing_manifest_url"]).json()
+    assert [stroke["stroke_id"] for stroke in canonical["strokes"]] == [
+        "stroke-0000",
+        "stroke-0001",
+    ]
+
+
+def test_duplicate_stroke_ids_are_rejected(client: TestClient):
+    response = client.post(
+        "/api/upload",
+        files={
+            "file": ("planet.png", _png(), "image/png"),
+            "manifest": (
+                "drawing-manifest.json",
+                _manifest(duplicate_ids=True),
+                "application/json",
+            ),
+        },
+        data={"name": "Duplicate IDs", "body_color": "#ffffff"},
+    )
+    assert response.status_code == 400
+    assert "stroke ids" in response.json()["detail"].lower()
 
 
 def test_manifest_background_must_match_body_color_field(client: TestClient):
