@@ -263,7 +263,9 @@ function applyAreaFillProjection(entity, texture) {
     data.kidsGalaxyStrokeLatitudeDegrees = LATITUDE_DEGREES;
     data.kidsGalaxyStrokeProjectionMode = group.userData.kidsGalaxyStrokeProjectionMode;
     data.kidsGalaxyDesignProjectionMode = group.userData.kidsGalaxyDesignProjectionMode;
-    data.designProjection = 'source-canvas-area-fill-preserved-by-latitude';
+    // Keep the stable explicit-body contract used by deployed QA while the
+    // more specific source-canvas mode is exposed through kidsGalaxy* fields.
+    data.designProjection = 'explicit-body-preserved-kid-traits-across-planet';
   }
   return true;
 }
