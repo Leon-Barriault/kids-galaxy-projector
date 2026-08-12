@@ -37,7 +37,7 @@ class PlanetExportClient(
         var attempt = 1
         while (
             response.code() == WEBGL_NOT_READY_STATUS &&
-                attempt < WEBGL_READY_ATTEMPTS
+            attempt < WEBGL_READY_ATTEMPTS
         ) {
             response.errorBody()?.close()
             delay(WEBGL_READY_RETRY_MS)
