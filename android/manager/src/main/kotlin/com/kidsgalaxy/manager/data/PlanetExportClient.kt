@@ -1,6 +1,7 @@
 package com.kidsgalaxy.manager.data
 
 import android.content.Context
+import kotlinx.coroutines.delay
 
 class PlanetExportHttpException(
     val statusCode: Int,
@@ -18,6 +19,9 @@ class PlanetExportClient(
 ) {
     companion object {
         private const val EXPORT_READ_TIMEOUT_SECONDS = 60L
+        private const val WEBGL_NOT_READY_STATUS = 409
+        private const val WEBGL_READY_ATTEMPTS = 40
+        private const val WEBGL_READY_RETRY_MS = 250L
         private val PDF_SIGNATURE = "%PDF".encodeToByteArray()
     }
 
@@ -29,7 +33,18 @@ class PlanetExportClient(
         )
 
     suspend fun printPdf(planetId: String): ByteArray {
-        val response = api.printPdf(planetId)
+        var response = api.printPdf(planetId)
+        var attempt = 1
+        while (
+            response.code() == WEBGL_NOT_READY_STATUS &&
+                attempt < WEBGL_READY_ATTEMPTS
+        ) {
+            response.errorBody()?.close()
+            delay(WEBGL_READY_RETRY_MS)
+            attempt += 1
+            response = api.printPdf(planetId)
+        }
+
         if (!response.isSuccessful) {
             throw PlanetExportHttpException(response.code(), "Print")
         }
