@@ -47,6 +47,32 @@ class PlanetRepository(ABC):
         """Store richer design metadata; legacy adapters fall back to classic saves."""
         return self.save(planet_id, display_name, image_bytes)
 
+    def save_designed_with_manifest(
+        self,
+        planet_id: str,
+        display_name: str,
+        image_bytes: bytes,
+        style: str,
+        companions: tuple[str, ...],
+        drawing_manifest: dict,
+        ring_color: str = DEFAULT_RING_COLOR,
+        crater_color: str = DEFAULT_CRATER_COLOR,
+        mountain_color: str = DEFAULT_MOUNTAIN_COLOR,
+        body_color: str | None = None,
+    ) -> Planet:
+        """Store design metadata plus the tablet-authored vector drawing sidecar."""
+        return self.save_designed(
+            planet_id=planet_id,
+            display_name=display_name,
+            image_bytes=image_bytes,
+            style=style,
+            companions=companions,
+            ring_color=ring_color,
+            crater_color=crater_color,
+            mountain_color=mountain_color,
+            body_color=body_color,
+        )
+
     @abstractmethod
     def latest(self) -> Planet | None:
         """Most recently stored planet, or None if there are none."""
@@ -69,7 +95,7 @@ class PlanetRepository(ABC):
 
     @abstractmethod
     def resolve_image(self, filename: str) -> Path | None:
-        """Resolve a public image filename inside the backing store."""
+        """Resolve a public image/sidecar filename inside the backing store."""
 
 
 class PlanetExportRenderer(ABC):
