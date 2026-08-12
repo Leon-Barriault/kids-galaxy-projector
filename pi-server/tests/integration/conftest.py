@@ -1,13 +1,7 @@
-"""
-Integration-only fixtures.
-
-Builds a real application through the composition root, pointed at an isolated
-temp directory. Because the app is created per test, suites no longer share
-upload state or rate-limit state - which is what previously forced tests to
-clean up after themselves.
-"""
+"""Integration-only fixtures for the manifest-first planet contract."""
 
 import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +9,73 @@ from PIL import Image
 
 from app.config import Settings
 from app.factory import create_app
+
+
+def _manifest(background: str = "#ff0000") -> bytes:
+    return json.dumps(
+        {
+            "version": 1,
+            "coordinate_space": "normalized-canvas-v1",
+            "canvas": {"width": 64, "height": 64},
+            "background_color": background.lower(),
+            "background_explicit": True,
+            "strokes": [
+                {
+                    "order": 0,
+                    "color": "#7b1fa2",
+                    "width_px": 8,
+                    "width_normalized": 0.125,
+                    "points": [[0.12, 0.16], [0.5, 0.18], [0.88, 0.15]],
+                },
+                {
+                    "order": 1,
+                    "color": "#f57c00",
+                    "width_px": 7,
+                    "width_normalized": 0.109375,
+                    "points": [[0.18, 0.43], [0.5, 0.46], [0.82, 0.42]],
+                },
+            ],
+            "raster": {
+                "background_fill": "solid",
+                "stroke_cap": "round",
+                "stroke_join": "round",
+                "stroke_order": "oldest-to-newest",
+            },
+        }
+    ).encode()
+
+
+class ManifestTestClient(TestClient):
+    """Keep ordinary integration requests on the current tablet wire contract.
+
+    Individual tests stay focused on the behavior they own. Any POST to the
+    upload endpoint that supplies an image but does not explicitly provide its
+    own manifest receives a small valid manifest fixture. Tests for malformed or
+    missing manifests use ``raw_client`` instead.
+    """
+
+    def post(self, url, *args, **kwargs):
+        if url == "/api/upload" and "files" in kwargs:
+            files = kwargs["files"]
+            has_manifest = False
+            if isinstance(files, dict):
+                has_manifest = "manifest" in files
+            else:
+                has_manifest = any(item[0] == "manifest" for item in files)
+
+            if not has_manifest:
+                data = kwargs.get("data") or {}
+                background = data.get("body_color", "#ff0000") if isinstance(data, dict) else "#ff0000"
+                manifest_file = (
+                    "drawing-manifest.json",
+                    _manifest(background),
+                    "application/json",
+                )
+                if isinstance(files, dict):
+                    kwargs["files"] = {**files, "manifest": manifest_file}
+                else:
+                    kwargs["files"] = [*files, ("manifest", manifest_file)]
+        return super().post(url, *args, **kwargs)
 
 
 @pytest.fixture
@@ -25,10 +86,6 @@ def settings(tmp_path):
         static_dir=tmp_path / "static",
         rate_limit_seconds=0.0,
         environment="development",
-        # No mDNS in tests. The app lifespan starts the advertiser, which binds
-        # a multicast socket - that makes the suite depend on the machine's
-        # network, and on a CI runner it is either slow or blocked. The
-        # advertiser has its own unit tests with the library faked.
         advertise=False,
     )
 
@@ -40,6 +97,12 @@ def app(settings):
 
 @pytest.fixture
 def client(app):
+    return ManifestTestClient(app)
+
+
+@pytest.fixture
+def raw_client(app):
+    """Unmodified HTTP client for testing the upload wire contract itself."""
     return TestClient(app)
 
 
@@ -77,7 +140,7 @@ def make_jpeg_bytes():
 
 @pytest.fixture
 def upload_planet(client, make_png_bytes):
-    """Upload a planet and return the parsed response body."""
+    """Upload a modern manifest-backed planet and return its response body."""
 
     def _upload(name: str = "Test Planet", png: bytes | None = None):
         response = client.post(
@@ -89,28 +152,3 @@ def upload_planet(client, make_png_bytes):
         return response.json()
 
     return _upload
-
-
-_LEGACY_DIFFUSION_TEST = (
-    "test_api_e2e.py::TestSurfaceBlending::"
-    "test_the_stored_texture_is_not_mostly_white"
-)
-
-
-def pytest_collection_modifyitems(items):
-    """Retire the old assertion that storage must erase the drawing's white space.
-
-    The server now intentionally preserves the raw child composition because
-    the projector needs it to derive body colour and sculpted motifs. The
-    replacement product contract is pinned in test_raw_artwork_storage.py.
-    """
-    for item in items:
-        if _LEGACY_DIFFUSION_TEST in item.nodeid:
-            item.add_marker(
-                pytest.mark.skip(
-                    reason=(
-                        "superseded: preserve raw kid artwork; projector owns "
-                        "visual interpretation"
-                    )
-                )
-            )
