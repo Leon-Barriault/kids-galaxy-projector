@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 const SNAPSHOT_SIZE = 700;
 const SNAPSHOT_FOV_DEGREES = 40;
-const CAMERA_DISTANCE = 7.4;
+const MIN_CAMERA_DISTANCE = 7.4;
+const CAMERA_FRAME_PADDING = 1.14;
 // Keep the printed/exported hero almost straight-on. The live galaxy can use a
 // dramatic orbital view, but the keepsake should read like a centred product
 // photo so the kid's latitude ribbons are not compressed toward one edge.
@@ -14,9 +15,9 @@ const MAX_UPLOAD_ATTEMPTS = 3;
 
 /**
  * Captures the finalized Three.js planet as an isolated hero frame and stores
- * it on the Pi. The exact runtime meshes/materials are cloned, so sculpted kid
- * artwork, crater/mountain geometry, Saturn rings and selected companions are
- * the same objects the projector shows instead of a server-side approximation.
+ * it on the server. The exact runtime meshes/materials are cloned, so sculpted
+ * kid artwork, crater/mountain geometry, Saturn rings and selected companions
+ * are the same objects the projector shows instead of a server approximation.
  */
 export class ProjectorSnapshotPublisher {
   constructor({ galaxyScene }) {
@@ -92,7 +93,7 @@ export class ProjectorSnapshotPublisher {
 
   capture(entity) {
     const exportScene = this.createExportScene(entity);
-    const camera = this.createExportCamera(entity);
+    const camera = this.createExportCamera(entity, exportScene);
     const target = new THREE.WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE, {
       depthBuffer: true,
       stencilBuffer: false,
@@ -172,21 +173,35 @@ export class ProjectorSnapshotPublisher {
     // on the projector's dark-sky backdrop.
     scene.background = null;
 
+    const framingObjects = [];
     const planet = entity.mesh.clone(true);
     planet.position.set(0, 0, 0);
     // A newly arrived planet may still be in its scale-in celebration. Export
     // the final production size, not the transient 1% arrival animation.
     planet.scale.setScalar(1);
     scene.add(planet);
+    framingObjects.push(planet);
 
     for (const decoration of entity.decorations || []) {
       const clone = decoration.clone(true);
       clone.position.set(0, 0, 0);
       scene.add(clone);
+      framingObjects.push(clone);
     }
 
+    // Compute the main planet/decorations bounds before companions and lights are
+    // added. The old camera always looked at world origin; that lets an internally
+    // offset mesh or asymmetric decoration drift toward a corner and get clipped.
+    // Framing the actual rendered object graph keeps the planet centred and gives
+    // it a predictable safe margin in every capture.
+    scene.updateMatrixWorld(true);
+    const framingBounds = new THREE.Box3();
+    for (const object of framingObjects) framingBounds.expandByObject(object);
+    scene.userData.kidsGalaxyExportFramingBounds = framingBounds;
+
     // Companions are visible parts of the child's selected planet design. Keep
-    // their live relative positions, but omit the large gallery orbit guide.
+    // their live relative positions, but omit the large gallery orbit guide. They
+    // do not pull the main planet away from the centre of the hero frame.
     for (const record of entity.companions || []) {
       const clone = record.object.clone(true);
       clone.position.copy(record.object.position).sub(entity.mesh.position);
@@ -215,7 +230,7 @@ export class ProjectorSnapshotPublisher {
     return scene;
   }
 
-  createExportCamera(entity) {
+  createExportCamera(entity, exportScene) {
     const camera = new THREE.PerspectiveCamera(
       SNAPSHOT_FOV_DEGREES,
       1,
@@ -230,9 +245,21 @@ export class ProjectorSnapshotPublisher {
     const elevationRatio = hasSaturnRing
       ? RING_CAMERA_ELEVATION_RATIO
       : CAMERA_ELEVATION_RATIO;
-    const elevation = CAMERA_DISTANCE * elevationRatio;
-    camera.position.set(0, elevation, CAMERA_DISTANCE);
-    camera.lookAt(0, 0, 0);
+
+    const target = new THREE.Vector3(0, 0, 0);
+    let distance = MIN_CAMERA_DISTANCE;
+    const bounds = exportScene?.userData?.kidsGalaxyExportFramingBounds;
+    if (bounds?.isBox3 && !bounds.isEmpty()) {
+      const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+      target.copy(sphere.center);
+      const halfFov = THREE.MathUtils.degToRad(SNAPSHOT_FOV_DEGREES / 2);
+      const fittedDistance = (sphere.radius / Math.sin(halfFov)) * CAMERA_FRAME_PADDING;
+      distance = Math.max(MIN_CAMERA_DISTANCE, fittedDistance);
+    }
+
+    const elevation = distance * elevationRatio;
+    camera.position.set(target.x, target.y + elevation, target.z + distance);
+    camera.lookAt(target);
     camera.updateProjectionMatrix();
     return camera;
   }

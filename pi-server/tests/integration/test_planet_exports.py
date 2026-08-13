@@ -163,16 +163,27 @@ def test_ringed_print_preserves_projector_render_including_ring(client):
 
     assert response.status_code == 200
     sheet = Image.open(io.BytesIO(response.content)).convert("RGB")
-    # Hero starts at (60,145), so this marker is at the exact location it had
-    # in the uploaded 700x700 WebGL frame. If Pillow re-renders the planet, it
-    # disappears and the contract fails.
-    assert sheet.getpixel((60 + 30, 145 + 30)) == (0, 255, 127)
-    # Sample the exposed left edge of the ring. The earlier top-centre sample
-    # sat behind the planet by design, so it correctly contained body pixels.
-    assert sheet.getpixel((60 + 60, 145 + 350)) == (244, 201, 93)
+    hero = sheet.crop((60, 145, 760, 845))
+
+    # The keepsake compositor is now allowed to move/scale the captured WebGL
+    # pixels so the planet cannot remain stuck in a corner. Verify the distinctive
+    # marker and Saturn ring survive that framing rather than requiring their old
+    # absolute coordinates.
+    marker_pixels = sum(
+        1
+        for red, green, blue in hero.getdata()
+        if red < 40 and green > 220 and 80 < blue < 190
+    )
+    ring_pixels = sum(
+        1
+        for red, green, blue in hero.getdata()
+        if red > 220 and 160 < green < 230 and blue < 140
+    )
+    assert marker_pixels > 500
+    assert ring_pixels > 2_000
 
 
-def test_print_sheet_uses_white_paper_and_blank_planet_guide(client):
+def test_print_sheet_uses_white_paper_and_kid_drawing_guide(client):
     planet = _upload_designed_planet(client, name="Kid Keepsake")
     _store_projector_snapshot(client, planet["planet_id"])
 
@@ -183,10 +194,17 @@ def test_print_sheet_uses_white_paper_and_blank_planet_guide(client):
     # Older stored WebGL snapshots had an opaque #050818 sky. The print path
     # must lift that connected background to paper-white instead of spending ink.
     assert sheet.getpixel((60 + 5, 145 + 5)) == (255, 255, 255)
-    # The right side is a blank version of the tablet's soft-blue planet guide,
-    # not the child's filled source bitmap. Its centre remains white for drawing.
-    assert sheet.getpixel((895 + 310, 145 + 310)) == (255, 255, 255)
-    assert sheet.getpixel((895 + 310, 145 + 55)) == (100, 181, 246)
+
+    # The right side contains the child's actual drawing, clipped by and wrapped
+    # in the same soft-blue circular guide used on the tablet.
+    drawing = sheet.crop((895, 145, 1515, 765))
+    red_pixels = sum(
+        1
+        for red, green, blue in drawing.getdata()
+        if red > 190 and green < 110 and blue < 110
+    )
+    assert red_pixels > 1_000
+    assert drawing.getpixel((310, 50)) == (100, 181, 246)
 
 
 def test_print_sheet_is_available_as_server_pdf(client):
