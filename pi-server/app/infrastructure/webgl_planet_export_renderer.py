@@ -122,7 +122,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
     def _drawing_with_guide(self, source: Image.Image) -> Image.Image:
         """Show the child's real drawing inside the same circle used on the tablet."""
         size = self.DRAWING_GUIDE_SIZE
-        radius = int(round(size * self.DRAWING_GUIDE_RADIUS_FRACTION))
+        radius = round(size * self.DRAWING_GUIDE_RADIUS_FRACTION)
         centre = size // 2
         bounds = (
             centre - radius,
