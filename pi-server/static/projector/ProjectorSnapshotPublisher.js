@@ -77,6 +77,10 @@ export class ProjectorSnapshotPublisher {
     const url = `/api/admin/planets/${encodeURIComponent(entity.id)}/rendered-preview.png`;
     let lastError = null;
     for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+      // Re-checked every attempt, not just before the first. A planet can be
+      // deleted during the backoff between attempts, and there is no point
+      // uploading a hero frame for something that no longer exists.
+      if (entity.disposed) return;
       try {
         const response = await fetch(url, {
           method: 'PUT',
@@ -90,6 +94,12 @@ export class ProjectorSnapshotPublisher {
           entity.userData.kidsGalaxyWebglSnapshotSize = SNAPSHOT_SIZE;
           return;
         }
+        // 404 means the server has no such planet - it was deleted while this
+        // snapshot was being captured, and the client has not processed the SSE
+        // removal yet. Retrying cannot succeed, and each attempt costs another
+        // browser-level console error that no JS handler can suppress. This is
+        // why a single deleted planet produced exactly three of them.
+        if (response.status === 404) return;
         lastError = new Error(`snapshot upload returned HTTP ${response.status}`);
       } catch (error) {
         lastError = error;
