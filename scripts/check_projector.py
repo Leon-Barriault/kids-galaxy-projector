@@ -410,11 +410,23 @@ def main() -> int:
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
+        # Chrome's console message for a failed request is the bare string
+        # "Failed to load resource: the server responded with a status of 404" -
+        # no URL, no method, nothing to act on. Three of those told us only that
+        # something, somewhere, three times, was missing. Recording the responses
+        # alongside gives the next person the URL.
+        failed_requests: list[str] = []
         page.on(
             "console",
             lambda message: errors.append(message.text) if message.type == "error" else None,
         )
         page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on(
+            "response",
+            lambda response: failed_requests.append(f"{response.status} {response.url}")
+            if response.status >= 400
+            else None,
+        )
 
         print("\nload and composition")
         page.goto(f"{server.base}/", wait_until="load")
@@ -539,7 +551,12 @@ def main() -> int:
         check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
-        check(errors == [], f"no browser console errors ({errors[:3]})")
+        check(
+            errors == [],
+            f"no browser console errors ({errors[:3]}"
+            + (f" | failed requests: {failed_requests[:5]}" if failed_requests else "")
+            + ")",
+        )
         browser.close()
 
     print()
