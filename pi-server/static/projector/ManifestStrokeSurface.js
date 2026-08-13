@@ -170,11 +170,93 @@ function strokeProjection(stroke, strokeIndex) {
     bandFrom: THREE.MathUtils.clamp(minY - halfWidth, 0, 1),
     bandTo: THREE.MathUtils.clamp(maxY + halfWidth, 0, 1),
     horizontalPoleCandidate,
+    // Exposed because the internal gap fill needs the same notion of "a band
+    // that goes right round the planet" to decide which background runs are
+    // trapped between paint and which are the child's actual sky.
+    wrapsLongitude,
     widthNormalized,
     coverageMetric,
     colourHex,
     colour: rgbOf(colourHex, '#ffffff'),
   };
+}
+
+/**
+ * Close background gaps that are trapped between two wrapped bands.
+ *
+ * A child who paints two ribbons with a sliver of background between them gets
+ * a trench: the base sphere sits a whole relief height below the paint on either
+ * side, falls into shadow, and reads as a black stripe rather than as their
+ * background colour. Only *internal* runs are filled - anything reaching a pole
+ * is the sky they meant to leave, and stays.
+ *
+ * This ran as a separate outermost stage, ManifestInternalGapFill, which patched
+ * the finished albedo canvas and then bridged the relief by rewriting the
+ * displacementMap. When relief became geometry that texture stopped existing,
+ * and because the stage null-guards carefully it did not fail - it silently
+ * stopped bridging, leaving the colour filled and the trench still there.
+ * Running here instead means there is nothing to patch afterwards: fill the
+ * ownership map and the relief follows, because relief is computed from
+ * ownership a few lines further down.
+ *
+ * It also drops a texel-colour distance test in favour of the ownership map,
+ * which is exact. The old pass had to ask "is this pixel close to the background
+ * colour", which cannot distinguish unpainted body from a stroke the child
+ * happened to paint in their background colour.
+ */
+export function fillInternalBandGaps(owner, colour, coverage, projections) {
+  const bandCentres = projections
+    .filter((projection) => projection.wrapsLongitude)
+    .map((projection) => projection.centerY);
+  if (bandCentres.length < 2) return { texels: 0, widestRun: 0 };
+
+  let texels = 0;
+  let widestRun = 0;
+
+  for (let u = 0; u < TEXTURE_WIDTH; u += 1) {
+    let v = 0;
+    while (v < TEXTURE_HEIGHT) {
+      if (owner[v * TEXTURE_WIDTH + u] >= 0) {
+        v += 1;
+        continue;
+      }
+      const start = v;
+      while (v < TEXTURE_HEIGHT && owner[v * TEXTURE_WIDTH + u] < 0) v += 1;
+      const end = v - 1;
+
+      // Touching either pole makes this the outside, not a gap.
+      if (start === 0 || end === TEXTURE_HEIGHT - 1) continue;
+
+      const midY = ((start + end) * 0.5) / Math.max(1, TEXTURE_HEIGHT - 1);
+      const bracketed =
+        bandCentres.some((centre) => centre < midY) && bandCentres.some((centre) => centre > midY);
+      if (!bracketed) continue;
+
+      const above = (start - 1) * TEXTURE_WIDTH + u;
+      const below = (end + 1) * TEXTURE_WIDTH + u;
+      if (owner[above] < 0 || owner[below] < 0) continue;
+
+      widestRun = Math.max(widestRun, end - start + 1);
+      for (let row = start; row <= end; row += 1) {
+        const texel = row * TEXTURE_WIDTH + u;
+        // Nearer neighbour wins, so a gap between two different colours splits
+        // down the middle rather than picking one arbitrarily. Ownership and
+        // colour are taken from the same source texel, which is what keeps the
+        // albedo edge on the bevel wall instead of a few texels off it.
+        const source = row - start + 1 <= end - row + 1 ? above : below;
+        owner[texel] = owner[source];
+        colour[texel * 3] = colour[source * 3];
+        colour[texel * 3 + 1] = colour[source * 3 + 1];
+        colour[texel * 3 + 2] = colour[source * 3 + 2];
+        // Filled, not feathered: this texel is interior paint now, so it must
+        // not be treated as a partly covered edge by the relief pass.
+        coverage[texel] = 1;
+        texels += 1;
+      }
+    }
+  }
+
+  return { texels, widestRun };
 }
 
 function drawProjectedStroke(mask, projection) {
@@ -292,7 +374,7 @@ function strokeProfiles(projections, poleOwners) {
   });
 }
 
-function roundedRelief(owner, profiles, coverage) {
+export function roundedRelief(owner, profiles, coverage) {
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const far = TEXTURE_WIDTH + TEXTURE_HEIGHT;
   const distance = new Float32Array(texels);
@@ -443,6 +525,10 @@ function buildManifestMaps(manifest) {
     renderedStrokeCount += 1;
   });
 
+  // Before the relief pass, so a bridged gap is raised by the same code that
+  // raises everything else rather than by a later correction.
+  const gaps = fillInternalBandGaps(owner, colour, coverage, projections);
+
   const { height, distance } = roundedRelief(owner, profiles, coverage);
   const colourCanvas = document.createElement('canvas');
   colourCanvas.width = TEXTURE_WIDTH;
@@ -484,6 +570,8 @@ function buildManifestMaps(manifest) {
       height: TEXTURE_HEIGHT,
     }),
     roughness: scalarCanvas(height, (relief) => 238 - relief * 72),
+    internalGapTexels: gaps.texels,
+    internalGapWidestRun: gaps.widestRun,
     strokeCount: renderedStrokeCount,
     layerLevels: diagnostics.map((profile) => profile.level),
     strokeProfiles: diagnostics,
@@ -553,6 +641,17 @@ function applyManifestSurface(entity) {
   material.userData.kidsGalaxyEmbossHeightHeuristic = 'order35-width25-coverage20-pole10-jitter10';
   material.userData.kidsGalaxyNorthPoleStroke = built.northPoleStroke;
   material.userData.kidsGalaxySouthPoleStroke = built.southPoleStroke;
+  // Same contract keys the ManifestInternalGapFill stage published, so the
+  // checks that watch gap filling keep working. Version 3 because the mechanism
+  // moved: gaps are closed in the ownership map before geometry is built rather
+  // than painted over the finished textures afterwards. Relief texels equal
+  // filled texels now by construction - a bridged gap is owned paint, so it is
+  // raised by the ordinary relief pass, where v2 bridged the two separately and
+  // could fill colour while silently failing to raise anything.
+  material.userData.kidsGalaxyInternalGapFillTexels = built.internalGapTexels;
+  material.userData.kidsGalaxyInternalGapReliefTexels = built.internalGapTexels;
+  material.userData.kidsGalaxyInternalGapFillWidestRun = built.internalGapWidestRun;
+  material.userData.kidsGalaxyInternalGapFillVersion = 3;
   // Keep the stable contract name used by the shared projector smoke suite. The
   // implementation is now periodic/wavy rather than row-filled, but it is still
   // the same manifest-strokes-on-body rendering stage.

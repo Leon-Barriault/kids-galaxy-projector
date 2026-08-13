@@ -27,7 +27,6 @@ import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMas
 import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
 import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
-import { installManifestInternalGapFill } from './projector/ManifestInternalGapFill.js';
 import { installManifestStrokeSurface } from './projector/ManifestStrokeSurface.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
@@ -90,11 +89,18 @@ const PLANET_RENDER_STAGES = Object.freeze([
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
 // Keep the long-standing pipeline diagnostics stable. The manifest renderer is
 // an authoritative input adapter for new vector-aware tablet drawings rather
-// than a replacement for the image-only compatibility pipeline. The narrow-gap
-// post-processor wraps it afterwards and only paints background runs that are
-// vertically bracketed by wrapped bands, leaving the exterior background intact.
+// than a replacement for the image-only compatibility pipeline. Installing it
+// afterwards still makes it the outermost applyTexture wrapper, so manifest
+// intent wins synchronously whenever a sidecar is present.
+//
+// The internal gap fill used to wrap this as a further stage. It runs inside
+// buildManifestMaps now, before the relief pass. As a post-processor it had to
+// reach back into finished textures, and when relief became geometry the
+// displacementMap it reached for stopped existing - so it silently stopped
+// bridging trenches while still reporting success, because every access was
+// null-guarded. Filling ownership before relief is computed means there is
+// nothing left to correct afterwards.
 installManifestStrokeSurface();
-installManifestInternalGapFill();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({

@@ -142,6 +142,7 @@ SURFACE_STATE = """
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
     internalGapFillTexels: m.userData.kidsGalaxyInternalGapFillTexels,
+    internalGapReliefTexels: m.userData.kidsGalaxyInternalGapReliefTexels,
     internalGapFillWidestRun: m.userData.kidsGalaxyInternalGapFillWidestRun,
     internalGapFillVersion: m.userData.kidsGalaxyInternalGapFillVersion,
     layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
@@ -214,9 +215,22 @@ def main() -> int:
     check(close(pixel(state, 2, 2), PURPLE), "purple top stroke closes the north cap")
 
     print("\nbackground handling")
+    # v3 closes gaps in the ownership map inside buildManifestMaps, before the
+    # relief pass. v2 was a post-processor that patched the finished albedo and
+    # then bridged the displacementMap separately - and once relief became
+    # geometry, that second half reached for a texture that no longer existed.
+    # Every access was null-guarded, so it kept reporting filled texels while
+    # quietly raising none of them, and the trench it existed to remove came
+    # back. Filling ownership first means relief follows from the same pass.
     check(
-        state["internalGapFillVersion"] == 2,
-        f"wide-gap filler v2 is active ({state['internalGapFillVersion']})",
+        state["internalGapFillVersion"] == 3,
+        f"gap filler v3 is active ({state['internalGapFillVersion']})",
+    )
+    # The half that broke silently last time, asserted directly.
+    check(
+        (state["internalGapReliefTexels"] or 0) >= (state["internalGapFillTexels"] or 0) > 0,
+        "every bridged texel is also raised "
+        f"({state['internalGapReliefTexels']} raised of {state['internalGapFillTexels']} filled)",
     )
     check(
         (state["internalGapFillTexels"] or 0) > 0,

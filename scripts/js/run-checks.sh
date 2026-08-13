@@ -34,7 +34,8 @@ printf "export * from '%s';\n" "${vendor}" > "${scratch}/node_modules/three/inde
 echo '{ "type": "module" }' > "${scratch}/package.json"
 
 cp "${projector}/BeveledPatchRelief.js" "${projector}/StudioEnvironment.js" \
-   "${projector}/SoftToyPlanetSurface.js" "${projector}/PlanetEntity.js" "${scratch}/"
+   "${projector}/SoftToyPlanetSurface.js" "${projector}/ManifestStrokeSurface.js" \
+   "${projector}/PlanetEntity.js" "${scratch}/"
 cp "${repo_root}/scripts/js/"*.mjs "${scratch}/"
 
 # SoftToyPlanetSurface pulls in PlanetEntity purely to monkeypatch its prototype
@@ -46,7 +47,8 @@ export class PlanetEntity {}
 JS
 
 status=0
-for check in check_relief_geometry.mjs check_studio_environment.mjs check_region_flatness.mjs derive_tone_exposure.mjs; do
+for check in check_relief_geometry.mjs check_studio_environment.mjs check_region_flatness.mjs \
+             check_internal_gap_fill.mjs derive_tone_exposure.mjs; do
   echo "=============================================================="
   echo "  ${check}"
   echo "=============================================================="
