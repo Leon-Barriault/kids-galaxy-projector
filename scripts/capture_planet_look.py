@@ -247,5 +247,11 @@ def main(out_dir: Path) -> int:
 
 
 if __name__ == "__main__":
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/look")
+    # Default inside the repo rather than at "/tmp/look". A POSIX absolute path
+    # is drive-relative on Windows, so running this without an argument there
+    # silently wrote the frames to C:\tmp\look - reachable, but not where anyone
+    # looks, and not where the message said they went. artifacts/look is
+    # gitignored precisely because these are rewritten on every run.
+    default = Path(__file__).resolve().parent.parent / "artifacts" / "look"
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else default
     raise SystemExit(main(target))
