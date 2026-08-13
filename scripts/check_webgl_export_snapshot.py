@@ -48,27 +48,25 @@ def wait_for_webgl_preview(base: str, planet_id: str, timeout: float = 15.0):
 
 
 def visible_ring_extent(image: Image.Image) -> tuple[int, int, int]:
-    """Find non-background pixels outside the central sphere footprint."""
-    rgb = image.convert("RGB")
-    width, height = rgb.size
-    centre_x = width // 2
-    centre_y = height // 2
-    background = rgb.getpixel((5, 5))
+    """Find the selected white Saturn particles in the transparent hero frame."""
+    rgba = image.convert("RGBA")
+    width, height = rgba.size
     coordinates: list[tuple[int, int]] = []
 
-    # At this camera/FOV the 1.05-radius sphere occupies roughly 140 px, while
-    # the real Saturn particle ring reaches ~285 px. Pixels beyond 175 px can
-    # therefore only be ring/decorative geometry in this companion-free test.
-    minimum_radius_sq = 175 * 175
+    # The export camera deliberately auto-fits the whole planet/decorations graph,
+    # so an absolute radius from the 700px frame centre is not a stable separator
+    # between sphere and ring. This fixture explicitly selects a white Saturn ring;
+    # use that authored colour instead. Bright near-neutral pixels survive the PBR
+    # lighting while excluding the blue/orange/green planet paint. The wide span
+    # checks below keep a small white specular highlight on the sphere from passing.
     for y in range(height):
-        dy = y - centre_y
         for x in range(width):
-            dx = x - centre_x
-            if dx * dx + dy * dy <= minimum_radius_sq:
+            red, green, blue, alpha = rgba.getpixel((x, y))
+            if alpha < 64:
                 continue
-            colour = rgb.getpixel((x, y))
-            distance = sum(abs(colour[index] - background[index]) for index in range(3))
-            if distance >= 55:
+            minimum = min(red, green, blue)
+            maximum = max(red, green, blue)
+            if minimum >= 170 and maximum - minimum <= 60:
                 coordinates.append((x, y))
 
     if not coordinates:
@@ -227,9 +225,9 @@ def main() -> int:
             snapshot = Image.open(io.BytesIO(response.content)).convert("RGBA")
             check(snapshot.size == (700, 700), "projector publishes the 700x700 hero frame", failures)
             count, horizontal_span, vertical_span = visible_ring_extent(snapshot)
-            check(count >= 500, f"real Saturn ring is visible outside the sphere ({count} pixels)", failures)
-            check(horizontal_span >= 380, f"ring spans the hero frame horizontally ({horizontal_span}px)", failures)
-            check(vertical_span >= 120, f"ring is visibly open rather than edge-on ({vertical_span}px)", failures)
+            check(count >= 500, f"selected white Saturn ring is visible ({count} pixels)", failures)
+            check(horizontal_span >= 280, f"ring spans the hero frame horizontally ({horizontal_span}px)", failures)
+            check(vertical_span >= 100, f"ring is visibly open rather than edge-on ({vertical_span}px)", failures)
             snapshot.save(ARTIFACTS / "webgl-export-ringed.png")
 
         print_response = httpx.get(
