@@ -117,9 +117,9 @@ export class PlanetEntity {
 
   createPlanetGeometry(radius = 1.05) {
     // Higher segment counts now that we are no longer constrained by Raspberry Pi.
-    // Gives the displacement/bump maps in SoftToyPlanetSurface clean rounded
-    // shoulders instead of stair-stepping on the latitude rows.
-    const geometry = new THREE.SphereGeometry(radius, 96, 72);
+    // 128×96 gives the displacement/bump maps clean rounded shoulders even
+    // with the softer, wider SoftToy fillets.
+    const geometry = new THREE.SphereGeometry(radius, 128, 96);
     if (this.style === 'cratered') this.applyCraterShape(geometry);
     return geometry;
   }
