@@ -100,6 +100,38 @@ def position_distance(left: list[float], right: list[float]) -> float:
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right, strict=True)))
 
 
+def visible_canvas_image(page) -> Image.Image:
+    """Capture the renderer's visible viewport without element actionability waits."""
+    clip = page.evaluate(
+        """
+        () => {
+          const canvas = window.kidsGalaxy?.renderer?.domElement;
+          if (!(canvas instanceof HTMLCanvasElement) || !canvas.isConnected) return null;
+          const rect = canvas.getBoundingClientRect();
+          return {
+            x: rect.left,
+            y: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+        """
+    )
+    if not clip or clip["width"] <= 0 or clip["height"] <= 0:
+        raise RuntimeError("projector renderer did not expose a visible DOM canvas")
+
+    # ElementHandle/Locator.screenshot() first waits for the target element to
+    # become stable. The projector is intentionally animated forever, and on
+    # Chromium/SwiftShader that stability wait can time out even though the
+    # renderer is healthy. A page screenshot clipped to the instantaneous canvas
+    # bounds captures the same visible pixels without an element actionability
+    # gate. Leave animations enabled because motion is exactly what this check
+    # exists to prove.
+    return Image.open(
+        io.BytesIO(page.screenshot(clip=clip, animations="allow"))
+    ).convert("RGB")
+
+
 def main() -> int:
     failures: list[str] = []
     ARTIFACTS.mkdir(exist_ok=True)
@@ -176,19 +208,13 @@ def main() -> int:
         # default framebuffer. Numerical motion alone is not enough: the bug we
         # are guarding kept requestAnimationFrame/update running while every
         # frame was rendered to an off-screen target, so the projector showed a
-        # still image. Capture the exact renderer canvas twice as the user sees it;
-        # do not rediscover it through page layout after the renderer is known ready.
+        # still image. Capture the visible canvas twice as the user sees it.
         motion_before = motion_state(page, planet_id)
-        renderer_canvas_handle = page.evaluate_handle("window.kidsGalaxy.renderer.domElement")
-        canvas = renderer_canvas_handle.as_element()
-        if canvas is None:
-            raise RuntimeError("projector renderer did not expose a DOM canvas")
-        visible_before = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
+        visible_before = visible_canvas_image(page)
         page.wait_for_timeout(1200)
         motion_after = motion_state(page, planet_id)
-        visible_after = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
+        visible_after = visible_canvas_image(page)
         visible_difference = ImageChops.difference(visible_before, visible_after).getbbox()
-        canvas.dispose()
 
         check(motion_before["screenTarget"], "renderer returns to the visible framebuffer after all snapshots", failures)
         check(motion_after["screenTarget"], "renderer stays on the visible framebuffer while animating", failures)
