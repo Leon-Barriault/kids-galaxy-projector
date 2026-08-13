@@ -176,14 +176,19 @@ def main() -> int:
         # default framebuffer. Numerical motion alone is not enough: the bug we
         # are guarding kept requestAnimationFrame/update running while every
         # frame was rendered to an off-screen target, so the projector showed a
-        # still image. Capture the actual canvas twice as the user sees it.
+        # still image. Capture the exact renderer canvas twice as the user sees it;
+        # do not rediscover it through page layout after the renderer is known ready.
         motion_before = motion_state(page, planet_id)
-        canvas = page.locator("#canvas-container canvas")
+        renderer_canvas_handle = page.evaluate_handle("window.kidsGalaxy.renderer.domElement")
+        canvas = renderer_canvas_handle.as_element()
+        if canvas is None:
+            raise RuntimeError("projector renderer did not expose a DOM canvas")
         visible_before = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
         page.wait_for_timeout(1200)
         motion_after = motion_state(page, planet_id)
         visible_after = Image.open(io.BytesIO(canvas.screenshot())).convert("RGB")
         visible_difference = ImageChops.difference(visible_before, visible_after).getbbox()
+        canvas.dispose()
 
         check(motion_before["screenTarget"], "renderer returns to the visible framebuffer after all snapshots", failures)
         check(motion_after["screenTarget"], "renderer stays on the visible framebuffer while animating", failures)
