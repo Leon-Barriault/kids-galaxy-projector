@@ -146,7 +146,6 @@ function strokeProjection(stroke, strokeIndex) {
     centerY: sumY / points.length,
     bandFrom: THREE.MathUtils.clamp(minY - halfWidth, 0, 1),
     bandTo: THREE.MathUtils.clamp(maxY + halfWidth, 0, 1),
-    wrapsLongitude,
     horizontalPoleCandidate,
     widthNormalized,
     coverageMetric,
@@ -214,68 +213,6 @@ function closePole(owner, colour, projection, poleOwners) {
       TEXTURE_HEIGHT - 1,
     );
   }
-}
-
-function fillBackgroundFromNearbyStrokes(owner, colour, projections) {
-  const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
-  const wrappedStrokeIndices = new Set(
-    projections.filter((projection) => projection.wrapsLongitude).map((projection) => projection.strokeIndex),
-  );
-  const useAllStrokes = wrappedStrokeIndices.size === 0;
-  const fillOwner = new Int32Array(texels).fill(-1);
-  const queue = new Int32Array(texels);
-  const colourByStroke = [];
-  let head = 0;
-  let tail = 0;
-
-  projections.forEach((projection) => {
-    colourByStroke[projection.strokeIndex] = projection.colour;
-  });
-
-  for (let index = 0; index < texels; index += 1) {
-    const strokeIndex = owner[index];
-    if (strokeIndex < 0) continue;
-    if (!useAllStrokes && !wrappedStrokeIndices.has(strokeIndex)) continue;
-    fillOwner[index] = strokeIndex;
-    queue[tail] = index;
-    tail += 1;
-  }
-
-  while (head < tail) {
-    const texel = queue[head];
-    head += 1;
-    const strokeIndex = fillOwner[texel];
-    const v = Math.floor(texel / TEXTURE_WIDTH);
-    const u = texel % TEXTURE_WIDTH;
-    const neighbours = [
-      [v - 1, u],
-      [v + 1, u],
-      [v, (u - 1 + TEXTURE_WIDTH) % TEXTURE_WIDTH],
-      [v, (u + 1) % TEXTURE_WIDTH],
-    ];
-
-    neighbours.forEach(([nv, nu]) => {
-      if (nv < 0 || nv >= TEXTURE_HEIGHT) return;
-      const neighbour = nv * TEXTURE_WIDTH + nu;
-      if (fillOwner[neighbour] >= 0) return;
-      fillOwner[neighbour] = strokeIndex;
-      queue[tail] = neighbour;
-      tail += 1;
-    });
-  }
-
-  let filledTexels = 0;
-  for (let index = 0; index < texels; index += 1) {
-    if (owner[index] >= 0) continue;
-    const strokeIndex = fillOwner[index];
-    const strokeColour = colourByStroke[strokeIndex];
-    if (!strokeColour) continue;
-    colour[index * 3] = strokeColour[0];
-    colour[index * 3 + 1] = strokeColour[1];
-    colour[index * 3 + 2] = strokeColour[2];
-    filledTexels += 1;
-  }
-  return filledTexels;
 }
 
 function normalizedMetricScores(projections, selector) {
@@ -458,8 +395,6 @@ function buildManifestMaps(manifest) {
     renderedStrokeCount += 1;
   });
 
-  const backgroundFillTexels =
-    renderedStrokeCount > 0 ? fillBackgroundFromNearbyStrokes(owner, colour, projections) : 0;
   const { height, shade } = roundedRelief(owner, profiles);
   const colourCanvas = document.createElement('canvas');
   colourCanvas.width = TEXTURE_WIDTH;
@@ -489,7 +424,6 @@ function buildManifestMaps(manifest) {
     height: scalarCanvas(height, (relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
     roughness: scalarCanvas(height, (relief) => 238 - relief * 72),
     strokeCount: renderedStrokeCount,
-    backgroundFillTexels,
     layerLevels: diagnostics.map((profile) => profile.level),
     strokeProfiles: diagnostics,
     northPoleStroke: poleOwners.north,
@@ -530,7 +464,6 @@ function applyManifestSurface(entity) {
   material.roughnessMap = canvasTexture(built.roughness);
   material.userData.kidsGalaxyManifestStrokeSurface = true;
   material.userData.kidsGalaxyEmbossedStrokeCount = built.strokeCount;
-  material.userData.kidsGalaxyBackgroundFillTexels = built.backgroundFillTexels;
   material.userData.kidsGalaxyEmbossLayerLevels = built.layerLevels;
   material.userData.kidsGalaxyEmbossStrokeProfiles = built.strokeProfiles;
   material.userData.kidsGalaxyEmbossHeightHeuristic = 'order35-width25-coverage20-pole10-jitter10';

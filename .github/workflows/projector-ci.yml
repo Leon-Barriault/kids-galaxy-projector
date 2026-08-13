@@ -51,12 +51,12 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Exercise core manifest projector contract
         run: python scripts/check_projector.py
-      - name: Verify tablet drawing manifests drive layered embossed sphere strokes
-        run: python scripts/check_manifest_stroke_projection.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
       - name: Verify the projector keeps animating after publishing previews
         run: python scripts/check_projector_live_after_snapshot.py
+      - name: Verify tablet drawing manifests drive layered embossed sphere strokes
+        run: python scripts/check_manifest_stroke_projection.py
       - name: Verify tablet-selected Saturn ring colors
         run: python scripts/check_ring_color_fidelity.py
       - name: Verify astronaut WebGL options
