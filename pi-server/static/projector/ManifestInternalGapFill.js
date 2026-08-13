@@ -4,6 +4,8 @@ const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
 const VERTICAL_ASPECT_THRESHOLD = 1.55;
 const WRAP_ASPECT_THRESHOLD = 0.72;
 const BACKGROUND_DISTANCE_THRESHOLD = 18;
+const BODY_HEIGHT = 26;
+const RELIEF_SAMPLE_DEPTH = 12;
 
 function rgbOf(value) {
   const colour = typeof value === 'string' && RGB_HEX.test(value) ? value : '#000000';
@@ -14,21 +16,16 @@ function rgbOf(value) {
   ];
 }
 
-function normalizedPoints(stroke) {
-  if (!Array.isArray(stroke?.points)) return [];
-  return stroke.points
-    .filter(
-      (point) =>
-        Array.isArray(point) &&
-        point.length === 2 &&
-        Number.isFinite(point[0]) &&
-        Number.isFinite(point[1]),
-    )
-    .map(([x, y]) => [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))]);
-}
-
-function projectedBand(stroke) {
-  const points = normalizedPoints(stroke);
+function bandOf(stroke) {
+  const points = Array.isArray(stroke?.points)
+    ? stroke.points.filter(
+        (point) =>
+          Array.isArray(point) &&
+          point.length === 2 &&
+          Number.isFinite(point[0]) &&
+          Number.isFinite(point[1]),
+      )
+    : [];
   if (points.length < 2) return null;
 
   let minX = 1;
@@ -36,7 +33,9 @@ function projectedBand(stroke) {
   let minY = 1;
   let maxY = 0;
   let sumY = 0;
-  points.forEach(([x, y]) => {
+  points.forEach(([rawX, rawY]) => {
+    const x = Math.max(0, Math.min(1, rawX));
+    const y = Math.max(0, Math.min(1, rawY));
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
     minY = Math.min(minY, y);
@@ -46,55 +45,96 @@ function projectedBand(stroke) {
 
   const spanX = Math.max(0.0001, maxX - minX);
   const spanY = Math.max(0.0001, maxY - minY);
-  const verticalAspect = spanY / spanX;
-  const horizontalAspect = spanX / spanY;
-  const nearVertical = verticalAspect >= VERTICAL_ASPECT_THRESHOLD;
-  const wrapsLongitude = !nearVertical && horizontalAspect >= WRAP_ASPECT_THRESHOLD;
-  if (!wrapsLongitude) return null;
+  const nearVertical = spanY / spanX >= VERTICAL_ASPECT_THRESHOLD;
+  if (nearVertical || spanX / spanY < WRAP_ASPECT_THRESHOLD) return null;
 
-  const widthNormalized = Math.max(
+  const width = Math.max(
     0.003,
     Math.min(0.35, Number(stroke.width_normalized) || Number(stroke.width_px) / 512 || 0.02),
   );
-  const halfWidth = widthNormalized * 0.5;
   return {
     centerY: sumY / points.length,
-    fromY: Math.max(0, minY - halfWidth),
-    toY: Math.min(1, maxY + halfWidth),
+    fromY: Math.max(0, minY - width * 0.5),
+    toY: Math.min(1, maxY + width * 0.5),
   };
 }
 
-function backgroundDistanceSquared(data, offset, background) {
+function isBackground(data, offset, background) {
   const dr = data[offset] - background[0];
   const dg = data[offset + 1] - background[1];
   const db = data[offset + 2] - background[2];
-  return dr * dr + dg * dg + db * db;
+  return dr * dr + dg * dg + db * db <= BACKGROUND_DISTANCE_THRESHOLD ** 2;
 }
 
-function isBackgroundPixel(data, offset, background) {
-  return (
-    backgroundDistanceSquared(data, offset, background) <=
-    BACKGROUND_DISTANCE_THRESHOLD * BACKGROUND_DISTANCE_THRESHOLD
-  );
-}
-
-function copyPixel(data, targetOffset, sourceOffset) {
+function copyRgb(data, targetOffset, sourceOffset) {
   data[targetOffset] = data[sourceOffset];
   data[targetOffset + 1] = data[sourceOffset + 1];
   data[targetOffset + 2] = data[sourceOffset + 2];
 }
 
-function isBracketedByWrappedBands(midY, bands) {
-  let hasUpper = false;
-  let hasLower = false;
-  for (const band of bands) {
-    if (band.centerY < midY) hasUpper = true;
-    if (band.centerY > midY) {
-      hasLower = true;
-      break;
-    }
+function writeScalar(data, offset, value) {
+  const scalar = Math.max(0, Math.min(255, Math.round(value)));
+  data[offset] = scalar;
+  data[offset + 1] = scalar;
+  data[offset + 2] = scalar;
+  data[offset + 3] = 255;
+}
+
+function bracketed(midY, bands) {
+  return bands.some((band) => band.centerY < midY) && bands.some((band) => band.centerY > midY);
+}
+
+function scalarCanvas(texture, width, height) {
+  const canvas = texture?.image;
+  if (
+    !canvas ||
+    canvas.width !== width ||
+    canvas.height !== height ||
+    typeof canvas.getContext !== 'function'
+  ) {
+    return null;
   }
-  return hasUpper && hasLower;
+  const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  if (!context) return null;
+  return {
+    context,
+    image: context.getImageData(0, 0, width, height),
+    texture,
+  };
+}
+
+function reliefPeak(data, width, height, x, y, step) {
+  let peak = BODY_HEIGHT;
+  for (let sample = 0; sample < RELIEF_SAMPLE_DEPTH; sample += 1, y += step) {
+    if (y < 0 || y >= height) break;
+    peak = Math.max(peak, data[(y * width + x) * 4]);
+  }
+  return peak;
+}
+
+function bridgeRelief(relief, width, height, x, start, end) {
+  if (!relief) return 0;
+  const top = reliefPeak(relief.data, width, height, x, start - 1, -1);
+  const bottom = reliefPeak(relief.data, width, height, x, end + 1, 1);
+  if (top <= BODY_HEIGHT + 2 || bottom <= BODY_HEIGHT + 2) return 0;
+
+  const length = end - start + 1;
+  for (let y = start; y <= end; y += 1) {
+    const t = (y - start + 1) / (length + 1);
+    writeScalar(relief.data, (y * width + x) * 4, top + (bottom - top) * t);
+  }
+  return length;
+}
+
+function bridgeRoughness(roughness, width, x, start, end) {
+  if (!roughness) return;
+  const top = roughness.data[((start - 1) * width + x) * 4];
+  const bottom = roughness.data[((end + 1) * width + x) * 4];
+  const length = end - start + 1;
+  for (let y = start; y <= end; y += 1) {
+    const t = (y - start + 1) / (length + 1);
+    writeScalar(roughness.data, (y * width + x) * 4, top + (bottom - top) * t);
+  }
 }
 
 function fillInternalBandGaps(entity) {
@@ -112,70 +152,60 @@ function fillInternalBandGaps(entity) {
     return 0;
   }
 
-  const bands = manifest.strokes.map(projectedBand).filter(Boolean).sort((a, b) => a.centerY - b.centerY);
+  const bands = manifest.strokes.map(bandOf).filter(Boolean).sort((a, b) => a.centerY - b.centerY);
   if (bands.length < 2) return 0;
 
   const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) return 0;
-
   const width = canvas.width;
   const height = canvas.height;
   const background = rgbOf(manifest.background_color);
   const image = context.getImageData(0, 0, width, height);
   const source = new Uint8ClampedArray(image.data);
+  const relief = scalarCanvas(material.displacementMap, width, height);
+  const roughness = scalarCanvas(material.roughnessMap, width, height);
   let filledTexels = 0;
+  let filledReliefTexels = 0;
   let widestFilledRun = 0;
 
   for (let x = 0; x < width; x += 1) {
     let y = 0;
     while (y < height) {
-      const offset = (y * width + x) * 4;
-      if (!isBackgroundPixel(source, offset, background)) {
+      if (!isBackground(source, (y * width + x) * 4, background)) {
         y += 1;
         continue;
       }
 
       const start = y;
-      while (y < height) {
-        const runOffset = (y * width + x) * 4;
-        if (!isBackgroundPixel(source, runOffset, background)) break;
-        y += 1;
-      }
+      while (y < height && isBackground(source, (y * width + x) * 4, background)) y += 1;
       const end = y - 1;
-      const runLength = end - start + 1;
-
-      // A run touching a texture pole is exterior body/background, not a hole
-      // between paint bands. Never extend the nearest paint into that region.
       if (start === 0 || end === height - 1) continue;
 
       const midY = ((start + end) * 0.5) / Math.max(1, height - 1);
-      if (!isBracketedByWrappedBands(midY, bands)) continue;
+      if (!bracketed(midY, bands)) continue;
 
       const topOffset = ((start - 1) * width + x) * 4;
       const bottomOffset = ((end + 1) * width + x) * 4;
-      if (
-        isBackgroundPixel(source, topOffset, background) ||
-        isBackgroundPixel(source, bottomOffset, background)
-      ) {
+      if (isBackground(source, topOffset, background) || isBackground(source, bottomOffset, background)) {
         continue;
       }
 
-      // Fill every genuinely internal run, regardless of width. The old 16%
-      // cap only fixed the synthetic narrow-gap fixture and left the much wider
-      // gaps visible on real kid drawings. Exterior background is still safe
-      // because those runs touch a pole and are rejected above.
+      const runLength = end - start + 1;
       widestFilledRun = Math.max(widestFilledRun, runLength);
       for (let fillY = start; fillY <= end; fillY += 1) {
         const targetOffset = (fillY * width + x) * 4;
-        const distanceToTop = fillY - (start - 1);
-        const distanceToBottom = end + 1 - fillY;
-        copyPixel(
-          image.data,
-          targetOffset,
-          distanceToTop <= distanceToBottom ? topOffset : bottomOffset,
-        );
+        const topDistance = fillY - start + 1;
+        const bottomDistance = end - fillY + 1;
+        copyRgb(image.data, targetOffset, topDistance <= bottomDistance ? topOffset : bottomOffset);
         filledTexels += 1;
       }
+
+      // Colour alone still leaves the base sphere recessed between strongly
+      // displaced ribbons. In the real scene that trench falls into shadow and
+      // reads as black. Raise only these internal runs by interpolating between
+      // nearby band peaks; pole-touching exterior background remains untouched.
+      filledReliefTexels += bridgeRelief(relief?.image, width, height, x, start, end);
+      bridgeRoughness(roughness?.image, width, x, start, end);
     }
   }
 
@@ -183,7 +213,17 @@ function fillInternalBandGaps(entity) {
     context.putImageData(image, 0, 0);
     material.map.needsUpdate = true;
   }
+  if (filledReliefTexels > 0 && relief) {
+    relief.context.putImageData(relief.image, 0, 0);
+    relief.texture.needsUpdate = true;
+  }
+  if (filledReliefTexels > 0 && roughness) {
+    roughness.context.putImageData(roughness.image, 0, 0);
+    roughness.texture.needsUpdate = true;
+  }
+
   material.userData.kidsGalaxyInternalGapFillTexels = filledTexels;
+  material.userData.kidsGalaxyInternalGapReliefTexels = filledReliefTexels;
   material.userData.kidsGalaxyInternalGapFillWidestRun = widestFilledRun;
   material.userData.kidsGalaxyInternalGapFillVersion = 2;
   return filledTexels;
@@ -192,7 +232,6 @@ function fillInternalBandGaps(entity) {
 export function installManifestInternalGapFill() {
   if (PlanetEntity.prototype.applyTexture?.kidsGalaxyManifestInternalGapFill) return;
   const previousApplyTexture = PlanetEntity.prototype.applyTexture;
-
   function manifestInternalGapFill(texture) {
     previousApplyTexture.call(this, texture);
     try {
@@ -201,7 +240,6 @@ export function installManifestInternalGapFill() {
       console.error('Kids Galaxy internal manifest gap fill failed', this.id, error);
     }
   }
-
   manifestInternalGapFill.kidsGalaxyManifestInternalGapFill = true;
   PlanetEntity.prototype.applyTexture = manifestInternalGapFill;
 }
