@@ -183,7 +183,11 @@ def main() -> int:
         # motion. Together they prove the live render loop is still submitting
         # frames to the screen after the snapshot queue has drained.
         motion_before = motion_state(page, planet_id)
-        page.wait_for_timeout(1200)
+        wait_for(
+            page,
+            f"window.kidsGalaxy.renderer.info.render.frame > {motion_before['renderFrame']}",
+            15_000,
+        )
         motion_after = motion_state(page, planet_id)
 
         check(motion_before["screenTarget"], "renderer returns to the visible framebuffer after all snapshots", failures)
