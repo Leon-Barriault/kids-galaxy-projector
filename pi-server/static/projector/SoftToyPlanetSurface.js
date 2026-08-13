@@ -41,11 +41,10 @@ import { PlanetEntity } from './PlanetEntity.js';
 // of twelve - the 1024-wide map the old note warned about would be 72 MB.
 const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
-const BUMP_SCALE = 0.09;
-// Radial relief for the paint. Slightly reduced so discrete height tiers
-// do not read as hard terraces from oblique angles, while still giving
-// clear molded volume.
-const DISPLACEMENT_SCALE = 0.075;
+const BUMP_SCALE = 0.12;
+// Much lower displacement so height tiers read as soft raised paint
+// rather than stacked shelves. Volume comes more from bump + clearcoat.
+const DISPLACEMENT_SCALE = 0.045;
 // Body level in the height map. Not zero, so the sphere is not pulled inward
 // where the child left it alone; displacementBias cancels it.
 const BODY_HEIGHT = 40;
@@ -61,12 +60,10 @@ const MIN_STROKE_PIXELS = 60;
 // this of the pixel the region grew from. Loose enough to ride out the tablet's
 // anti-aliasing, tight enough that neighbouring rainbow arcs stay separate.
 const STROKE_COLOUR_TOLERANCE = 40;
-// Finer height tiers reduce visible terracing while still giving variety
-// between strokes of different colours.
-const STROKE_HEIGHT_TIERS = [0.35, 0.55, 0.75, 0.9, 1.0];
-// Wider shoulders so the steps between tiers blend into soft rounded fillets
-// closer to the continuous clay look of the reference images.
-const SHOULDER_TEXELS = 16;
+// Height tiers kept close together so remaining steps stay subtle.
+const STROKE_HEIGHT_TIERS = [0.55, 0.7, 0.85, 0.95, 1.0];
+// Very wide shoulders for soft clay-like transitions.
+const SHOULDER_TEXELS = 22;
 // How much darker a stroke's rounded edge is than its flat top. Stronger
 // darkening makes the embossed pads read clearly even under soft studio light.
 const STROKE_EDGE_SHADE = 0.70;
