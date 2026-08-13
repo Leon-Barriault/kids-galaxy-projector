@@ -1,0 +1,22 @@
+# Dependencies for the headless-browser projector checks in scripts/.
+#
+# Kept out of requirements-dev.txt on purpose: Playwright plus a Chromium build
+# is a few hundred megabytes, and nobody running the Python unit suite needs it.
+# Kept out of the CI workflow on purpose too - these pins used to live inline in
+# .github/workflows/projector-ci.yml and nowhere else, so CI passed while anyone
+# running the same scripts locally hit one ModuleNotFoundError after another.
+#
+# Install with: make install-projector-checks
+
+-r requirements-dev.txt
+
+# scripts/check_projector.py and friends talk to the test server with httpx.
+# Note this is *not* the httpx2 in requirements-dev.txt, despite the names: that
+# one exists for Starlette's TestClient and imports as `httpx2`. Both are needed
+# and they do not collide, because they are different top-level modules.
+httpx==0.28.1
+
+# The browser the checks drive. `python -m playwright install --with-deps
+# chromium` still has to be run afterwards to fetch the browser itself; the
+# Makefile target does both.
+playwright==1.54.0

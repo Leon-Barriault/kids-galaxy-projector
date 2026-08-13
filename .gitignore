@@ -59,3 +59,7 @@ coverage*.xml
 htmlcov/
 .ruff_cache/
 .pytest_cache/
+
+# Hero-frame captures from scripts/capture_planet_look.py. Regenerable, and
+# rewritten on every run.
+artifacts/look/

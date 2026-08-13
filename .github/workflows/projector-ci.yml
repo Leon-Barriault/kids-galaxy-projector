@@ -43,11 +43,11 @@ jobs:
           cache-dependency-path: |
             pi-server/requirements.txt
             pi-server/requirements-dev.txt
+            pi-server/requirements-projector.txt
       - name: Install projector smoke dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r pi-server/requirements-dev.txt \
-            "httpx==0.28.1" "playwright==1.54.0"
+          pip install -r pi-server/requirements-projector.txt
           python -m playwright install --with-deps chromium
       - name: Exercise core manifest projector contract
         run: python scripts/check_projector.py

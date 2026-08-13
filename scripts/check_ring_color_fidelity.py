@@ -3,6 +3,12 @@
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
+from _projector_deps import require as _require_projector_dependencies
+
+_require_projector_dependencies()
+
 from playwright.sync_api import sync_playwright
 
 from check_projector import FAILURES, Server, check, chromium_executable, wait_for

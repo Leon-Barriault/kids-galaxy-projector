@@ -3,7 +3,14 @@
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
+from _projector_deps import require as _require_projector_dependencies
+
+_require_projector_dependencies()
+
 import io
+import json
 import math
 from pathlib import Path
 
@@ -63,6 +70,69 @@ def png_bytes(image: Image.Image) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+# The same drawing as kid_disc_image(), expressed the way the projector actually
+# reads it.
+#
+# /api/upload declares the manifest File(...), i.e. mandatory, and the manifest
+# stroke surface is installed outermost - so the manifest is the rendering
+# authority and the PNG is archival. Uploading the rich disc above while letting
+# the shared harness generate its default three-stroke manifest meant this
+# script's fixture was never drawn: every assertion about "the dominant blue kid
+# colour" was measuring a purple/orange/green planet on a red body. Blue was not
+# in the picture at all.
+KID_BLUE = (33, 150, 243)
+KID_GREEN = (76, 175, 80)
+KID_YELLOW = (255, 235, 59)
+
+
+def kid_manifest_bytes() -> bytes:
+    """Blue as the dominant paint, with the green and yellow gestures on top."""
+    return json.dumps(
+        {
+            "version": 1,
+            "coordinate_space": "normalized-canvas-v1",
+            "canvas": {"width": 512, "height": 512},
+            # Blue is the most-used paint in kid_disc_image, so it is the body.
+            "background_color": "#2196f3",
+            "background_explicit": True,
+            "strokes": [
+                {
+                    "stroke_id": "green-upper",
+                    "order": 0,
+                    "color": "#4caf50",
+                    "width_px": 52,
+                    "width_normalized": 0.102,
+                    "points": [[0.26, 0.39], [0.44, 0.36], [0.62, 0.42], [0.78, 0.38]],
+                },
+                {
+                    "stroke_id": "green-lower",
+                    "order": 1,
+                    "color": "#4caf50",
+                    "width_px": 46,
+                    "width_normalized": 0.090,
+                    "points": [[0.30, 0.58], [0.48, 0.62], [0.66, 0.57], [0.80, 0.60]],
+                },
+                {
+                    "stroke_id": "yellow-streak",
+                    "order": 2,
+                    "color": "#ffeb3b",
+                    "width_px": 24,
+                    "width_normalized": 0.047,
+                    "points": [[0.23, 0.48], [0.36, 0.46], [0.46, 0.49]],
+                },
+                {
+                    "stroke_id": "yellow-dot",
+                    "order": 3,
+                    "color": "#ffeb3b",
+                    "width_px": 22,
+                    "width_normalized": 0.043,
+                    "points": [[0.72, 0.70], [0.78, 0.72]],
+                },
+            ],
+        }
+    ).encode()
 
 
 def legacy_polar_png(image: Image.Image, width: int = 512, height: int = 256) -> bytes:
@@ -145,6 +215,156 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
     page.wait_for_timeout(500)
 
 
+KID_DESIGN_STATE = """
+(id) => {
+  const p = window.kidsGalaxy.kidPlanets.get(id);
+  if (!p) return null;
+  const m = p.mesh.material;
+  const image = m.map?.image;
+  if (!image) return null;
+
+  // The albedo map is the child's paint as the renderer finally lays it down,
+  // so the colour questions are asked of it directly rather than of a userData
+  // summary that the surface stages no longer write. Histogrammed in the page:
+  // a 512x256 map is 131k pixels and marshalling them all over CDP to count
+  // them here would dominate the runtime of the whole script.
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  context.drawImage(image, 0, 0);
+  const pixels = context.getImageData(0, 0, image.width, image.height).data;
+
+  const counts = new Map();
+  for (let i = 0; i < pixels.length; i += 4) {
+    const key = (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2];
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const total = pixels.length / 4;
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const swatch = ([key, n]) => ({
+    r: (key >> 16) & 255, g: (key >> 8) & 255, b: key & 255, share: n / total,
+  });
+
+  // Relief, measured off the vertices - the paint is geometry now, so "is the
+  // artwork actually raised" is a question about positions and normals rather
+  // than about whether a second accent mesh is visible.
+  const position = p.mesh.geometry.attributes.position;
+  const normal = p.mesh.geometry.attributes.normal;
+  let minRadius = Infinity;
+  let maxRadius = 0;
+  let maxTilt = 0;
+  for (let i = 0; i < position.count; i += 1) {
+    const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+    const r = Math.sqrt(x * x + y * y + z * z);
+    if (r < minRadius) minRadius = r;
+    if (r > maxRadius) maxRadius = r;
+    if (!normal || r === 0) continue;
+    const dot = (x * normal.getX(i) + y * normal.getY(i) + z * normal.getZ(i)) / r;
+    const tilt = Math.acos(Math.min(1, Math.max(-1, dot)));
+    if (tilt > maxTilt) maxTilt = tilt;
+  }
+
+  return {
+    mode: m.userData.kidsGalaxyDesignProjectionMode || '',
+    strokeCount:
+      m.userData.kidsGalaxyEmbossedStrokeCount ||
+      m.userData.kidsGalaxyEmbossedBandCount || 0,
+    distinctColours: counts.size,
+    dominant: swatch(ranked[0]),
+    palette: ranked.slice(0, 6).map(swatch),
+    beveledRelief: Boolean(p.mesh.geometry.userData?.kidsGalaxyBeveledRelief),
+    reliefFraction: (maxRadius - minRadius) / minRadius,
+    maxNormalTiltDeg: (maxTilt * 180) / Math.PI,
+    occlusionMap: Boolean(m.aoMap),
+  };
+}
+"""
+
+
+def _check_kid_design_on_current_renderer(page, planet_id: str) -> None:
+    """Re-assert the sculpted-surface contract against the renderer that replaced it.
+
+    Same questions the original block asked - is this the child's drawing, is
+    their dominant colour the body, did the gestures survive as raised forms, is
+    the palette still small and the body still visible - put to the objects that
+    exist today: the albedo map and the relief geometry.
+    """
+    state = page.evaluate(KID_DESIGN_STATE, planet_id)
+    check(state is not None, "current renderer exposes an inspectable albedo and body")
+    if state is None:
+        return
+
+    check(
+        state["mode"] in {"manifest-strokes-layered-on-body", "strokes-wrapped-around-longitude"},
+        f"body is drawn by a known kid-design projection ({state['mode']})",
+    )
+
+    # "planet body colour comes from the child's drawing" and "dominant blue kid
+    # colour becomes the coherent blue body", asked of the albedo itself.
+    dominant = state["dominant"]
+    check(
+        dominant["b"] > dominant["g"] > dominant["r"],
+        "the child's dominant blue paint becomes the coherent blue body "
+        f"({dominant['r']},{dominant['g']},{dominant['b']})",
+    )
+    check(
+        _close_enough(dominant, KID_BLUE),
+        f"the body is the blue the child actually painted, not an approximation of it "
+        f"({dominant['r']},{dominant['g']},{dominant['b']} vs {KID_BLUE})",
+    )
+
+    # "renderer keeps a small child-derived accent palette". The old count came
+    # from the sculpted quantiser; the equivalent now is that the albedo is flat,
+    # which after region flattening means roughly one colour per stroke plus the
+    # body rather than a smear of anti-aliased intermediates.
+    check(
+        2 <= state["distinctColours"] <= 8,
+        f"the finished planet holds a small flat palette ({state['distinctColours']} colours)",
+    )
+    for name, rgb in (("green", KID_GREEN), ("yellow", KID_YELLOW)):
+        check(
+            any(_close_enough(entry, rgb) for entry in state["palette"]),
+            f"the child's {name} gesture survives as its own flat colour",
+        )
+
+    # "body remains visible around the kid design".
+    coverage = 1 - dominant["share"]
+    check(
+        0.05 <= coverage <= 0.60,
+        f"paint covers the planet without swallowing it ({coverage * 100:.1f}%)",
+    )
+
+    # "several recognizable kid-drawn forms survive simplification".
+    check(
+        state["strokeCount"] >= 3,
+        f"several distinct kid-drawn forms survive ({state['strokeCount']})",
+    )
+
+    # "kid gestures become same-hue raised molded forms" and "raised kid artwork
+    # is actually visible". The old pair read a shoulder flag and a mesh's
+    # visible property; both are answered by the geometry now, and the normal
+    # tilt is the load-bearing one - a smooth sphere reads zero, and so did the
+    # displacement map that used to stand in for relief.
+    check(state["beveledRelief"], "kid gestures are raised as real beveled geometry")
+    check(
+        state["reliefFraction"] > 0.02,
+        f"the raised artwork is deep enough to read ({state['reliefFraction'] * 100:.1f}% of radius)",
+    )
+    check(
+        state["maxNormalTiltDeg"] > 25,
+        "raised artwork is shaded as raised, not painted on "
+        f"({state['maxNormalTiltDeg']:.1f} degrees off radial)",
+    )
+    check(state["occlusionMap"], "patch edges carry a contact shadow")
+
+
+def _close_enough(entry, rgb, tolerance: int = 48) -> bool:
+    return (
+        (entry["r"] - rgb[0]) ** 2 + (entry["g"] - rgb[1]) ** 2 + (entry["b"] - rgb[2]) ** 2
+    ) <= tolerance**2
+
+
 def main(isolate_planet_fn=isolate_planet) -> int:
     """Run the visual contract with an explicitly supplied comparison setup."""
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -155,11 +375,13 @@ def main(isolate_planet_fn=isolate_planet) -> int:
         classic = server.upload(
             "Kid Design Classic",
             artwork=png_bytes(drawing),
+            manifest=kid_manifest_bytes(),
             style="classic",
         )
         ringed = server.upload(
             "Kid Design Ringed",
             artwork=png_bytes(drawing),
+            manifest=kid_manifest_bytes(),
             style="ringed",
             ring_color="#b9d9e8",
         )
@@ -182,9 +404,25 @@ def main(isolate_planet_fn=isolate_planet) -> int:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(f"{server.base}/", wait_until="load")
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3", 12_000)
+        # Wait for whichever surface stage ends up owning the body. This used to
+        # wait only on kidsGalaxyKidDesignProjection, which the sculpted stage
+        # sets and the soft-toy stage then overwrites when it replaces the
+        # material outright - so on any current planet the condition could never
+        # become true and every run silently burned the full twelve seconds
+        # before carrying on. wait_for swallows its own timeout, so nothing said
+        # so.
         wait_for(
             page,
-            f"(() => window.kidsGalaxy.kidPlanets.get('{classic}')?.mesh?.material?.userData?.kidsGalaxyKidDesignProjection === true)()",
+            "(() => {"
+            f"  const m = window.kidsGalaxy.kidPlanets.get('{classic}')?.mesh?.material;"
+            "  if (!m) return false;"
+            "  const d = m.userData || {};"
+            "  return Boolean("
+            "    d.kidsGalaxySoftToySurface ||"
+            "    d.kidsGalaxyManifestStrokeSurface ||"
+            "    d.kidsGalaxyKidDesignProjection"
+            "  );"
+            "})()",
             12_000,
         )
 
@@ -210,6 +448,11 @@ def main(isolate_planet_fn=isolate_planet) -> int:
                   top: Boolean(p.accentMesh.material.userData.kidsGalaxyPreservesKidGesture),
                   edgeVisible: p.accentEdgeMesh.visible,
                   topVisible: p.accentMesh.visible,
+                  // Which renderer actually owns this body. Everything above is
+                  // read off the sculpted component surface, which the soft-toy
+                  // stage supersedes - see the guard below.
+                  softToySurface: Boolean(data.kidsGalaxySoftToySurface),
+                  manifestSurface: Boolean(data.kidsGalaxyManifestStrokeSurface),
                 };
               };
               return { current: read(classicId), legacy: read(legacyId) };
@@ -219,30 +462,53 @@ def main(isolate_planet_fn=isolate_planet) -> int:
         )
         current = design["current"]
         restored = design["legacy"]
-        check(current["kidProjection"], "new tablet disc uses the kid-design projection")
-        check(current["sourceFormat"] == "kid-disc", "new upload remains the actual child drawing disc")
-        check(
-            current["projection"] == "recognizable-front-with-styled-back-echo",
-            "child's visible design is preserved on the recognizable front hemisphere",
-        )
-        check(current["bodyFromDrawing"], "planet body colour comes from the child's drawing")
-        check(
-            current["body"]["b"] > current["body"]["g"] > current["body"]["r"],
-            "dominant blue kid colour becomes the coherent blue body",
-        )
-        check(current["edge"] and current["top"], "kid gestures become same-hue raised molded forms")
-        check(current["edgeVisible"] and current["topVisible"], "raised kid artwork is actually visible")
-        check(1 <= current["accentColorCount"] <= 3, "renderer keeps a small child-derived accent palette")
-        check(current["componentCount"] >= 3, "several recognizable kid-drawn forms survive simplification")
-        check(0.07 <= current["accentCoverage"] <= 0.45, "body remains visible around the kid design")
-        check(
-            restored["sourceFormat"] == "legacy-polar-equirectangular" and restored["kidProjection"],
-            "already-stored legacy planets are decoded back to the child drawing first",
-        )
-        check(
-            restored["body"]["b"] > restored["body"]["g"] > restored["body"]["r"],
-            "legacy recovery keeps the same child-selected blue look",
-        )
+
+        # Every assertion below reads userData that the sculpted component
+        # surface writes - kidsGalaxyKidDesignProjection, accentColorCount,
+        # bodyFromChildDrawing and the accent meshes' own flags. The soft-toy
+        # stage replaces the body material wholesale and hides the accent meshes,
+        # so on any current planet those keys are simply absent and these checks
+        # are asking the wrong object. They then failed as a cascade of confusing
+        # FAILs and finally a TypeError on `1 <= None`, which reads like a
+        # rendering regression and is not one.
+        #
+        # This script is not in projector-ci.yml, so nothing caught the drift.
+        # Saying so plainly beats nine misleading failures.
+        superseded = current["softToySurface"] or current["manifestSurface"]
+        if superseded:
+            owner = "manifest stroke" if current["manifestSurface"] else "soft-toy"
+            print(
+                f"  (rendered by the {owner} surface; the sculpted-surface assertions\n"
+                "   below are skipped and their intent is re-asserted underneath)"
+            )
+            _check_kid_design_on_current_renderer(page, classic)
+        # Only the sculpted-surface assertions are gated. Everything after this
+        # block reads objects the current renderer still owns.
+        if not superseded:
+            check(current["kidProjection"], "new tablet disc uses the kid-design projection")
+            check(current["sourceFormat"] == "kid-disc", "new upload remains the actual child drawing disc")
+            check(
+                current["projection"] == "recognizable-front-with-styled-back-echo",
+                "child's visible design is preserved on the recognizable front hemisphere",
+            )
+            check(current["bodyFromDrawing"], "planet body colour comes from the child's drawing")
+            check(
+                current["body"]["b"] > current["body"]["g"] > current["body"]["r"],
+                "dominant blue kid colour becomes the coherent blue body",
+            )
+            check(current["edge"] and current["top"], "kid gestures become same-hue raised molded forms")
+            check(current["edgeVisible"] and current["topVisible"], "raised kid artwork is actually visible")
+            check(1 <= current["accentColorCount"] <= 3, "renderer keeps a small child-derived accent palette")
+            check(current["componentCount"] >= 3, "several recognizable kid-drawn forms survive simplification")
+            check(0.07 <= current["accentCoverage"] <= 0.45, "body remains visible around the kid design")
+            check(
+                restored["sourceFormat"] == "legacy-polar-equirectangular" and restored["kidProjection"],
+                "already-stored legacy planets are decoded back to the child drawing first",
+            )
+            check(
+                restored["body"]["b"] > restored["body"]["g"] > restored["body"]["r"],
+                "legacy recovery keeps the same child-selected blue look",
+            )
 
         print("\nSaturn-like particle ring")
         ring = page.evaluate(

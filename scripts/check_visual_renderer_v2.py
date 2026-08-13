@@ -27,7 +27,14 @@ def isolate_planet(page, planet_id: str, include_ring: bool) -> None:
 
           kg.scene.background.setHex(0xf6f5f2);
           kg.scene.fog = null;
-          kg.renderer.toneMappingExposure = 0.95;
+          // Was 0.95 under ACESFilmic. The scene now tone maps with Khronos PBR
+          // Neutral, which does not divide by 0.6 the way ACES does internally,
+          // so holding this shot's brightness needs a higher number rather than
+          // the same one. 1.22 is solved the same way the scene's own 1.91 is -
+          // it holds mid-grey and mean brightness across the tablet palette -
+          // and the two ratios differ slightly, which is why this was solved
+          // rather than scaled from the other.
+          kg.renderer.toneMappingExposure = 1.22;
           g.stars.visible = false;
           g.companions.forEach((record) => { record.mesh.visible = false; });
           g.sunGroup.visible = true;

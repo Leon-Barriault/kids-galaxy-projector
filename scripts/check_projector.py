@@ -8,6 +8,12 @@ planet features, and live lifecycle behavior without pinning obsolete renderers.
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
+from _projector_deps import require as _require_projector_dependencies
+
+_require_projector_dependencies()
+
 import io
 import json
 import os
@@ -177,8 +183,18 @@ class Server:
         name: str,
         colour: tuple[int, int, int] = (200, 30, 30),
         artwork: bytes | None = None,
+        manifest: bytes | None = None,
         **design: str,
     ) -> str:
+        """Upload a planet, optionally with a caller-supplied drawing manifest.
+
+        The manifest is not optional at the API - /api/upload declares it
+        File(...) - and the manifest stroke surface is installed outermost, so
+        whatever is sent here is what the projector renders. A caller passing
+        rich `artwork` and letting this build the default three-stroke manifest
+        is therefore uploading a picture that will never be drawn: the generic
+        manifest wins. Scripts whose fixture *is* the drawing need to pass both.
+        """
         background = design.get("body_color") or _hex_colour(colour)
         response = httpx.post(
             f"{self.base}/api/upload",
@@ -190,7 +206,7 @@ class Server:
                 ),
                 "manifest": (
                     "drawing-manifest.json",
-                    drawing_manifest_bytes(background),
+                    manifest if manifest is not None else drawing_manifest_bytes(background),
                     "application/json",
                 ),
             },
@@ -242,6 +258,31 @@ def core_render_state(page, planet_id: str) -> dict:
           const p = kg.kidPlanets.get(id);
           const g = kg.engine.galaxyScene;
           const m = p.mesh.material;
+          // Relief now lives in the vertices rather than in a displacementMap,
+          // so it is measured off the geometry. A normal that has swung away
+          // from radial is the load-bearing number: on a smooth sphere every
+          // normal is radial, and a displacementMap leaves them that way because
+          // three.js does not recompute normals after displacing.
+          const relief = (() => {
+            const position = p.mesh.geometry.attributes.position;
+            const normal = p.mesh.geometry.attributes.normal;
+            let minRadius = Infinity;
+            let maxRadius = 0;
+            let maxTilt = 0;
+            for (let i = 0; i < position.count; i += 1) {
+              const x = position.getX(i);
+              const y = position.getY(i);
+              const z = position.getZ(i);
+              const r = Math.sqrt(x * x + y * y + z * z);
+              if (r < minRadius) minRadius = r;
+              if (r > maxRadius) maxRadius = r;
+              if (!normal || r === 0) continue;
+              const dot = (x * normal.getX(i) + y * normal.getY(i) + z * normal.getZ(i)) / r;
+              const tilt = Math.acos(Math.min(1, Math.max(-1, dot)));
+              if (tilt > maxTilt) maxTilt = tilt;
+            }
+            return { minRadius, maxRadius, maxNormalTiltDeg: (maxTilt * 180) / Math.PI };
+          })();
           return {
             pipeline: kg.renderPipeline || [],
             qualityProfile: g.renderer.userData.kidsGalaxyQualityProfile,
@@ -254,15 +295,26 @@ def core_render_state(page, planet_id: str) -> dict:
             strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount || 0,
             layerLevels: m.userData.kidsGalaxyEmbossLayerLevels || [],
             background: p.mesh.userData.kidsGalaxyManifestBackground || '',
+            beveledRelief: Boolean(p.mesh.geometry.userData?.kidsGalaxyBeveledRelief),
+            reliefDepth: relief.maxRadius - relief.minRadius,
+            reliefFraction: (relief.maxRadius - relief.minRadius) / relief.minRadius,
+            maxNormalTiltDeg: relief.maxNormalTiltDeg,
+            occlusionMap: Boolean(m.aoMap),
+            // Paint is raised by moving vertices now. A displacement map on top
+            // of already-displaced geometry would raise every stroke twice, so
+            // its absence is the assertion, not its presence.
             displacement: Boolean(m.displacementMap),
-            displacementScale: m.displacementScale || 0,
             bump: Boolean(m.bumpMap),
-            bumpScale: m.bumpScale || 0,
             roughness: m.roughness,
             metalness: m.metalness,
             clearcoat: m.clearcoat || 0,
             roughnessMap: Boolean(m.roughnessMap),
             environmentLit: Boolean(m.envMap),
+            // The projector page loads three as an ES module, so THREE is not a
+            // global here and the constant has to be compared by value.
+            // NeutralToneMapping is 7 in the vendored build; ACESFilmic was 4.
+            toneMapping: g.renderer.toneMapping,
+            toneMappingExposure: g.renderer.toneMappingExposure,
             shadows: g.renderer.shadowMap.enabled,
             sunCastsShadow: g.sunLight.castShadow,
             internalWidth: g.renderer.userData.kidsGalaxyInternalWidth,
@@ -391,8 +443,21 @@ def main() -> int:
         )
         check(state["strokeCount"] == 3, "all authored fixture strokes reach the renderer")
         check(len(state["layerLevels"]) == 3, "each authored stroke receives a relief layer")
-        check(state["displacement"] and state["displacementScale"] >= 0.1, "strokes use real displacement")
-        check(state["bump"] and state["bumpScale"] >= 0.14, "strokes have visible rounded emboss")
+        check(state["beveledRelief"], "strokes are raised as real beveled geometry")
+        check(
+            not state["displacement"] and not state["bump"],
+            "no displacement or bump map stacked on already-displaced vertices",
+        )
+        check(
+            state["reliefFraction"] >= 0.02,
+            f"paint stands proud of the body ({state['reliefFraction'] * 100:.1f}% of radius)",
+        )
+        check(
+            state["maxNormalTiltDeg"] >= 25,
+            "bevel walls carry their own normals, so they shade as walls "
+            f"(a smooth sphere reads 0 degrees; this reads {state['maxNormalTiltDeg']:.1f})",
+        )
+        check(state["occlusionMap"], "creases are shaded by an ambient occlusion map")
 
         print("\npainted-toy finish")
         check(0.3 <= state["roughness"] <= 0.7, f"body holds a soft sheen ({state['roughness']})")
@@ -400,6 +465,19 @@ def main() -> int:
         check(state["clearcoat"] > 0, "planet carries a painted-toy coat")
         check(state["roughnessMap"], "raised paint is finished separately from the body")
         check(state["environmentLit"], "planet receives image-based light")
+        # 7 is NeutralToneMapping. ACESFilmic (4) desaturates saturated colour on
+        # its way to white, which is right for photographic footage and wrong for
+        # a planet covered in flat poster paint.
+        check(
+            state["toneMapping"] == 7,
+            f"scene tone maps with Khronos PBR Neutral, not ACES (got {state['toneMapping']})",
+        )
+        # Exposure is solved against the ACES setting it replaced rather than
+        # picked, so drifting off it un-matches the brightness on purpose.
+        check(
+            abs(state["toneMappingExposure"] - 1.91) < 0.01,
+            f"exposure holds the solved match ({state['toneMappingExposure']})",
+        )
         check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline still exposes its stable first stage")
         check(state["shadows"] and state["sunCastsShadow"], "renderer keeps real shadows")
         check(state["internalWidth"] <= 3840, "internal width stays within the 4K ceiling")

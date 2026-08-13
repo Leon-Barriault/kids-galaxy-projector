@@ -5,6 +5,7 @@
 help:
 	@echo "Kids Galaxy Projector - common targets"
 	@echo "  make install-dev      - install runtime + test dependencies"
+	@echo "  make install-projector-checks - adds Playwright + Chromium for the browser checks"
 	@echo "  make lint             - lint all layers (Python, Docker, shell, Kotlin)"
 	@echo "  make arch             - enforce clean-architecture boundaries"
 	@echo "  make test-unit        - fast unit tests (domain/application/infrastructure)"
@@ -14,6 +15,7 @@ help:
 	@echo "  make build-android    - assemble the debug APK"
 	@echo "  make verify           - lint + arch + all tests (what CI runs)"
 	@echo "  make check-projector  - drive the projector in headless Chromium"
+	@echo "  make check-render-math - bevel/environment/tone-curve checks, no GPU needed"
 	@echo "  make dev-up           - full debug environment: server + emulator"
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make pi-up            - deploy on the Pi, discoverable over mDNS"
@@ -23,6 +25,10 @@ help:
 
 install-dev:
 	cd pi-server && pip install -r requirements-dev.txt
+
+install-projector-checks:
+	cd pi-server && pip install -r requirements-projector.txt
+	python -m playwright install --with-deps chromium
 
 # -------------------- linting --------------------
 
@@ -88,6 +94,10 @@ verify: lint arch test test-android
 check-projector:
 	@command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
 	python3 scripts/check_projector.py
+
+check-render-math:
+	@command -v node >/dev/null || { echo "node required"; exit 1; }
+	bash scripts/js/run-checks.sh
 
 # -------------------- local stack --------------------
 

@@ -13,6 +13,12 @@ at.
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
+from _projector_deps import require as _require_projector_dependencies
+
+_require_projector_dependencies()
+
 import io
 import sys
 import time
@@ -23,7 +29,7 @@ from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check_projector import Server  # noqa: E402
+from check_projector import Server, wait_for  # noqa: E402
 
 CANVAS = 512
 
@@ -140,9 +146,81 @@ def main(out_dir: Path) -> int:
                     errors.append(message.text) if message.type == "error" else None
                 ),
             )
-            page.goto(f"{server.base}/", wait_until="networkidle")
-            page.wait_for_timeout(9000)
+            # "load", not "networkidle". PlanetLoader opens an EventSource on
+            # /api/events and holds it for the life of the page, and networkidle
+            # waits for zero network connections for 500ms - so it could never
+            # fire and this always spent the full 30 second timeout before
+            # failing. Deterministic, not flaky, and invisible because this
+            # script is not in projector-ci.yml. Every other script in here
+            # already used "load".
+            page.goto(f"{server.base}/", wait_until="load")
+
+            # Wait for the render to actually exist rather than sleeping at it.
+            # A planet is done when a surface stage has claimed its body; the
+            # geometry rebuild that stage now performs is real work, so a fixed
+            # sleep is a guess that gets worse as the renderer gets slower.
+            wait_for(
+                page,
+                "(() => {"
+                f"  const kg = window.kidsGalaxy;"
+                f"  if (!kg?.kidPlanets || kg.kidPlanets.size < {len(planets)}) return false;"
+                "  return [...kg.kidPlanets.values()].every((p) => {"
+                "    const d = p?.mesh?.material?.userData || {};"
+                "    return Boolean(d.kidsGalaxySoftToySurface || d.kidsGalaxyManifestStrokeSurface);"
+                "  });"
+                "})()",
+                30_000,
+            )
+            # Settle: entry animations, ring rotation and the first few frames of
+            # the environment prefilter all land after the surface is applied.
+            page.wait_for_timeout(4000)
             page.screenshot(path=str(out_dir / "scene.png"))
+
+            failures = page.evaluate(
+                "({"
+                "  softToy: window.kidsGalaxySoftToyFailures || [],"
+                "  manifest: window.kidsGalaxyManifestStrokeFailures || [],"
+                "})"
+            )
+            # Both surface stages swallow their exceptions into these arrays and
+            # fall back to the older appearance, so a broken renderer looks like
+            # a working one in a screenshot. Say so out loud.
+            for kind, entries in failures.items():
+                for entry in entries:
+                    errors.append(f"{kind} surface failed on {entry.get('id')}: {entry.get('message')}")
+
+            # The hero frames below are fetched from the server *after* the
+            # browser is gone, but it is the browser that produces them:
+            # ProjectorSnapshotPublisher renders each planet into a render
+            # target and POSTs it, debounced and retried with backoff. So every
+            # snapshot has to be published before this page closes.
+            #
+            # Nothing here used to wait for that. It happened to work only
+            # because the networkidle bug held the page open for its full 30
+            # second timeout first - the page was alive and rendering that whole
+            # time. Fixing the timeout removed the accident and took the capture
+            # window with it, which is why the later planets in the gallery
+            # stopped producing frames. This waits on the publisher's own signal
+            # instead of on a side effect of a bug.
+            wait_for(
+                page,
+                "(() => {"
+                "  const kg = window.kidsGalaxy;"
+                f"  if (!kg?.kidPlanets || kg.kidPlanets.size < {len(planets)}) return false;"
+                "  return [...kg.kidPlanets.values()].every("
+                "    (p) => p?.userData?.kidsGalaxyWebglSnapshotPublished"
+                "  );"
+                "})()",
+                90_000,
+            )
+            unpublished = page.evaluate(
+                "[...window.kidsGalaxy.kidPlanets.values()]"
+                "  .filter((p) => !p?.userData?.kidsGalaxyWebglSnapshotPublished)"
+                "  .map((p) => p.id)"
+            )
+            for planet_id in unpublished:
+                errors.append(f"snapshot never published for {planet_id}")
+
             browser.close()
 
         published = 0

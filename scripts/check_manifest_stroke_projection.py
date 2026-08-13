@@ -3,6 +3,12 @@
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
+from _projector_deps import require as _require_projector_dependencies
+
+_require_projector_dependencies()
+
 import io
 import json
 
@@ -100,8 +106,31 @@ SURFACE_STATE = """
   if (!p) return null;
   const m = p.mesh.material;
   const image = m.map?.image;
-  const relief = m.displacementMap?.image;
-  if (!image || !relief) return null;
+  if (!image) return null;
+  // Relief is geometry now, not a displacementMap, so it is measured off the
+  // vertices. maxNormalTilt is the number that matters: a smooth sphere reads
+  // zero, and so did the displacementMap this replaced, because three.js does
+  // not recompute normals after displacing a vertex.
+  const relief = (() => {
+    const position = p.mesh.geometry.attributes.position;
+    const normal = p.mesh.geometry.attributes.normal;
+    let minRadius = Infinity;
+    let maxRadius = 0;
+    let maxTilt = 0;
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i);
+      const y = position.getY(i);
+      const z = position.getZ(i);
+      const r = Math.sqrt(x * x + y * y + z * z);
+      if (r < minRadius) minRadius = r;
+      if (r > maxRadius) maxRadius = r;
+      if (!normal || r === 0) continue;
+      const dot = (x * normal.getX(i) + y * normal.getY(i) + z * normal.getZ(i)) / r;
+      const tilt = Math.acos(Math.min(1, Math.max(-1, dot)));
+      if (tilt > maxTilt) maxTilt = tilt;
+    }
+    return { minRadius, maxRadius, maxNormalTiltDeg: (maxTilt * 180) / Math.PI };
+  })();
   const read = (source) => {
     const c = document.createElement('canvas');
     c.width = source.width; c.height = source.height;
@@ -121,9 +150,12 @@ SURFACE_STATE = """
     width: image.width,
     height: image.height,
     colour: read(image),
-    relief: read(relief),
-    displacementScale: m.displacementScale,
-    bumpScale: m.bumpScale,
+    beveledRelief: Boolean(p.mesh.geometry.userData?.kidsGalaxyBeveledRelief),
+    reliefFraction: (relief.maxRadius - relief.minRadius) / relief.minRadius,
+    maxNormalTiltDeg: relief.maxNormalTiltDeg,
+    occlusionMap: Boolean(m.aoMap),
+    displacementMap: Boolean(m.displacementMap),
+    bumpMap: Boolean(m.bumpMap),
   };
 }
 """
@@ -240,10 +272,21 @@ def main() -> int:
             "same-colour strokes have visibly different molded heights",
         )
 
-    relief_values = state["relief"][0::4]
-    check(state["displacementScale"] >= 0.14, "paint uses strong geometry displacement")
-    check(state["bumpScale"] >= 0.2, "rounded shoulders use strong local surface relief")
-    check(max(relief_values) - min(relief_values) > 150, "relief map has toy-like physical depth")
+    check(state["beveledRelief"], "paint is raised as real beveled geometry")
+    check(
+        not state["displacementMap"] and not state["bumpMap"],
+        "no displacement or bump map stacked on already-displaced vertices",
+    )
+    check(
+        state["reliefFraction"] > 0.02,
+        f"relief has toy-like physical depth ({state['reliefFraction'] * 100:.1f}% of radius)",
+    )
+    check(
+        state["maxNormalTiltDeg"] > 25,
+        "bevel walls carry their own normals, so a shoulder shades as a shoulder "
+        f"(a smooth sphere reads 0 degrees; this reads {state['maxNormalTiltDeg']:.1f})",
+    )
+    check(state["occlusionMap"], "creases are shaded by an ambient occlusion map")
 
     white_columns = 0
     for x in range(state["width"]):
