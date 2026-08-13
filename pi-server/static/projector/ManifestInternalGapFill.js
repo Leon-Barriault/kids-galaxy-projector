@@ -3,7 +3,6 @@ import { PlanetEntity } from './PlanetEntity.js';
 const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
 const VERTICAL_ASPECT_THRESHOLD = 1.55;
 const WRAP_ASPECT_THRESHOLD = 0.72;
-const MAX_INTERNAL_GAP_FRACTION = 0.16;
 const BACKGROUND_DISTANCE_THRESHOLD = 18;
 
 function rgbOf(value) {
@@ -124,8 +123,8 @@ function fillInternalBandGaps(entity) {
   const background = rgbOf(manifest.background_color);
   const image = context.getImageData(0, 0, width, height);
   const source = new Uint8ClampedArray(image.data);
-  const maxGap = Math.max(2, Math.round(height * MAX_INTERNAL_GAP_FRACTION));
   let filledTexels = 0;
+  let widestFilledRun = 0;
 
   for (let x = 0; x < width; x += 1) {
     let y = 0;
@@ -145,7 +144,9 @@ function fillInternalBandGaps(entity) {
       const end = y - 1;
       const runLength = end - start + 1;
 
-      if (start === 0 || end === height - 1 || runLength > maxGap) continue;
+      // A run touching a texture pole is exterior body/background, not a hole
+      // between paint bands. Never extend the nearest paint into that region.
+      if (start === 0 || end === height - 1) continue;
 
       const midY = ((start + end) * 0.5) / Math.max(1, height - 1);
       if (!isBracketedByWrappedBands(midY, bands)) continue;
@@ -159,6 +160,11 @@ function fillInternalBandGaps(entity) {
         continue;
       }
 
+      // Fill every genuinely internal run, regardless of width. The old 16%
+      // cap only fixed the synthetic narrow-gap fixture and left the much wider
+      // gaps visible on real kid drawings. Exterior background is still safe
+      // because those runs touch a pole and are rejected above.
+      widestFilledRun = Math.max(widestFilledRun, runLength);
       for (let fillY = start; fillY <= end; fillY += 1) {
         const targetOffset = (fillY * width + x) * 4;
         const distanceToTop = fillY - (start - 1);
@@ -178,6 +184,8 @@ function fillInternalBandGaps(entity) {
     material.map.needsUpdate = true;
   }
   material.userData.kidsGalaxyInternalGapFillTexels = filledTexels;
+  material.userData.kidsGalaxyInternalGapFillWidestRun = widestFilledRun;
+  material.userData.kidsGalaxyInternalGapFillVersion = 2;
   return filledTexels;
 }
 
