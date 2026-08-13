@@ -112,6 +112,7 @@ SURFACE_STATE = """
   return {
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
+    internalGapFillTexels: m.userData.kidsGalaxyInternalGapFillTexels,
     layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
     strokeProfiles: m.userData.kidsGalaxyEmbossStrokeProfiles,
     northPoleStroke: m.userData.kidsGalaxyNorthPoleStroke,
@@ -177,6 +178,20 @@ def main() -> int:
     check(state["strokeCount"] == 5, f"all authored strokes survive ({state['strokeCount']})")
     check(state["northPoleStroke"] == 0, "nearest broad top stroke owns the north pole")
     check(close(pixel(state, 2, 2), PURPLE), "purple top stroke closes the north cap")
+
+    print("\nbackground handling")
+    check(
+        (state["internalGapFillTexels"] or 0) > 0,
+        f"narrow internal background gaps are bridged ({state['internalGapFillTexels']})",
+    )
+    check(
+        not close(pixel(state, 256, 60), BODY, tolerance=24),
+        "background between adjacent wrapped paint bands is not exposed",
+    )
+    check(
+        close(pixel(state, 256, state["height"] - 2), BODY, tolerance=24),
+        "background below the final wrapped paint band remains intentional body colour",
+    )
 
     print("\nperiodic wrapped ribbons")
     for target, name in [(ORANGE, "orange"), (GREEN, "green")]:
