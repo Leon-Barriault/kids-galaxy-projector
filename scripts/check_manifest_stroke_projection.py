@@ -112,6 +112,7 @@ SURFACE_STATE = """
   return {
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
+    backgroundFillTexels: m.userData.kidsGalaxyBackgroundFillTexels,
     layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
     strokeProfiles: m.userData.kidsGalaxyEmbossStrokeProfiles,
     northPoleStroke: m.userData.kidsGalaxyNorthPoleStroke,
@@ -177,6 +178,23 @@ def main() -> int:
     check(state["strokeCount"] == 5, f"all authored strokes survive ({state['strokeCount']})")
     check(state["northPoleStroke"] == 0, "nearest broad top stroke owns the north pole")
     check(close(pixel(state, 2, 2), PURPLE), "purple top stroke closes the north cap")
+
+    print("\ncomplete body colour coverage")
+    check(
+        int(state["backgroundFillTexels"] or 0) > 0,
+        "unpainted body texels are filled from nearby wrapped strokes",
+    )
+    exposed_background = sum(
+        1
+        for y in range(state["height"])
+        for x in range(state["width"])
+        if close(pixel(state, x, y), BODY, tolerance=12)
+    )
+    check(exposed_background == 0, f"drawing background never leaks onto the globe ({exposed_background})")
+    check(
+        close(pixel(state, 32, state["height"] - 2), GREEN),
+        "lowest wrapped band continues across the south cap instead of exposing the background",
+    )
 
     print("\nperiodic wrapped ribbons")
     for target, name in [(ORANGE, "orange"), (GREEN, "green")]:
