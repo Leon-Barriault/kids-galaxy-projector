@@ -65,7 +65,7 @@ def manifest_bytes() -> bytes:
                     "color": "#43a047",
                     "width_px": 42,
                     "width_normalized": 0.082,
-                    "points": [[0.12, 0.49], [0.36, 0.45], [0.65, 0.51], [0.88, 0.47]],
+                    "points": [[0.12, 0.68], [0.36, 0.63], [0.65, 0.70], [0.88, 0.66]],
                 },
                 {
                     "stroke_id": "white-meridian",
@@ -73,7 +73,7 @@ def manifest_bytes() -> bytes:
                     "color": "#ffffff",
                     "width_px": 24,
                     "width_normalized": 0.047,
-                    "points": [[0.49, 0.65], [0.52, 0.78], [0.5, 0.92]],
+                    "points": [[0.49, 0.74], [0.52, 0.84], [0.5, 0.94]],
                 },
             ],
         }
@@ -113,6 +113,8 @@ SURFACE_STATE = """
     mode: m.userData.kidsGalaxyDesignProjectionMode,
     strokeCount: m.userData.kidsGalaxyEmbossedStrokeCount,
     internalGapFillTexels: m.userData.kidsGalaxyInternalGapFillTexels,
+    internalGapFillWidestRun: m.userData.kidsGalaxyInternalGapFillWidestRun,
+    internalGapFillVersion: m.userData.kidsGalaxyInternalGapFillVersion,
     layerLevels: m.userData.kidsGalaxyEmbossLayerLevels,
     strokeProfiles: m.userData.kidsGalaxyEmbossStrokeProfiles,
     northPoleStroke: m.userData.kidsGalaxyNorthPoleStroke,
@@ -181,12 +183,20 @@ def main() -> int:
 
     print("\nbackground handling")
     check(
-        (state["internalGapFillTexels"] or 0) > 0,
-        f"narrow internal background gaps are bridged ({state['internalGapFillTexels']})",
+        state["internalGapFillVersion"] == 2,
+        f"wide-gap filler v2 is active ({state['internalGapFillVersion']})",
     )
     check(
-        not close(pixel(state, 256, 60), BODY, tolerance=24),
-        "background between adjacent wrapped paint bands is not exposed",
+        (state["internalGapFillTexels"] or 0) > 0,
+        f"internal background gaps are bridged ({state['internalGapFillTexels']})",
+    )
+    check(
+        (state["internalGapFillWidestRun"] or 0) > state["height"] * 0.16,
+        f"a real wide internal gap is bridged ({state['internalGapFillWidestRun']} texels)",
+    )
+    check(
+        not close(pixel(state, 256, 132), BODY, tolerance=24),
+        "wide background between adjacent wrapped paint bands is not exposed",
     )
     check(
         close(pixel(state, 256, state["height"] - 2), BODY, tolerance=24),
@@ -237,7 +247,7 @@ def main() -> int:
 
     white_columns = 0
     for x in range(state["width"]):
-        if any(close(pixel(state, x, y), WHITE) for y in range(160, 245)):
+        if any(close(pixel(state, x, y), WHITE) for y in range(180, 250)):
             white_columns += 1
     check(white_columns < state["width"] * 0.2, "vertical stroke remains a localized meridian")
     check(not errors, f"browser console remains clean ({errors})")
