@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageChops
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
@@ -100,38 +100,6 @@ def motion_state(page, planet_id: str) -> dict:
 
 def position_distance(left: list[float], right: list[float]) -> float:
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right, strict=True)))
-
-
-def visible_canvas_image(page) -> Image.Image:
-    """Capture the renderer's visible viewport without element actionability waits."""
-    clip = page.evaluate(
-        """
-        () => {
-          const canvas = window.kidsGalaxy?.renderer?.domElement;
-          if (!(canvas instanceof HTMLCanvasElement) || !canvas.isConnected) return null;
-          const rect = canvas.getBoundingClientRect();
-          return {
-            x: rect.left,
-            y: rect.top,
-            width: rect.width,
-            height: rect.height,
-          };
-        }
-        """
-    )
-    if not clip or clip["width"] <= 0 or clip["height"] <= 0:
-        raise RuntimeError("projector renderer did not expose a visible DOM canvas")
-
-    # ElementHandle/Locator.screenshot() first waits for the target element to
-    # become stable. The projector is intentionally animated forever, and on
-    # Chromium/SwiftShader that stability wait can time out even though the
-    # renderer is healthy. A page screenshot clipped to the instantaneous canvas
-    # bounds captures the same visible pixels without an element actionability
-    # gate. Leave animations enabled because motion is exactly what this check
-    # exists to prove.
-    return Image.open(
-        io.BytesIO(page.screenshot(clip=clip, animations="allow"))
-    ).convert("RGB")
 
 
 def main() -> int:
