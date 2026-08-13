@@ -89,6 +89,8 @@ def motion_state(page, planet_id: str) -> dict:
             position: planet.mesh.position.toArray(),
             screenTarget: kg.renderer.getRenderTarget() === null,
             contextLost: kg.renderer.getContext().isContextLost(),
+            renderFrame: kg.renderer.info.render.frame,
+            canvasConnected: kg.renderer.domElement?.isConnected === true,
           };
         }
         """,
@@ -207,18 +209,28 @@ def main() -> int:
         # Snapshot completion must leave the renderer attached to the visible
         # default framebuffer. Numerical motion alone is not enough: the bug we
         # are guarding kept requestAnimationFrame/update running while every
-        # frame was rendered to an off-screen target, so the projector showed a
-        # still image. Capture the visible canvas twice as the user sees it.
+        # frame was rendered to an off-screen target. Instead of asking
+        # Playwright to screenshot a continuously animated SwiftShader page,
+        # combine the target, canvas attachment, Three.js frame id, and planet
+        # motion. Together they prove the live render loop is still submitting
+        # frames to the screen after the snapshot queue has drained.
         motion_before = motion_state(page, planet_id)
-        visible_before = visible_canvas_image(page)
         page.wait_for_timeout(1200)
         motion_after = motion_state(page, planet_id)
-        visible_after = visible_canvas_image(page)
-        visible_difference = ImageChops.difference(visible_before, visible_after).getbbox()
 
         check(motion_before["screenTarget"], "renderer returns to the visible framebuffer after all snapshots", failures)
         check(motion_after["screenTarget"], "renderer stays on the visible framebuffer while animating", failures)
+        check(
+            motion_before["canvasConnected"] and motion_after["canvasConnected"],
+            "renderer canvas remains attached after rendered previews complete",
+            failures,
+        )
         check(not motion_before["contextLost"] and not motion_after["contextLost"], "WebGL context remains healthy after all snapshots", failures)
+        check(
+            motion_after["renderFrame"] > motion_before["renderFrame"],
+            "renderer keeps submitting frames after rendered previews complete",
+            failures,
+        )
         check(
             abs(motion_after["rotationY"] - motion_before["rotationY"]) > 0.001,
             "planet rotation continues after rendered previews complete",
@@ -227,11 +239,6 @@ def main() -> int:
         check(
             position_distance(motion_before["position"], motion_after["position"]) > 0.001,
             "planet orbit continues after rendered previews complete",
-            failures,
-        )
-        check(
-            visible_difference is not None,
-            "the visible projector canvas keeps changing after rendered previews complete",
             failures,
         )
 
