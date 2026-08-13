@@ -14,7 +14,7 @@ import math
 import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 from app.domain.planet import Planet
 from app.infrastructure.manifest_lithophane import (
@@ -28,10 +28,11 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
     SNAPSHOT_SIZE = 700
     MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024
     DRAWING_GUIDE_SIZE = 620
-    DRAWING_GUIDE_MARGIN = 55
+    DRAWING_GUIDE_RADIUS_FRACTION = 0.42
     DRAWING_GUIDE_STROKE_WIDTH = 6
     DRAWING_GUIDE_COLOR = "#64B5F6"
     PRINT_BACKGROUND_THRESHOLD = 28
+    PRINT_HERO_PADDING = 34
 
     def __init__(self, snapshot_dir: Path) -> None:
         self.snapshot_dir = snapshot_dir
@@ -83,11 +84,14 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         return super().render_preview(planet, image_path)
 
     def _print_hero(self, hero: Image.Image) -> Image.Image:
-        """Put the isolated planet on paper-white, including older dark snapshots."""
+        """Put the isolated planet on white paper and centre it with safe margins."""
         rgba = hero.convert("RGBA")
         prepared = Image.new("RGB", rgba.size, "white")
         prepared.paste(rgba, (0, 0), rgba)
 
+        # Snapshots created before transparent capture used the projector's dark
+        # sky as an opaque background. Remove only the connected corner colour so
+        # the planet's genuine dark strokes and shadows remain untouched.
         corner = prepared.getpixel((0, 0))
         if any(abs(channel - 255) > 8 for channel in corner):
             ImageDraw.floodfill(
@@ -96,29 +100,56 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
                 (255, 255, 255),
                 thresh=self.PRINT_BACKGROUND_THRESHOLD,
             )
-        return prepared
 
-    def _drawing_outline(self) -> Image.Image:
-        """Return the same simple soft-blue planet guide used by the kid tablet."""
+        # Do not trust the stored frame to already be centred. Older captures can
+        # place the object toward an edge, and decorations can enlarge one side of
+        # the frame. Find the visible non-paper pixels, fit them into a padded
+        # square, and centre that exact render without reconstructing the planet.
+        white = Image.new("RGB", prepared.size, "white")
+        bounds = ImageChops.difference(prepared, white).getbbox()
+        if bounds is None:
+            return white
+
+        visible = prepared.crop(bounds)
+        max_edge = self.SNAPSHOT_SIZE - self.PRINT_HERO_PADDING * 2
+        visible.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        centred = Image.new("RGB", (self.SNAPSHOT_SIZE, self.SNAPSHOT_SIZE), "white")
+        x = (self.SNAPSHOT_SIZE - visible.width) // 2
+        y = (self.SNAPSHOT_SIZE - visible.height) // 2
+        centred.paste(visible, (x, y))
+        return centred
+
+    def _drawing_with_guide(self, source: Image.Image) -> Image.Image:
+        """Show the child's real drawing inside the same circle used on the tablet."""
         size = self.DRAWING_GUIDE_SIZE
-        margin = self.DRAWING_GUIDE_MARGIN
+        radius = int(round(size * self.DRAWING_GUIDE_RADIUS_FRACTION))
+        centre = size // 2
+        bounds = (
+            centre - radius,
+            centre - radius,
+            centre + radius,
+            centre + radius,
+        )
+
+        # The uploaded drawing is a square disc texture: pixels outside the tablet
+        # guide intentionally repeat the body colour to prevent sampling seams in
+        # WebGL. On paper those corner pixels are not part of the child's planet,
+        # so mask them away while preserving every pixel inside the actual guide.
+        artwork = source.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+        mask = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(mask).ellipse(bounds, fill=255)
+
         drawing = Image.new("RGB", (size, size), "white")
+        drawing.paste(artwork, (0, 0), mask)
         ImageDraw.Draw(drawing).ellipse(
-            (margin, margin, size - margin, size - margin),
+            bounds,
             outline=self.DRAWING_GUIDE_COLOR,
             width=self.DRAWING_GUIDE_STROKE_WIDTH,
         )
         return drawing
 
     def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
-        """
-        Compose a kid-friendly print sheet, preferring the projector WebGL frame.
-
-        The left side is the child's rendered planet on paper-white. The right
-        side is deliberately only a blank planet outline: printing the tablet's
-        dark drawing background wastes ink and leaves little useful space for a
-        child who wants to colour or redraw the planet on paper.
-        """
+        """Compose a kid-friendly print sheet, preferring the projector WebGL frame."""
         source = Image.open(image_path).convert("RGB")
         hero = self._projector_snapshot(planet)
         if hero is not None:
@@ -132,7 +163,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             footer = "Kids Galaxy Projector · rendered by the galaxy server"
 
         hero = self._print_hero(hero)
-        drawing = self._drawing_outline()
+        drawing = self._drawing_with_guide(source)
         hero.thumbnail((700, 700), Image.Resampling.LANCZOS)
 
         canvas = Image.new("RGB", (self.PRINT_WIDTH, self.PRINT_HEIGHT), "white")
@@ -141,7 +172,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         label_font = self._font(22)
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
         draw.text((70, 92), heading, fill="#4b5563", font=label_font)
-        draw.text((895, 92), "Draw your planet", fill="#4b5563", font=label_font)
+        draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
 
         hero_x = 60 + (700 - hero.width) // 2
         hero_y = 145 + (700 - hero.height) // 2
@@ -167,7 +198,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         return output.getvalue()
 
     def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
-        """Return the Pi-rendered print sheet as a one-page PDF for Android printing."""
+        """Return the server-rendered print sheet as a one-page PDF for Android printing."""
         png = self.render_print_sheet(planet, image_path)
         sheet = Image.open(io.BytesIO(png)).convert("RGB")
         output = io.BytesIO()
