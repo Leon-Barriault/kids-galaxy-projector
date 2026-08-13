@@ -2,6 +2,14 @@ import * as THREE from 'three';
 
 const SNAPSHOT_SIZE = 700;
 const SNAPSHOT_FOV_DEGREES = 40;
+// Distance the key light is placed at for a hero frame, regardless of where the
+// planet actually is in its orbit. The sun is a point light with decay 2 and
+// intensity 92, so this fixes the key irradiance at about 1.4 - firm enough to
+// model the bevels, soft enough that the studio environment still carries the
+// wrap, which is the balance the reference look depends on. Distance rather than
+// intensity so that nothing about the cloned light's own configuration is
+// second-guessed here.
+const SNAPSHOT_KEY_DISTANCE = 8;
 const MIN_CAMERA_DISTANCE = 7.4;
 const CAMERA_FRAME_PADDING = 1.14;
 // Keep the printed/exported hero almost straight-on. The live galaxy can use a
@@ -220,10 +228,24 @@ export class ProjectorSnapshotPublisher {
       // shadow map allocated on the spot. Off before the light is ever rendered
       // is cheaper than disposing it afterwards.
       sun.castShadow = false;
-      // Preserve the live sun direction and inverse-square distance from this
-      // planet so the hero image uses the same lighting model as the projector.
+      // Direction from the live sun, distance normalised.
+      //
+      // This used to preserve the true distance too, so that the hero image used
+      // "the same lighting model as the projector". The light decays with the
+      // square of that distance, and planets orbit between roughly 3 and 20
+      // units out, so the key varied about forty-five fold - irradiance 10.2 at
+      // the near end against 0.23 at the far end. A planet caught near the sun
+      // came back with a blown white flare along whichever rim faced it; one
+      // caught far out came back nearly unlit. Worse, it is not reproducible:
+      // the same drawing snapshotted twice, at two points in its orbit, yields
+      // two different pictures, and these frames are what gets printed.
+      //
+      // A hero frame is a product shot. Keeping the direction preserves the
+      // relationship with the projected scene; fixing the distance is what makes
+      // one planet comparable with the next.
       sun.position.copy(this.galaxyScene.sunGroup.position).sub(entity.mesh.position);
       if (sun.position.lengthSq() < 1) sun.position.set(-5, 5, 8);
+      sun.position.setLength(SNAPSHOT_KEY_DISTANCE);
       scene.add(sun);
     }
 

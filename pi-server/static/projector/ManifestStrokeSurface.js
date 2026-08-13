@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
+import {
+  attachReliefGeometry,
+  bevelProfile,
+  bodyRadiusOf,
+  bodyShaperFor,
+  buildBeveledReliefGeometry,
+  buildCreaseAoCanvas,
+  edgeSeedDistance,
+} from './BeveledPatchRelief.js';
 
 const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
@@ -9,14 +18,28 @@ const VERTICAL_ASPECT_THRESHOLD = 1.55;
 const HORIZONTAL_POLE_ASPECT_THRESHOLD = 1.1;
 const WRAP_ASPECT_THRESHOLD = 0.72;
 const SEAM_BLEND_FRACTION = 0.14;
-const DEFAULT_SHOULDER_TEXELS = 8;
-const MIN_SHOULDER_TEXELS = 5;
-const MAX_SHOULDER_TEXELS = 11;
-const SHOULDER_FLOOR = 0.18;
-const DISPLACEMENT_SCALE = 0.145;
-const BUMP_SCALE = 0.22;
-const BODY_HEIGHT = 26;
-const EDGE_SHADE = 0.7;
+// Shoulder widths brought in around the shared BEVEL_TEXELS. The 5-11 range
+// this replaced was tuned for a smoothstep ramp, which is tangent-flat where it
+// leaves the body and so had no crease to protect; a bevel profile puts a wall
+// there, and eleven texels of arc on top of it reads as a dome rather than a
+// rounded edge. Per-stroke variation is kept - a broad deliberate band should
+// still round more softly than a quick thin line - just over a tighter range.
+const DEFAULT_SHOULDER_TEXELS = 5;
+const MIN_SHOULDER_TEXELS = 3;
+const MAX_SHOULDER_TEXELS = 7;
+// Relief is real geometry now, so this is a height in world units rather than a
+// displacementScale over a 0..1 map. The 0.145 it replaces was not a comparable
+// number: displacement of a smoothstep field only ever reached full height at
+// the centre of a wide stroke, so most of that scale was never spent. Applied to
+// a profile that stands at full height across a whole patch it would put paint
+// an eighth of a planet radius proud of the body.
+// Raised from 0.048 after seeing it rendered: the patches read as raised but
+// thin, where the reference has paint with obvious thickness. The wall is a
+// one-texel step, so this is also the wall's steepness - 0.065 puts it at about
+// 66 degrees at the equator, up from 59. Past roughly 0.08 the wall approaches
+// vertical and the patch stops reading as a laid-on pad and starts reading as a
+// mesa, so this is near the top of the useful range rather than the middle.
+const RELIEF_DISPLACEMENT = 0.065;
 const MIN_LAYER_LEVEL = 0.42;
 const MAX_LAYER_LEVEL = 1.0;
 const ORDER_WEIGHT = 0.35;
@@ -269,7 +292,7 @@ function strokeProfiles(projections, poleOwners) {
   });
 }
 
-function roundedRelief(owner, profiles) {
+function roundedRelief(owner, profiles, coverage) {
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const far = TEXTURE_WIDTH + TEXTURE_HEIGHT;
   const distance = new Float32Array(texels);
@@ -287,12 +310,16 @@ function roundedRelief(owner, profiles) {
       const texel = v * TEXTURE_WIDTH + u;
       const strokeIndex = owner[texel];
       if (strokeIndex < 0) {
-        distance[texel] = 0;
+        // Half a texel outside rather than zero - see edgeSeedDistance.
+        distance[texel] = edgeSeedDistance(0);
         continue;
       }
       const neighbours = [ownerAt(v - 1, u), ownerAt(v + 1, u), ownerAt(v, u - 1), ownerAt(v, u + 1)];
+      // Sub-texel seed rather than a flat 1. Coverage says where inside this
+      // texel the edge fell, so a sloping band's wall slides smoothly along it
+      // instead of snapping to whole rows and growing a staircase of facets.
       distance[texel] = neighbours.some((neighbour) => neighbour !== null && neighbour !== strokeIndex)
-        ? 1
+        ? edgeSeedDistance(coverage ? coverage[texel] : 1)
         : far;
     }
   }
@@ -328,18 +355,21 @@ function roundedRelief(owner, profiles) {
   }
 
   const height = new Float32Array(texels);
-  const shade = new Float32Array(texels).fill(1);
   for (let index = 0; index < texels; index += 1) {
     const strokeIndex = owner[index];
     if (strokeIndex < 0) continue;
     const profile = profileByStroke[strokeIndex];
-    const t = Math.min(1, distance[index] / (profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS));
-    const eased = smoothstep(t);
-    const rounded = SHOULDER_FLOOR + (1 - SHOULDER_FLOOR) * eased;
-    height[index] = (profile?.level || 0.75) * rounded;
-    shade[index] = EDGE_SHADE + (1 - EDGE_SHADE) * eased;
+    height[index] =
+      (profile?.level || 0.75) *
+      bevelProfile(distance[index], profile?.shoulderTexels || DEFAULT_SHOULDER_TEXELS);
   }
-  return { height, shade };
+  // The distance field goes out with the height because the crease shading needs
+  // the identical numbers to darken in the identical place. Note this transform
+  // only relaxes within a single owner, so a stroke laid across another is
+  // bevelled against its neighbour as well as against the body - which is the
+  // layered look the manifest path exists to preserve, and the reason it does
+  // not use the shared body-versus-paint transform.
+  return { height, distance };
 }
 
 function scalarCanvas(height, writer) {
@@ -381,31 +411,54 @@ function buildManifestMaps(manifest) {
   mask.height = TEXTURE_HEIGHT;
   let renderedStrokeCount = 0;
 
+  // How much of each texel the owning stroke actually covers. The canvas
+  // rasteriser anti-aliases, so this is free - it was being thresholded away at
+  // alpha 32 and discarded, which is what quantised every edge to whole texels.
+  const coverage = new Float32Array(texels);
+
   projections.forEach((projection) => {
     const alpha = drawProjectedStroke(mask, projection);
     if (!alpha) return;
     for (let index = 0; index < texels; index += 1) {
-      if (alpha[index * 4 + 3] < 32) continue;
-      owner[index] = projection.strokeIndex;
-      colour[index * 3] = projection.colour[0];
-      colour[index * 3 + 1] = projection.colour[1];
-      colour[index * 3 + 2] = projection.colour[2];
+      const covered = alpha[index * 4 + 3] / 255;
+      if (covered <= 0.01) continue;
+      // Ownership still flips at the halfway point, so the geometric edge and
+      // the colour edge agree; coverage records where inside the texel it fell.
+      if (covered >= 0.5) {
+        owner[index] = projection.strokeIndex;
+        colour[index * 3] = projection.colour[0];
+        colour[index * 3 + 1] = projection.colour[1];
+        colour[index * 3 + 2] = projection.colour[2];
+      } else {
+        // Partly covered and not claimed: blend so the albedo edge is as smooth
+        // as the geometry edge rather than a hard texel step beside it.
+        const keep = 1 - covered;
+        colour[index * 3] = colour[index * 3] * keep + projection.colour[0] * covered;
+        colour[index * 3 + 1] = colour[index * 3 + 1] * keep + projection.colour[1] * covered;
+        colour[index * 3 + 2] = colour[index * 3 + 2] * keep + projection.colour[2] * covered;
+      }
+      if (covered > coverage[index]) coverage[index] = covered;
     }
     closePole(owner, colour, projection, poleOwners);
     renderedStrokeCount += 1;
   });
 
-  const { height, shade } = roundedRelief(owner, profiles);
+  const { height, distance } = roundedRelief(owner, profiles, coverage);
   const colourCanvas = document.createElement('canvas');
   colourCanvas.width = TEXTURE_WIDTH;
   colourCanvas.height = TEXTURE_HEIGHT;
   const context = colourCanvas.getContext('2d', { alpha: false });
   if (!context) return null;
+  // Albedo is the stroke colour the tablet sent and nothing else. The edge
+  // darkening that used to be multiplied in here is an aoMap now: baked into the
+  // colour it dimmed the diffuse term while clearcoat and environment reflection
+  // carried on over the top at full strength, so the crease washed out and the
+  // flat colours went muddy at the same time.
   const image = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
   for (let index = 0; index < texels; index += 1) {
-    image.data[index * 4] = colour[index * 3] * shade[index];
-    image.data[index * 4 + 1] = colour[index * 3 + 1] * shade[index];
-    image.data[index * 4 + 2] = colour[index * 3 + 2] * shade[index];
+    image.data[index * 4] = colour[index * 3];
+    image.data[index * 4 + 1] = colour[index * 3 + 1];
+    image.data[index * 4 + 2] = colour[index * 3 + 2];
     image.data[index * 4 + 3] = 255;
   }
   context.putImageData(image, 0, 0);
@@ -421,7 +474,15 @@ function buildManifestMaps(manifest) {
   }));
   return {
     colour: colourCanvas,
-    height: scalarCanvas(height, (relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
+    // No height canvas: the relief is in the vertices, so handing a
+    // displacementMap to the material as well would raise every stroke twice.
+    reliefField: height,
+    occlusion: buildCreaseAoCanvas({
+      owner,
+      distanceIn: distance,
+      width: TEXTURE_WIDTH,
+      height: TEXTURE_HEIGHT,
+    }),
     roughness: scalarCanvas(height, (relief) => 238 - relief * 72),
     strokeCount: renderedStrokeCount,
     layerLevels: diagnostics.map((profile) => profile.level),
@@ -452,16 +513,39 @@ function applyManifestSurface(entity) {
     roughness: 0.42,
     metalness: 0,
     clearcoat: 0.46,
-    clearcoatRoughness: 0.3,
+    // Spread rather than sharpened. A tight clearcoat plus the sun's point light
+    // put a blown specular flare on whichever rim faced it, which the reference
+    // never has - its highlight is a broad soft shoulder. Widening the coat is
+    // material-local, so it fixes the flare without re-lighting the gallery.
+    clearcoatRoughness: 0.48,
     envMap: previous?.envMap || null,
     envMapIntensity: previous?.envMapIntensity ?? 0.78,
   });
-  material.displacementMap = canvasTexture(built.height);
-  material.displacementScale = DISPLACEMENT_SCALE;
-  material.displacementBias = -(BODY_HEIGHT / 255) * DISPLACEMENT_SCALE;
-  material.bumpMap = material.displacementMap;
-  material.bumpScale = BUMP_SCALE;
+  // Real beveled geometry rather than a displacementMap plus a bumpMap. three.js
+  // does not recompute normals for a displacementMap - it moves the vertex and
+  // leaves the normal pointing where the undisplaced sphere pointed - so every
+  // raised stroke used to be shaded as though it were still a smooth ball, and
+  // the bumpMap was there to paint back an edge the lighting had thrown away.
+  const reliefGeometry = buildBeveledReliefGeometry({
+    heightField: built.reliefField,
+    fieldWidth: TEXTURE_WIDTH,
+    fieldHeight: TEXTURE_HEIGHT,
+    radius: bodyRadiusOf(entity),
+    displacement: RELIEF_DISPLACEMENT,
+    shapeGeometry: bodyShaperFor(entity),
+  });
+  if (reliefGeometry) attachReliefGeometry(entity, reliefGeometry);
+
   material.roughnessMap = canvasTexture(built.roughness);
+  const occlusion = canvasTexture(built.occlusion);
+  if (occlusion) {
+    // aoMap defaults to the second UV set; the relief map shares the body's
+    // layout exactly, and the geometry builder publishes uv1 as the same buffer,
+    // so either resolution path lands on the right coordinates.
+    occlusion.channel = 0;
+    material.aoMap = occlusion;
+    material.aoMapIntensity = 1;
+  }
   material.userData.kidsGalaxyManifestStrokeSurface = true;
   material.userData.kidsGalaxyEmbossedStrokeCount = built.strokeCount;
   material.userData.kidsGalaxyEmbossLayerLevels = built.layerLevels;

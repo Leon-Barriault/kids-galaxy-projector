@@ -1,6 +1,18 @@
 import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
+import {
+  BEVEL_TEXELS,
+  attachReliefGeometry,
+  bevelProfile,
+  bodyRadiusOf,
+  bodyShaperFor,
+  buildBeveledReliefGeometry,
+  buildCreaseAoCanvas,
+  edgeSeedDistance,
+  relaxDistanceField,
+} from './BeveledPatchRelief.js';
+import { studioEnvironment } from './StudioEnvironment.js';
 
 /**
  * Paint the child's drawing onto the planet as a surface, not as sculpture.
@@ -30,8 +42,13 @@ import { PlanetEntity } from './PlanetEntity.js';
  * middle setting - the drawing either vanished or took over.
  *
  * Paint is raised off the body by the same mask that decides its colour, so a
- * stroke has the thickness of poster paint rather than of a slab: relief you
- * read at the terminator, never on the outline.
+ * stroke has the thickness of poster paint rather than of a slab. That relief is
+ * real geometry with its own normals - see BeveledPatchRelief.js - so it reads
+ * at the terminator, in the crease shadow at the foot of every patch, and yes,
+ * on the outline too. The earlier note here promised the silhouette would stay
+ * perfectly round, which was describing the old slab problem's cure rather than
+ * the goal: the reference look has hand-formed lumps at the edge, and a body
+ * that stays a flawless circle is the giveaway that the paint is printed on.
  */
 
 // Longitude carries information now, so the texture can no longer be eight
@@ -41,13 +58,20 @@ import { PlanetEntity } from './PlanetEntity.js';
 // of twelve - the 1024-wide map the old note warned about would be 72 MB.
 const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
-const BUMP_SCALE = 0.12;
-// Much lower displacement so height tiers read as soft raised paint
-// rather than stacked shelves. Volume comes more from bump + clearcoat.
-const DISPLACEMENT_SCALE = 0.045;
-// Body level in the height map. Not zero, so the sphere is not pulled inward
-// where the child left it alone; displacementBias cancels it.
-const BODY_HEIGHT = 40;
+// Relief is real geometry now, so this is a height in world units rather than a
+// displacementScale multiplying a 0..1 map, and there is no body level left to
+// cancel with a bias: unpainted body is exactly the sphere.
+//
+// Set to 0.042 while this could not be seen rendered, reasoning that the bevel
+// profile holds a patch at full height across its whole outline where the old
+// 22-texel smoothstep only reached it at the centre, so the same number would
+// read thicker. Rendered, it read thinner than the reference, not thicker - the
+// old profile's height was spread over a wide soft mound that caught light
+// across its whole width, while a flat pad with a sharp wall only shows its
+// thickness at the wall. 0.058 is what that costs to correct. Kept a little
+// under the manifest path's 0.065 because this path's regions come from image
+// segmentation and are correspondingly less crisp.
+const RELIEF_DISPLACEMENT = 0.058;
 // How far from the body colour a pixel must sit, in RGB units, before it counts
 // as paint.
 const PAINT_MATCH_DISTANCE = 26;
@@ -57,16 +81,32 @@ const PAINT_MATCH_DISTANCE = 26;
 // deleted every thin vertical line and kept every thick one at full strength.
 const MIN_STROKE_PIXELS = 60;
 // Two touching pixels belong to the same stroke while every channel is within
-// this of the pixel the region grew from. Loose enough to ride out the tablet's
-// anti-aliasing, tight enough that neighbouring rainbow arcs stay separate.
+// this of the region's reference colour. Tight enough that neighbouring rainbow
+// arcs stay separate.
 const STROKE_COLOUR_TOLERANCE = 40;
+// ...but not, on its own, loose enough to ride out the tablet's anti-aliasing,
+// which the comment here used to claim it was. A half-covered edge pixel of a
+// red stroke on a pale body is about eighty units per channel away from the
+// solid interior, so the absolute test alone splits every high-contrast stroke
+// into three regions: top fringe, interior, bottom fringe. Each fringe then
+// draws its own height tier and its own colour, and now that a patch edge is a
+// one-texel geometric wall it would draw its own wall too - a double step around
+// everything the child paints.
+//
+// Anti-aliasing has a shape, though. A partially covered pixel is exactly
+// body + coverage * (paint - body), so it lies on the ray from the body colour
+// through the paint colour, differing only in length. Testing for that directly
+// is what lets a fringe rejoin its own stroke.
+const FRINGE_RAY_COS = Math.cos((12 * Math.PI) / 180);
+// How far along the ray two colours must sit before one counts as a partial
+// version of the other rather than a second deliberate colour. A child painting
+// pink beside red is the case this protects: pink is genuinely on the ray from a
+// pale body through red, but it arrives at nearly full strength, so it stays its
+// own stroke. Anything dimmer than this - or, growing outward from a fringe that
+// happened to seed first, anything correspondingly brighter - is coverage.
+const FRINGE_COVERAGE_BAND = 0.8;
 // Height tiers kept close together so remaining steps stay subtle.
 const STROKE_HEIGHT_TIERS = [0.55, 0.7, 0.85, 0.95, 1.0];
-// Very wide shoulders for soft clay-like transitions.
-const SHOULDER_TEXELS = 22;
-// How much darker a stroke's rounded edge is than its flat top. Stronger
-// darkening makes the embossed pads read clearly even under soft studio light.
-const STROKE_EDGE_SHADE = 0.70;
 // How near the edge of the drawing paint must come before it counts as the child
 // colouring that pole. Four percent of 512 is the top twenty rows, where the
 // tablet's circular clip has narrowed the drawable width to about a fifth of the
@@ -94,7 +134,7 @@ function readDisc(image) {
  * way it runs, where its middle is at each height - because those are what
  * decide how it wraps. Working a row at a time cannot recover any of them.
  */
-function labelStrokes(disc, bodyRgb) {
+export function labelStrokes(disc, bodyRgb) {
   const { data, size } = disc;
   const total = size * size;
   const labels = new Int32Array(total).fill(-1);
@@ -121,6 +161,18 @@ function labelStrokes(disc, bodyRgb) {
     const seedG = data[seed * 4 + 1];
     const seedB = data[seed * 4 + 2];
 
+    // The colour every candidate is judged against. Starts at the seed and
+    // climbs toward the most solid pixel the region finds - see the note where
+    // it is updated.
+    let referenceR = seedR;
+    let referenceG = seedG;
+    let referenceB = seedB;
+    let referenceLength = Math.hypot(
+      seedR - bodyRgb[0],
+      seedG - bodyRgb[1],
+      seedB - bodyRgb[2],
+    );
+
     let top = 0;
     let count = 0;
     stack[top += 1] = seed;
@@ -132,6 +184,29 @@ function labelStrokes(disc, bodyRgb) {
     let maxY = -1;
     const sumX = new Float64Array(size);
     const perRow = new Int32Array(size);
+
+    // One colour for the whole region, weighted toward its interior.
+    //
+    // A stroke used to be painted texel by texel out of the drawing, which
+    // carried the tablet's anti-aliasing onto the planet: every patch faded into
+    // the body over two or three texels. That was survivable while the edge was
+    // a soft twenty-two texel ramp with darkening painted over it. It is not
+    // survivable now - the bevel is a one-texel geometric wall, so a blurred
+    // colour edge sits visibly adrift of the hard shading edge beside it, and
+    // the reference look's flat poster-paint patches turn back into smudges.
+    //
+    // Weighting by distance from the body colour is what makes the average
+    // honest. A plain mean over the region drags toward the body, because the
+    // blended rim pixels are half body colour and a thin stroke is mostly rim.
+    // The seed pixel is no better: flood fill seeds in raster order, so it lands
+    // on the region's top edge, which is exactly the anti-aliased part.
+    let weightedR = 0;
+    let weightedG = 0;
+    let weightedB = 0;
+    let colourWeight = 0;
+    let plainR = 0;
+    let plainG = 0;
+    let plainB = 0;
 
     while (top > 0) {
       const point = stack[(top -= 1) + 1];
@@ -145,6 +220,25 @@ function labelStrokes(disc, bodyRgb) {
       sumX[y] += x;
       perRow[y] += 1;
 
+      const memberOffset = point * 4;
+      const memberR = data[memberOffset];
+      const memberG = data[memberOffset + 1];
+      const memberB = data[memberOffset + 2];
+      plainR += memberR;
+      plainG += memberG;
+      plainB += memberB;
+      const fromBody = Math.sqrt(
+        (memberR - bodyRgb[0]) ** 2 + (memberG - bodyRgb[1]) ** 2 + (memberB - bodyRgb[2]) ** 2,
+      );
+      // A fully blended rim pixel sits right on the paint threshold and so
+      // contributes nothing; a solid interior pixel contributes in proportion to
+      // how solid it is.
+      const weight = Math.max(0, fromBody - PAINT_MATCH_DISTANCE);
+      weightedR += memberR * weight;
+      weightedG += memberG * weight;
+      weightedB += memberB * weight;
+      colourWeight += weight;
+
       for (let dy = -1; dy <= 1; dy += 1) {
         const ny = y + dy;
         if (ny < 0 || ny >= size) continue;
@@ -154,14 +248,47 @@ function labelStrokes(disc, bodyRgb) {
           const neighbour = ny * size + nx;
           if (labels[neighbour] >= 0 || !isPaint(neighbour)) continue;
           const offset = neighbour * 4;
-          const spread = Math.max(
-            Math.abs(data[offset] - seedR),
-            Math.abs(data[offset + 1] - seedG),
-            Math.abs(data[offset + 2] - seedB),
-          );
-          if (spread > STROKE_COLOUR_TOLERANCE) continue;
+          const nr = data[offset];
+          const ng = data[offset + 1];
+          const nb = data[offset + 2];
+
+          let joins =
+            Math.max(Math.abs(nr - referenceR), Math.abs(ng - referenceG), Math.abs(nb - referenceB)) <=
+            STROKE_COLOUR_TOLERANCE;
+
+          // Vector from the body colour, which is the axis anti-aliasing slides
+          // along. Length is coverage; direction is which paint it is.
+          const nvr = nr - bodyRgb[0];
+          const nvg = ng - bodyRgb[1];
+          const nvb = nb - bodyRgb[2];
+          const neighbourLength = Math.sqrt(nvr * nvr + nvg * nvg + nvb * nvb);
+
+          if (!joins && neighbourLength > 1e-6 && referenceLength > 1e-6) {
+            const rvr = referenceR - bodyRgb[0];
+            const rvg = referenceG - bodyRgb[1];
+            const rvb = referenceB - bodyRgb[2];
+            const alignment = (nvr * rvr + nvg * rvg + nvb * rvb) / (neighbourLength * referenceLength);
+            const coverage = neighbourLength / referenceLength;
+            joins =
+              alignment >= FRINGE_RAY_COS &&
+              (coverage <= FRINGE_COVERAGE_BAND || coverage >= 1 / FRINGE_COVERAGE_BAND);
+          }
+          if (!joins) continue;
+
           labels[neighbour] = index;
           stack[top += 1] = neighbour;
+
+          // Flood fill seeds in raster order, so a region's first pixel is on
+          // its top edge - which for an anti-aliased stroke is the fringe, not
+          // the paint. Tracking the most saturated member seen keeps every
+          // later comparison against the colour the child actually chose rather
+          // than against a half-covered sample of it.
+          if (neighbourLength > referenceLength) {
+            referenceR = nr;
+            referenceG = ng;
+            referenceB = nb;
+            referenceLength = neighbourLength;
+          }
         }
       }
     }
@@ -181,9 +308,22 @@ function labelStrokes(disc, bodyRgb) {
       centreX[y] = perRow[y] ? sumX[y] / perRow[y] : (minX + maxX) / 2;
     }
 
+    // Falls back down a ladder rather than trusting one estimator: the weighted
+    // interior average, then the plain average if every pixel sat on the paint
+    // threshold, then the seed if the region somehow had no members at all.
+    const regionColour = colourWeight > 0
+      ? [
+          Math.round(weightedR / colourWeight),
+          Math.round(weightedG / colourWeight),
+          Math.round(weightedB / colourWeight),
+        ]
+      : count > 0
+        ? [Math.round(plainR / count), Math.round(plainG / count), Math.round(plainB / count)]
+        : [seedR, seedG, seedB];
+
     strokes.push({
       index,
-      colour: [seedR, seedG, seedB],
+      colour: regionColour,
       minX,
       maxX,
       minY,
@@ -193,7 +333,38 @@ function labelStrokes(disc, bodyRgb) {
     });
   }
 
-  return { labels, strokes };
+  // How solid each painted pixel is, as a fraction of its own region's colour.
+  // This is the tablet's anti-aliasing read as coverage rather than discarded:
+  // a rim pixel half blended into the body is half covered, and that is exactly
+  // what the relief pass needs to place a patch edge between texel centres.
+  const coverage = new Float32Array(total);
+  const solidLength = new Map();
+  for (const stroke of strokes) {
+    solidLength.set(
+      stroke.index,
+      Math.max(
+        1e-6,
+        Math.hypot(
+          stroke.colour[0] - bodyRgb[0],
+          stroke.colour[1] - bodyRgb[1],
+          stroke.colour[2] - bodyRgb[2],
+        ),
+      ),
+    );
+  }
+  for (let i = 0; i < total; i += 1) {
+    const label = labels[i];
+    if (label < 0) continue;
+    const offset = i * 4;
+    const fromBody = Math.hypot(
+      data[offset] - bodyRgb[0],
+      data[offset + 1] - bodyRgb[1],
+      data[offset + 2] - bodyRgb[2],
+    );
+    coverage[i] = Math.min(1, fromBody / solidLength.get(label));
+  }
+
+  return { labels, strokes, coverage };
 }
 
 /**
@@ -205,11 +376,14 @@ function labelStrokes(disc, bodyRgb) {
  * 200 of them going forwards, and the result is a line combed into vertical
  * stripes with the body colour showing between them.
  */
-function projectStrokes(disc, bodyRgb, labels, strokes) {
-  const { data, size } = disc;
+export function projectStrokes(disc, bodyRgb, labels, strokes, sourceCoverage = null) {
+  // The drawing's pixels are not read here any more, only its labelling - the
+  // colour of a texel is decided by which region owns it.
+  const { size } = disc;
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const colour = new Uint8ClampedArray(texels * 3);
   const owner = new Int32Array(texels).fill(-1);
+  const coverage = new Float32Array(texels);
 
   for (let i = 0; i < texels; i += 1) {
     colour[i * 3] = bodyRgb[0];
@@ -250,15 +424,20 @@ function projectStrokes(disc, bodyRgb, labels, strokes) {
         const source = y * size + x;
         if (labels[source] !== stroke.index) continue;
 
-        colour[texel * 3] = data[source * 4];
-        colour[texel * 3 + 1] = data[source * 4 + 1];
-        colour[texel * 3 + 2] = data[source * 4 + 2];
+        // The region's one colour, not the drawing pixel underneath. The pixel
+        // is what carried the tablet's anti-aliased fringe onto the planet; the
+        // region colour makes the patch flat right up to the bevel wall, which
+        // is where the reference look's hard colour boundaries come from.
+        colour[texel * 3] = stroke.colour[0];
+        colour[texel * 3 + 1] = stroke.colour[1];
+        colour[texel * 3 + 2] = stroke.colour[2];
         owner[texel] = stroke.index;
+        coverage[texel] = sourceCoverage ? sourceCoverage[source] : 1;
       }
     }
   }
 
-  return { colour, owner };
+  return { colour, owner, coverage };
 }
 
 /**
@@ -381,7 +560,7 @@ function fillPoles(colour, owner, disc, bodyRgb) {
  * was invisibly correct while every stroke ran the whole way round and wrong
  * the moment one had ends.
  */
-function strokeRelief(owner, strokes) {
+function strokeRelief(owner, strokes, coverage) {
   const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const tierOf = new Map();
   for (const stroke of strokes) {
@@ -393,65 +572,47 @@ function strokeRelief(owner, strokes) {
     tierOf.set(stroke.index, STROKE_HEIGHT_TIERS[key]);
   }
 
-  // Chamfer distance from unpainted texels inward. Longitude wraps, so the
-  // horizontal neighbours wrap with it and a stroke crossing the seam is not
-  // bevelled down the middle of its back. Latitude clamps instead: the row
-  // above the north pole is the pole, not empty space, and treating it as an
-  // edge dents and darkens the exact centre of the cap.
+  // Distance from the edge of a patch inward. Seeded sub-texel from coverage
+  // rather than from a binary in/out mask: a texel the paint only half fills has
+  // its edge half a texel away, not a whole one, and quantising that to whole
+  // texels is what turns a gently sloping band into a staircase once the bevel
+  // is real geometry. Shared with the geometry builder, which needs the
+  // identical field to put the wall in the identical place.
   const far = TEXTURE_WIDTH + TEXTURE_HEIGHT;
   const distance = new Float32Array(texels);
-  for (let i = 0; i < texels; i += 1) distance[i] = owner[i] >= 0 ? far : 0;
-
-  const relax = (v, u, dv, du) => {
-    const nv = v + dv;
-    if (nv < 0 || nv >= TEXTURE_HEIGHT) return;
-    const nu = (u + du + TEXTURE_WIDTH) % TEXTURE_WIDTH;
-    const candidate = distance[nv * TEXTURE_WIDTH + nu] + (dv && du ? 1.414 : 1);
-    const texel = v * TEXTURE_WIDTH + u;
-    if (candidate < distance[texel]) distance[texel] = candidate;
-  };
-
-  // Two sweeps each way; the second lets a distance that had to travel around
-  // the seam finish propagating.
-  for (let pass = 0; pass < 2; pass += 1) {
-    for (let v = 0; v < TEXTURE_HEIGHT; v += 1) {
-      for (let u = 0; u < TEXTURE_WIDTH; u += 1) {
-        relax(v, u, -1, 0);
-        relax(v, u, -1, -1);
-        relax(v, u, -1, 1);
-        relax(v, u, 0, -1);
-      }
+  for (let i = 0; i < texels; i += 1) {
+    if (owner[i] < 0) {
+      // Half a texel outside, not zero: the edge cannot be at an unpainted
+      // texel's own centre. See edgeSeedDistance.
+      distance[i] = edgeSeedDistance(0);
+      continue;
     }
-    for (let v = TEXTURE_HEIGHT - 1; v >= 0; v -= 1) {
-      for (let u = TEXTURE_WIDTH - 1; u >= 0; u -= 1) {
-        relax(v, u, 1, 0);
-        relax(v, u, 1, 1);
-        relax(v, u, 1, -1);
-        relax(v, u, 0, 1);
-      }
-    }
+    const covered = coverage ? coverage[i] : 1;
+    distance[i] = covered >= 0.999 ? far : edgeSeedDistance(covered);
   }
+  relaxDistanceField(distance, TEXTURE_WIDTH, TEXTURE_HEIGHT);
 
   const height = new Float32Array(texels);
-  const shade = new Float32Array(texels).fill(1);
   for (let i = 0; i < texels; i += 1) {
     if (owner[i] < 0) continue;
     const level = tierOf.get(owner[i]) ?? STROKE_HEIGHT_TIERS[0];
-    const t = Math.min(1, distance[i] / SHOULDER_TEXELS);
-    // Smoothstep, so the shoulder is round rather than a chamfer.
-    const eased = t * t * (3 - 2 * t);
-    height[i] = level * eased;
-    shade[i] = STROKE_EDGE_SHADE + (1 - STROKE_EDGE_SHADE) * eased;
+    height[i] = level * bevelProfile(distance[i], BEVEL_TEXELS);
   }
 
-  return { height, shade };
+  // No shade field any more. Edge darkening used to be multiplied into the
+  // albedo here, which is the wrong channel twice over: it dims the diffuse term
+  // while clearcoat and environment reflection carry on at full strength over
+  // the top, and it permanently muddies the flat colours the child chose. The
+  // crease is an aoMap now, and the shoulder gets its shading from its own
+  // normals instead of from a painted-on gradient.
+  return { height, distance };
 }
 
 function buildEquirectangularCanvas(disc, bodyRgb) {
-  const { labels, strokes } = labelStrokes(disc, bodyRgb);
-  const { colour, owner } = projectStrokes(disc, bodyRgb, labels, strokes);
+  const { labels, strokes, coverage: sourceCoverage } = labelStrokes(disc, bodyRgb);
+  const { colour, owner, coverage } = projectStrokes(disc, bodyRgb, labels, strokes, sourceCoverage);
   fillPoles(colour, owner, disc, bodyRgb);
-  const { height, shade } = strokeRelief(owner, strokes);
+  const { height, distance } = strokeRelief(owner, strokes, coverage);
 
   const target = document.createElement('canvas');
   target.width = TEXTURE_WIDTH;
@@ -459,108 +620,48 @@ function buildEquirectangularCanvas(disc, bodyRgb) {
   const context = target.getContext('2d', { alpha: false });
   if (!context) return null;
 
+  // Albedo is the child's colour and nothing else. Every bit of shading that
+  // used to be baked in here now comes from geometry and the aoMap, which is
+  // what lets the reference look's flat saturated patches actually read as flat
+  // and saturated instead of as a colour with a gradient painted over it.
   const painted = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
   for (let i = 0; i < TEXTURE_WIDTH * TEXTURE_HEIGHT; i += 1) {
-    const tone = shade[i];
-    painted.data[i * 4] = colour[i * 3] * tone;
-    painted.data[i * 4 + 1] = colour[i * 3 + 1] * tone;
-    painted.data[i * 4 + 2] = colour[i * 3 + 2] * tone;
+    painted.data[i * 4] = colour[i * 3];
+    painted.data[i * 4 + 1] = colour[i * 3 + 1];
+    painted.data[i * 4 + 2] = colour[i * 3 + 2];
     painted.data[i * 4 + 3] = 255;
   }
   context.putImageData(painted, 0, 0);
 
-  return { canvas: target, height, strokeCount: strokes.length };
+  return { canvas: target, height, owner, distance, strokeCount: strokes.length };
 }
 
 /**
- * Turn the per-stroke thickness into the maps the material reads.
+ * Turn the per-stroke thickness into the one map the material still reads.
  *
- * The roughness map comes off the same numbers: a raised pad is finished very
- * slightly smoother than the body, which is how a second coat behaves and keeps
- * the two readable in flat light where relief alone disappears.
+ * There is no height canvas here any more: the relief is in the vertices, so
+ * writing it into a displacementMap as well would raise every patch twice. What
+ * survives is roughness, because a raised pad is finished very slightly smoother
+ * than the body - how a second coat behaves - and that keeps the two readable in
+ * flat light, where relief alone disappears.
  */
-function buildPaintMaps(height) {
-  const make = (write) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = TEXTURE_WIDTH;
-    canvas.height = TEXTURE_HEIGHT;
-    const context = canvas.getContext('2d', { alpha: false });
-    if (!context) return null;
-    const image = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-    for (let i = 0; i < TEXTURE_WIDTH * TEXTURE_HEIGHT; i += 1) {
-      const value = write(height[i]);
-      image.data[i * 4] = value;
-      image.data[i * 4 + 1] = value;
-      image.data[i * 4 + 2] = value;
-      image.data[i * 4 + 3] = 255;
-    }
-    context.putImageData(image, 0, 0);
-    return canvas;
-  };
-
-  return {
-    height: make((relief) => BODY_HEIGHT + relief * (255 - BODY_HEIGHT)),
-    // Raised pads are noticeably smoother (toy plastic / second coat of paint).
-    roughness: make((relief) => 230 - relief * 95),
-  };
-}
-
-/**
- * A small studio-in-a-can: one soft gradient, prefiltered into an environment
- * map and shared by every planet.
- *
- * The scene's own rig is two dim ambient lights plus a point light at the sun,
- * which is physically honest and makes a matte ball read as a dark disc with a
- * bright edge - space, not a toy on a shelf. Image-based light is what supplies
- * the gentle wrap-around that a painted object needs to look solid, and one
- * prefiltered texture costs a fraction of the fill lights it replaces.
- */
-let sharedEnvironment = null;
-
-function studioEnvironment(renderer) {
-  if (sharedEnvironment || !renderer) return sharedEnvironment;
-
-  const size = 64;
+function buildRoughnessCanvas(height) {
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = TEXTURE_WIDTH;
+  canvas.height = TEXTURE_HEIGHT;
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) return null;
-  // Cool sky over a warm bounce, the way daylight falls on a table.
-  const gradient = context.createLinearGradient(0, 0, 0, size);
-  gradient.addColorStop(0, '#dfe9ff');
-  gradient.addColorStop(0.55, '#9fb0cc');
-  gradient.addColorStop(1, '#6b5f52');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, size, size);
-
-  const source = new THREE.CanvasTexture(canvas);
-  source.mapping = THREE.EquirectangularReflectionMapping;
-  source.colorSpace = THREE.SRGBColorSpace;
-  source.needsUpdate = true;
-
-  // Prefiltering renders into its own targets, so it moves the renderer's
-  // target, viewport and scissor out from under whatever set them. This
-  // projector scales its internal resolution, so those are not defaults to be
-  // restored by luck - leaving them changed means every later frame draws into
-  // the wrong rectangle.
-  const previousTarget = renderer.getRenderTarget();
-  const previousViewport = renderer.getViewport(new THREE.Vector4());
-  const previousScissor = renderer.getScissor(new THREE.Vector4());
-  const previousScissorTest = renderer.getScissorTest();
-  try {
-    const generator = new THREE.PMREMGenerator(renderer);
-    generator.compileEquirectangularShader();
-    sharedEnvironment = generator.fromEquirectangular(source).texture;
-    generator.dispose();
-  } finally {
-    renderer.setRenderTarget(previousTarget);
-    renderer.setViewport(previousViewport);
-    renderer.setScissor(previousScissor);
-    renderer.setScissorTest(previousScissorTest);
-    source.dispose();
+  const image = context.createImageData(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  for (let i = 0; i < TEXTURE_WIDTH * TEXTURE_HEIGHT; i += 1) {
+    // Raised pads are noticeably smoother (toy plastic / second coat of paint).
+    const value = 230 - height[i] * 95;
+    image.data[i * 4] = value;
+    image.data[i * 4 + 1] = value;
+    image.data[i * 4 + 2] = value;
+    image.data[i * 4 + 3] = 255;
   }
-  return sharedEnvironment;
+  context.putImageData(image, 0, 0);
+  return canvas;
 }
 
 function hideSculptedGeometry(entity) {
@@ -598,7 +699,13 @@ function applySoftToySurface(entity, texture, renderer) {
   const bodyRgb = bodyColourOf(entity, disc);
   const built = buildEquirectangularCanvas(disc, bodyRgb);
   if (!built) return false;
-  const maps = buildPaintMaps(built.height);
+  const roughnessCanvas = buildRoughnessCanvas(built.height);
+  const aoCanvas = buildCreaseAoCanvas({
+    owner: built.owner,
+    distanceIn: built.distance,
+    width: TEXTURE_WIDTH,
+    height: TEXTURE_HEIGHT,
+  });
 
   const map = new THREE.CanvasTexture(built.canvas);
   map.colorSpace = THREE.SRGBColorSpace;
@@ -620,38 +727,45 @@ function applySoftToySurface(entity, texture, renderer) {
     roughness: 0.38,
     metalness: 0.0,
     clearcoat: 0.62,
-    clearcoatRoughness: 0.28,
+    clearcoatRoughness: 0.45,
     // Soft studio wrap rather than a pinpoint glint.
     envMapIntensity: 0.85,
   });
   const environment = studioEnvironment(renderer);
   if (environment) material.envMap = environment;
-  if (maps.height) {
-    const height = new THREE.CanvasTexture(maps.height);
-    height.wrapS = THREE.RepeatWrapping;
-    height.needsUpdate = true;
 
-    // Real geometry, not only shading. The sculpted pipeline this replaced did
-    // emboss the child's marks, and losing that lost the moulded look the
-    // reference images have - a bump map alone leaves the silhouette perfectly
-    // round, so paint reads as printed on rather than laid on.
-    material.displacementMap = height;
-    material.displacementScale = DISPLACEMENT_SCALE;
-    // The map stores body at BODY_HEIGHT/255 rather than 0, so cancel that out:
-    // without the bias the whole planet inflates and the paint does not stand
-    // proud of anything.
-    material.displacementBias = -(BODY_HEIGHT / 255) * DISPLACEMENT_SCALE;
+  // No displacementMap and no bumpMap. Both are gone on purpose: the relief is
+  // real geometry now, so a displacementMap would raise every patch a second
+  // time, and a bumpMap reading the same field would fight normals that are
+  // already correct. What they were compensating for - three.js not recomputing
+  // normals after displacement, which left every raised patch shaded as if it
+  // were still a smooth ball - is the thing the geometry build fixes.
+  const reliefGeometry = buildBeveledReliefGeometry({
+    heightField: built.height,
+    fieldWidth: TEXTURE_WIDTH,
+    fieldHeight: TEXTURE_HEIGHT,
+    radius: bodyRadiusOf(entity),
+    displacement: RELIEF_DISPLACEMENT,
+    shapeGeometry: bodyShaperFor(entity),
+  });
+  if (reliefGeometry) attachReliefGeometry(entity, reliefGeometry);
 
-    // Bump on the same mask keeps the stroke edge crisp between the sphere's
-    // latitude rows, which are 2.5 degrees apart and would otherwise stair-step.
-    material.bumpMap = height;
-    material.bumpScale = BUMP_SCALE;
-  }
-  if (maps.roughness) {
-    const roughness = new THREE.CanvasTexture(maps.roughness);
+  if (roughnessCanvas) {
+    const roughness = new THREE.CanvasTexture(roughnessCanvas);
     roughness.wrapS = THREE.RepeatWrapping;
     roughness.needsUpdate = true;
     material.roughnessMap = roughness;
+  }
+  if (aoCanvas) {
+    const occlusion = new THREE.CanvasTexture(aoCanvas);
+    occlusion.wrapS = THREE.RepeatWrapping;
+    // aoMap defaults to the second UV set. The relief map shares the body's
+    // layout exactly, so send it back to uv - the geometry builder also
+    // publishes uv1 as the same buffer, so either resolution path works.
+    occlusion.channel = 0;
+    occlusion.needsUpdate = true;
+    material.aoMap = occlusion;
+    material.aoMapIntensity = 1;
   }
 
   hideSculptedGeometry(entity);

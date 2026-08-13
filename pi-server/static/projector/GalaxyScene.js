@@ -60,8 +60,25 @@ export class GalaxyScene {
       window.devicePixelRatio,
     );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.46;
+    // Khronos PBR Neutral rather than ACES Filmic. ACES is a film-emulation
+    // curve: it desaturates on its way to white and drags hue with it, which is
+    // right for photographic footage and wrong for a wall of flat saturated
+    // poster paint. Measured across the tablet's own palette it was costing
+    // about 16/255 of chroma per swatch and pulling every hue roughly 1.4
+    // degrees off the colour the child actually picked - a blue arriving as a
+    // pale grey-blue, a yellow arriving nearly white.
+    //
+    // The exposure is not a re-guess. ACES scales by exposure/0.6 internally
+    // before its curve, so a like-for-like swap needs a *higher* number, not a
+    // lower one, and eyeballing it would have gone the wrong way. 1.91 is the
+    // value that holds mid-grey (168 -> 164 of 255) and mean picture brightness
+    // (136.1 -> 136.2) across the palette and a nine-stop irradiance sweep.
+    // scripts/js/derive_tone_exposure.mjs solves it from the two curves exactly
+    // as vendored - `make check-render-math` re-derives it.
+    // Highlight clipping drops from 9.3% of samples to none, because Neutral
+    // asymptotes toward white where ACES saturates hard against it.
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.91;
     container.appendChild(this.renderer.domElement);
 
     this.addLights();
