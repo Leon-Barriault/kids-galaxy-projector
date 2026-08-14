@@ -77,7 +77,7 @@ def snapshot_progress(page, planet_ids: list[str]) -> dict:
           return {
             entities: ids.filter((id) => kg?.kidPlanets?.has(id)).length,
             ready: ids.filter((id) => Boolean(
-              kg?.kidPlanets?.get(id)?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork
+              kg?.kidPlanets?.get(id)?.mesh?.geometry?.userData?.kidsGalaxyBeveledRelief
             )).length,
             published: ids.filter((id) => Boolean(
               kg?.kidPlanets?.get(id)?.userData?.kidsGalaxyWebglSnapshotPublished
@@ -87,6 +87,44 @@ def snapshot_progress(page, planet_ids: list[str]) -> dict:
         }
         """,
         planet_ids,
+    )
+
+
+def drain_snapshot_queue(page, timeout_ms: int = 120_000) -> bool:
+    """Wait for schedule() deferrals and then the publisher's real serial queue."""
+    return page.evaluate(
+        """
+        async (timeoutMs) => {
+          const publisher = window.kidsGalaxy?.engine?.snapshotPublisher;
+          if (!publisher) return false;
+          const deadline = performance.now() + timeoutMs;
+
+          // schedule() deliberately waits two animation frames, then a 60 ms
+          // timer, before enqueueing capture work. Once every entity has its
+          // beveled geometry, all applyTexture() callbacks have completed and
+          // schedule() has been called. Give those deferrals a chance to land.
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => window.setTimeout(resolve, 100));
+            });
+          });
+
+          // A timer deletes itself from pending and synchronously appends its
+          // capture to captureQueue. Therefore pending === 0 means the queue
+          // promise below includes every scheduled planet.
+          while (publisher.pending.size > 0 && performance.now() < deadline) {
+            await new Promise((resolve) => window.setTimeout(resolve, 25));
+          }
+          if (publisher.pending.size > 0) return false;
+
+          const remaining = Math.max(0, deadline - performance.now());
+          return Promise.race([
+            publisher.captureQueue.then(() => true),
+            new Promise((resolve) => window.setTimeout(() => resolve(false), remaining)),
+          ]);
+        }
+        """,
+        timeout_ms,
     )
 
 
@@ -117,16 +155,15 @@ def main() -> int:
         page.goto(f"{server.base}/", wait_until="load")
 
         # PlanetLoader adds an entity before its manifest and texture are ready.
-        # Starting the snapshot deadline at page load therefore charges heavy
-        # sculpted-geometry construction against publication time on SwiftShader.
-        # Wait for the same final-render marker used by the export acceptance test,
-        # then time the snapshot queue itself.
+        # The common final-render marker for these manifest fixtures is beveled
+        # relief on the actual sphere geometry; the material-only
+        # kidsGalaxyTrueSculptedArtwork marker belongs to a narrower renderer path.
         ready = " && ".join(
             f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
-            f"?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)"
+            f"?.mesh?.geometry?.userData?.kidsGalaxyBeveledRelief)"
             for planet_id in planet_ids
         )
-        wait_for(page, f"() => {ready}", 60_000)
+        wait_for(page, f"() => {ready}", 90_000)
         progress = snapshot_progress(page, planet_ids)
         check(
             progress["ready"] == PLANET_COUNT,
@@ -135,24 +172,25 @@ def main() -> int:
             failures,
         )
 
-        published = " && ".join(
-            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
-            f"?.userData?.kidsGalaxyWebglSnapshotPublished)"
-            for planet_id in planet_ids
-        )
-        wait_for(page, f"() => {published}", 60_000)
+        queue_drained = drain_snapshot_queue(page)
         progress = snapshot_progress(page, planet_ids)
+        check(
+            queue_drained,
+            f"snapshot queue drains ({progress['published']}/{PLANET_COUNT} published, "
+            f"{progress['pendingTimers']} timers pending)",
+            failures,
+        )
         check(
             progress["published"] == PLANET_COUNT,
             f"all {PLANET_COUNT} planets published a snapshot "
-            f"({progress['published']}/{PLANET_COUNT}, {progress['pendingTimers']} timers pending)",
+            f"({progress['published']}/{PLANET_COUNT})",
             failures,
         )
 
         first = render_state(page)
         check(first["screenTarget"], "renderer draws to the canvas after capture", failures)
-        check(first["canvasConnected"], "renderer canvas remains attached after concurrent captures", failures)
-        check(not first["contextLost"], "WebGL context remains healthy after concurrent captures", failures)
+        check(first["canvasConnected"], "renderer canvas remains attached after queued captures", failures)
+        check(not first["contextLost"], "WebGL context remains healthy after queued captures", failures)
 
         wait_for(
             page,
@@ -169,7 +207,7 @@ def main() -> int:
         check(second["canvasConnected"], "renderer canvas stays attached while frames advance", failures)
         check(not second["contextLost"], "WebGL context stays healthy while frames advance", failures)
 
-        check(errors == [], f"no browser errors across concurrent captures ({errors[:3]})", failures)
+        check(errors == [], f"no browser errors across queued captures ({errors[:3]})", failures)
         browser.close()
 
     if failures:
