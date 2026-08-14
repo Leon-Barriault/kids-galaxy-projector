@@ -11,9 +11,10 @@ renderer ended up bound to an offscreen - sometimes disposed - target, and
 every later frame drew into it. The scene graph stayed perfect, the animation
 loop kept running, and nothing was logged. Only the picture stopped.
 
-The publisher now serialises captures, but this check still loads a batch large
-enough to exercise a full snapshot queue and then verifies the renderer contract
-directly:
+The publisher now serialises captures, so this regression check does not need to
+stress an overlapping-capture race anymore. It loads a bounded multi-planet
+batch, drains the real serial snapshot queue, and then verifies the renderer
+contract directly:
 
   1. Every planet finishes its renderer setup before snapshot timing begins.
   2. Every queued planet publishes its WebGL snapshot.
@@ -41,7 +42,11 @@ from playwright.sync_api import sync_playwright
 
 from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
 
-PLANET_COUNT = 8
+# Four full 700x700 SwiftShader captures exercise ordering/restoration across a
+# real serial queue while keeping this focused liveness guard within a stable CI
+# budget. The separate export acceptance test covers the larger gallery/export
+# workload; this test's purpose is specifically post-queue renderer health.
+PLANET_COUNT = 4
 BODY_COLOURS = ("#2196F3", "#E91E63", "#4CAF50", "#FF9800")
 
 
@@ -99,19 +104,12 @@ def drain_snapshot_queue(page, timeout_ms: int = 120_000) -> bool:
           if (!publisher) return false;
           const deadline = performance.now() + timeoutMs;
 
-          // schedule() deliberately waits two animation frames, then a 60 ms
-          // timer, before enqueueing capture work. Once every entity has its
-          // beveled geometry, all applyTexture() callbacks have completed and
-          // schedule() has been called. Give those deferrals a chance to land.
           await new Promise((resolve) => {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => window.setTimeout(resolve, 100));
             });
           });
 
-          // A timer deletes itself from pending and synchronously appends its
-          // capture to captureQueue. Therefore pending === 0 means the queue
-          // promise below includes every scheduled planet.
           while (publisher.pending.size > 0 && performance.now() < deadline) {
             await new Promise((resolve) => window.setTimeout(resolve, 25));
           }
@@ -154,10 +152,6 @@ def main() -> int:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(f"{server.base}/", wait_until="load")
 
-        # PlanetLoader adds an entity before its manifest and texture are ready.
-        # The common final-render marker for these manifest fixtures is beveled
-        # relief on the actual sphere geometry; the material-only
-        # kidsGalaxyTrueSculptedArtwork marker belongs to a narrower renderer path.
         ready = " && ".join(
             f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
             f"?.mesh?.geometry?.userData?.kidsGalaxyBeveledRelief)"
