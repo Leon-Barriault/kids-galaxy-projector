@@ -53,6 +53,10 @@ function highFidelityCraterDefinitions() {
     let radius = 0.105 + random() * 0.15;
     if (index === 0) radius = 0.275 + random() * 0.055;
     else if (index === 1) radius = 0.215 + random() * 0.055;
+    // Preserve an obvious scale hierarchy for every deterministic planet id.
+    // Without a guaranteed small crater, some seeds made every remaining crater
+    // medium-sized and the visual/acceptance contract became probabilistic.
+    else if (index === 2) radius = 0.105 + random() * 0.025;
 
     const depth = 0.095 + random() * 0.09 + radius * 0.08;
     const aspect = 0.78 + random() * 0.44;

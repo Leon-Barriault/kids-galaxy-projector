@@ -11,18 +11,26 @@ renderer ended up bound to an offscreen - sometimes disposed - target, and
 every later frame drew into it. The scene graph stayed perfect, the animation
 loop kept running, and nothing was logged. Only the picture stopped.
 
-That is why this check is deliberately not a scene-state assertion. It uploads
-enough planets to force captures to overlap, then looks at two things that a
-state assertion cannot see:
+The publisher now serialises captures, so this regression check does not need to
+stress an overlapping-capture race anymore. It loads a bounded multi-planet
+batch, drains the real serial snapshot queue, and then verifies the renderer
+contract directly:
 
-  1. `renderer.getRenderTarget()` is null once the dust settles - the invariant
+  1. Every planet finishes its renderer setup before snapshot timing begins.
+  2. Every queued planet publishes its WebGL snapshot.
+  3. `renderer.getRenderTarget()` is null once the dust settles - the invariant
      that actually broke.
-  2. Successive screenshots of the page differ - the projector is still putting
-     new frames on the glass.
+  4. The renderer canvas is still attached and the WebGL context is healthy.
+  5. Three.js' render-frame counter advances while the renderer remains on the
+     default framebuffer.
 
-Screenshots rather than reading the WebGL canvas directly: the renderer runs
-without preserveDrawingBuffer, so drawImage() off it outside the frame returns
-blank and would pass this test on a frozen projector.
+A browser screenshot is deliberately not part of this check: the compositor
+path is unreliable under CI SwiftShader. But the frame counter alone cannot
+replace it. `renderer.info.render.frame` is incremented inside render() before
+the draw, so it advances identically whether the destination is the canvas or an
+off-screen texture - which is precisely the freeze being guarded. So the counter
+proves the loop is alive, and frames_reaching_the_screen() proves the draws are
+landing on the glass, by counting render() calls by destination.
 """
 
 from __future__ import annotations
@@ -34,20 +42,22 @@ from _projector_deps import require as _require_projector_dependencies
 _require_projector_dependencies()
 
 import sys
-import time
-from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
+from check_projector import (
+    Server,
+    chromium_executable,
+    frames_reaching_the_screen,
+    kid_style_png_bytes,
+    wait_for,
+)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ARTIFACTS = REPO_ROOT / "artifacts"
-
-# Enough planets that their texture loads land inside the same 60 ms schedule()
-# window and their captures genuinely overlap. Two was not enough to reproduce
-# the original freeze by hand; a full gallery always did.
-PLANET_COUNT = 8
+# Four full 700x700 SwiftShader captures exercise ordering/restoration across a
+# real serial queue while keeping this focused liveness guard within a stable CI
+# budget. The separate export acceptance test covers the larger gallery/export
+# workload; this test's purpose is specifically post-queue renderer health.
+PLANET_COUNT = 4
 BODY_COLOURS = ("#2196F3", "#E91E63", "#4CAF50", "#FF9800")
 
 
@@ -57,20 +67,68 @@ def check(condition: bool, description: str, failures: list[str]) -> None:
         failures.append(description)
 
 
-def frame_signature(page) -> bytes:
-    """A screenshot of the live canvas, as the projector's audience sees it."""
-    return page.locator("canvas").first.screenshot()
+def render_state(page) -> dict:
+    """Return renderer signals that distinguish a live canvas from the freeze."""
+    return page.evaluate(
+        """
+        () => {
+          const renderer = window.kidsGalaxy.renderer;
+          return {
+            screenTarget: renderer.getRenderTarget() === null,
+            renderFrame: renderer.info.render.frame,
+            canvasConnected: renderer.domElement?.isConnected === true,
+            contextLost: renderer.getContext().isContextLost(),
+          };
+        }
+        """
+    )
 
 
-def differing_bytes(first: bytes, second: bytes) -> int:
-    if len(first) != len(second):
-        return max(len(first), len(second))
-    return sum(1 for a, b in zip(first, second) if a != b)
+def snapshot_progress(page, planet_ids: list[str]) -> dict:
+    """Report lifecycle progress so a CI timeout says what is actually slow."""
+    return page.evaluate(
+        """
+        (ids) => {
+          const kg = window.kidsGalaxy;
+          return {
+            entities: ids.filter((id) => kg?.kidPlanets?.has(id)).length,
+            ready: ids.filter((id) => Boolean(
+              kg?.kidPlanets?.get(id)?.mesh?.geometry?.userData?.kidsGalaxyBeveledRelief
+            )).length,
+            published: ids.filter((id) => Boolean(
+              kg?.kidPlanets?.get(id)?.userData?.kidsGalaxyWebglSnapshotPublished
+            )).length,
+            pendingTimers: kg?.engine?.snapshotPublisher?.pending?.size ?? null,
+          };
+        }
+        """,
+        planet_ids,
+    )
+
+
+def drain_snapshot_queue(page, timeout_ms: int = 120_000) -> bool:
+    """Wait on the publisher's own idle contract.
+
+    This used to reach into `publisher.pending.size` and `publisher.captureQueue`
+    directly. Both are internals: the deferral is two animation frames plus a
+    debounce, and the queueing is a promise chain, and a test that encodes both
+    quietly becomes wrong the moment either is reworked. whenIdle() is the
+    supported answer to the same question.
+    """
+    return page.evaluate(
+        """
+        async (timeoutMs) => {
+          const publisher = window.kidsGalaxy?.engine?.snapshotPublisher;
+          if (!publisher || typeof publisher.whenIdle !== 'function') return false;
+          return publisher.whenIdle(timeoutMs);
+        }
+        """,
+        timeout_ms,
+    )
 
 
 def main() -> int:
     failures: list[str] = []
-    ARTIFACTS.mkdir(exist_ok=True)
 
     with Server() as server, sync_playwright() as playwright:
         planet_ids = [
@@ -95,35 +153,67 @@ def main() -> int:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(f"{server.base}/", wait_until="load")
 
-        published = " && ".join(
+        ready = " && ".join(
             f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
-            f"?.userData?.kidsGalaxyWebglSnapshotPublished)"
+            f"?.mesh?.geometry?.userData?.kidsGalaxyBeveledRelief)"
             for planet_id in planet_ids
         )
-        wait_for(page, f"() => {published}", 40_000)
-        settled = page.evaluate(f"() => {published}")
-        check(settled, f"all {PLANET_COUNT} planets published a snapshot", failures)
+        wait_for(page, f"() => {ready}", 90_000)
+        progress = snapshot_progress(page, planet_ids)
+        check(
+            progress["ready"] == PLANET_COUNT,
+            f"all {PLANET_COUNT} planets finished renderer setup "
+            f"({progress['ready']}/{PLANET_COUNT} ready, {progress['entities']} present)",
+            failures,
+        )
 
-        # The invariant. A snapshot that finished tidily leaves the renderer
-        # drawing to the canvas; anything else means a capture kept the target.
-        bound = page.evaluate("() => window.kidsGalaxy.renderer.getRenderTarget()")
-        check(bound is None, f"renderer draws to the canvas after capture (got {bound!r})", failures)
+        queue_drained = drain_snapshot_queue(page)
+        progress = snapshot_progress(page, planet_ids)
+        check(
+            queue_drained,
+            f"snapshot queue drains ({progress['published']}/{PLANET_COUNT} published, "
+            f"{progress['pendingTimers']} timers pending)",
+            failures,
+        )
+        check(
+            progress["published"] == PLANET_COUNT,
+            f"all {PLANET_COUNT} planets published a snapshot "
+            f"({progress['published']}/{PLANET_COUNT})",
+            failures,
+        )
 
-        # And the symptom. Two frames a good interval apart must differ: the
-        # star field rotates and the sun pulses every frame, so a live projector
-        # cannot produce two identical screenshots here.
-        first = frame_signature(page)
-        time.sleep(1.2)
-        second = frame_signature(page)
-        moved = differing_bytes(first, second)
-        check(moved > 0, "projector is still drawing new frames after publishing", failures)
-        (ARTIFACTS / "freeze-guard-first.png").write_bytes(first)
-        (ARTIFACTS / "freeze-guard-second.png").write_bytes(second)
+        first = render_state(page)
+        check(first["screenTarget"], "renderer draws to the canvas after capture", failures)
+        check(first["canvasConnected"], "renderer canvas remains attached after queued captures", failures)
+        check(not first["contextLost"], "WebGL context remains healthy after queued captures", failures)
 
-        # A capture that leaves the target bound is invisible in the console,
-        # which is exactly why this file exists - but a genuine exception during
-        # one is worth failing on too.
-        check(errors == [], f"no browser errors across concurrent captures ({errors[:3]})", failures)
+        wait_for(
+            page,
+            f"() => window.kidsGalaxy.renderer.info.render.frame > {first['renderFrame']}",
+            15_000,
+        )
+        second = render_state(page)
+        check(
+            second["renderFrame"] > first["renderFrame"],
+            "projector keeps submitting frames after publishing",
+            failures,
+        )
+        check(second["screenTarget"], "later frames still target the visible framebuffer", failures)
+
+        # The assertion the screenshot used to make. A projector that renders
+        # every frame into an off-screen target and restores it afterwards
+        # satisfies every check above while showing a still picture.
+        destinations = frames_reaching_the_screen(page)
+        check(
+            destinations["toScreen"] > 0,
+            "frames are drawn to the screen, not only to off-screen targets "
+            f"({destinations['toScreen']} to screen, {destinations['toTarget']} to targets)",
+            failures,
+        )
+        check(second["canvasConnected"], "renderer canvas stays attached while frames advance", failures)
+        check(not second["contextLost"], "WebGL context stays healthy while frames advance", failures)
+
+        check(errors == [], f"no browser errors across queued captures ({errors[:3]})", failures)
         browser.close()
 
     if failures:
