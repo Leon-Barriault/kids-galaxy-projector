@@ -11,13 +11,16 @@ renderer ended up bound to an offscreen - sometimes disposed - target, and
 every later frame drew into it. The scene graph stayed perfect, the animation
 loop kept running, and nothing was logged. Only the picture stopped.
 
-The check therefore exercises enough simultaneous snapshot publication to
-reproduce the original race, then verifies the renderer contract directly:
+The publisher now serialises captures, but this check still loads a batch large
+enough to exercise a full snapshot queue and then verifies the renderer contract
+directly:
 
-  1. `renderer.getRenderTarget()` is null once the dust settles - the invariant
+  1. Every planet finishes its renderer setup before snapshot timing begins.
+  2. Every queued planet publishes its WebGL snapshot.
+  3. `renderer.getRenderTarget()` is null once the dust settles - the invariant
      that actually broke.
-  2. The renderer canvas is still attached and the WebGL context is healthy.
-  3. Three.js' render-frame counter advances while the renderer remains on the
+  4. The renderer canvas is still attached and the WebGL context is healthy.
+  5. Three.js' render-frame counter advances while the renderer remains on the
      default framebuffer.
 
 A browser screenshot is deliberately not part of this check. Playwright waits
@@ -65,6 +68,28 @@ def render_state(page) -> dict:
     )
 
 
+def snapshot_progress(page, planet_ids: list[str]) -> dict:
+    """Report lifecycle progress so a CI timeout says what is actually slow."""
+    return page.evaluate(
+        """
+        (ids) => {
+          const kg = window.kidsGalaxy;
+          return {
+            entities: ids.filter((id) => kg?.kidPlanets?.has(id)).length,
+            ready: ids.filter((id) => Boolean(
+              kg?.kidPlanets?.get(id)?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork
+            )).length,
+            published: ids.filter((id) => Boolean(
+              kg?.kidPlanets?.get(id)?.userData?.kidsGalaxyWebglSnapshotPublished
+            )).length,
+            pendingTimers: kg?.engine?.snapshotPublisher?.pending?.size ?? null,
+          };
+        }
+        """,
+        planet_ids,
+    )
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -91,14 +116,38 @@ def main() -> int:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(f"{server.base}/", wait_until="load")
 
+        # PlanetLoader adds an entity before its manifest and texture are ready.
+        # Starting the snapshot deadline at page load therefore charges heavy
+        # sculpted-geometry construction against publication time on SwiftShader.
+        # Wait for the same final-render marker used by the export acceptance test,
+        # then time the snapshot queue itself.
+        ready = " && ".join(
+            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
+            f"?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)"
+            for planet_id in planet_ids
+        )
+        wait_for(page, f"() => {ready}", 60_000)
+        progress = snapshot_progress(page, planet_ids)
+        check(
+            progress["ready"] == PLANET_COUNT,
+            f"all {PLANET_COUNT} planets finished renderer setup "
+            f"({progress['ready']}/{PLANET_COUNT} ready, {progress['entities']} present)",
+            failures,
+        )
+
         published = " && ".join(
             f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')"
             f"?.userData?.kidsGalaxyWebglSnapshotPublished)"
             for planet_id in planet_ids
         )
-        wait_for(page, f"() => {published}", 40_000)
-        settled = page.evaluate(f"() => {published}")
-        check(settled, f"all {PLANET_COUNT} planets published a snapshot", failures)
+        wait_for(page, f"() => {published}", 60_000)
+        progress = snapshot_progress(page, planet_ids)
+        check(
+            progress["published"] == PLANET_COUNT,
+            f"all {PLANET_COUNT} planets published a snapshot "
+            f"({progress['published']}/{PLANET_COUNT}, {progress['pendingTimers']} timers pending)",
+            failures,
+        )
 
         first = render_state(page)
         check(first["screenTarget"], "renderer draws to the canvas after capture", failures)
