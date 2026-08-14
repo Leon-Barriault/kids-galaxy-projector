@@ -69,6 +69,38 @@ export class ProjectorSnapshotPublisher {
     return run;
   }
 
+  /**
+   * Resolve once nothing is scheduled and the capture queue has drained.
+   *
+   * Publishing is deferred twice - two animation frames, then a 60ms debounce -
+   * before it even joins the serial queue, so "has every snapshot finished" is
+   * not answerable from outside without knowing both halves. Exposing it here
+   * means callers do not have to reach into `pending` and `captureQueue`, which
+   * are implementation details that would silently change meaning if the
+   * deferral or the queueing were ever reworked.
+   */
+  async whenIdle(timeoutMs = 120_000) {
+    const deadline = performance.now() + timeoutMs;
+
+    // The schedule() deferrals: two animation frames plus the debounce.
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.setTimeout(resolve, 100));
+      });
+    });
+
+    while (this.pending.size > 0 && performance.now() < deadline) {
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+    }
+    if (this.pending.size > 0) return false;
+
+    const remaining = Math.max(0, deadline - performance.now());
+    return Promise.race([
+      this.captureQueue.then(() => true),
+      new Promise((resolve) => window.setTimeout(() => resolve(false), remaining)),
+    ]);
+  }
+
   async captureAndPublish(entity) {
     if (entity.disposed) return;
     const blob = await this.capture(entity);

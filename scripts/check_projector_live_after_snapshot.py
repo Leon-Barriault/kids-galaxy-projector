@@ -24,14 +24,19 @@ contract directly:
   5. Three.js' render-frame counter advances while the renderer remains on the
      default framebuffer.
 
-A browser screenshot is deliberately not part of this check. Playwright waits
-for an animated canvas to become stable before an element screenshot, and the
-page screenshot/compositor path is also unreliable under CI SwiftShader. The
-renderer frame counter measures submitted renders without imposing either wait.
+A browser screenshot is deliberately not part of this check: the compositor
+path is unreliable under CI SwiftShader. But the frame counter alone cannot
+replace it. `renderer.info.render.frame` is incremented inside render() before
+the draw, so it advances identically whether the destination is the canvas or an
+off-screen texture - which is precisely the freeze being guarded. So the counter
+proves the loop is alive, and frames_reaching_the_screen() proves the draws are
+landing on the glass, by counting render() calls by destination.
 """
 
 from __future__ import annotations
 
+# Checked before the third-party imports below, so a missing Playwright or
+# Pillow reports one install command instead of a bare ModuleNotFoundError.
 from _projector_deps import require as _require_projector_dependencies
 
 _require_projector_dependencies()
@@ -40,7 +45,13 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
+from check_projector import (
+    Server,
+    chromium_executable,
+    frames_reaching_the_screen,
+    kid_style_png_bytes,
+    wait_for,
+)
 
 # Four full 700x700 SwiftShader captures exercise ordering/restoration across a
 # real serial queue while keeping this focused liveness guard within a stable CI
@@ -96,30 +107,20 @@ def snapshot_progress(page, planet_ids: list[str]) -> dict:
 
 
 def drain_snapshot_queue(page, timeout_ms: int = 120_000) -> bool:
-    """Wait for schedule() deferrals and then the publisher's real serial queue."""
+    """Wait on the publisher's own idle contract.
+
+    This used to reach into `publisher.pending.size` and `publisher.captureQueue`
+    directly. Both are internals: the deferral is two animation frames plus a
+    debounce, and the queueing is a promise chain, and a test that encodes both
+    quietly becomes wrong the moment either is reworked. whenIdle() is the
+    supported answer to the same question.
+    """
     return page.evaluate(
         """
         async (timeoutMs) => {
           const publisher = window.kidsGalaxy?.engine?.snapshotPublisher;
-          if (!publisher) return false;
-          const deadline = performance.now() + timeoutMs;
-
-          await new Promise((resolve) => {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => window.setTimeout(resolve, 100));
-            });
-          });
-
-          while (publisher.pending.size > 0 && performance.now() < deadline) {
-            await new Promise((resolve) => window.setTimeout(resolve, 25));
-          }
-          if (publisher.pending.size > 0) return false;
-
-          const remaining = Math.max(0, deadline - performance.now());
-          return Promise.race([
-            publisher.captureQueue.then(() => true),
-            new Promise((resolve) => window.setTimeout(() => resolve(false), remaining)),
-          ]);
+          if (!publisher || typeof publisher.whenIdle !== 'function') return false;
+          return publisher.whenIdle(timeoutMs);
         }
         """,
         timeout_ms,
@@ -198,6 +199,17 @@ def main() -> int:
             failures,
         )
         check(second["screenTarget"], "later frames still target the visible framebuffer", failures)
+
+        # The assertion the screenshot used to make. A projector that renders
+        # every frame into an off-screen target and restores it afterwards
+        # satisfies every check above while showing a still picture.
+        destinations = frames_reaching_the_screen(page)
+        check(
+            destinations["toScreen"] > 0,
+            "frames are drawn to the screen, not only to off-screen targets "
+            f"({destinations['toScreen']} to screen, {destinations['toTarget']} to targets)",
+            failures,
+        )
         check(second["canvasConnected"], "renderer canvas stays attached while frames advance", failures)
         check(not second["contextLost"], "WebGL context stays healthy while frames advance", failures)
 

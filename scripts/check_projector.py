@@ -246,6 +246,56 @@ def wait_for(page, expression: str, timeout_ms: int = 8000) -> None:
         pass
 
 
+def frames_reaching_the_screen(page, frames: int = 20) -> dict:
+    """Count render() calls by destination over a run of animation frames.
+
+    The freeze this guards against kept requestAnimationFrame and the scene
+    graph perfectly healthy while every frame was drawn into an off-screen
+    target, so nothing reached the glass. `renderer.info.render.frame` cannot
+    see it: that counter is incremented inside render() before the draw and
+    advances identically whether the destination is the canvas or a texture.
+    Sampling `getRenderTarget()` between frames cannot see it either, because a
+    capture that binds a target and restores it afterwards reads as null from
+    the outside on every sample.
+
+    Wrapping render() for a moment answers the question directly - how many
+    draws went to the screen, and how many went somewhere else. Screenshots used
+    to answer it, at the cost of waiting on a compositor that is unreliable
+    under CI's software renderer. The wrapper is removed again in a finally, so
+    a failure part-way through cannot leave the projector instrumented.
+    """
+    return page.evaluate(
+        """
+        async (frameCount) => {
+          const renderer = window.kidsGalaxy.renderer;
+          const original = renderer.render;
+          let toScreen = 0;
+          let toTarget = 0;
+          renderer.render = function (scene, camera) {
+            if (this.getRenderTarget() === null) toScreen += 1;
+            else toTarget += 1;
+            return original.call(this, scene, camera);
+          };
+          try {
+            await new Promise((resolve) => {
+              let seen = 0;
+              const tick = () => {
+                seen += 1;
+                if (seen >= frameCount) resolve();
+                else requestAnimationFrame(tick);
+              };
+              requestAnimationFrame(tick);
+            });
+          } finally {
+            renderer.render = original;
+          }
+          return { toScreen, toTarget };
+        }
+        """,
+        frames,
+    )
+
+
 def planet_ids(page) -> list[str]:
     return page.evaluate("Array.from(window.kidsGalaxy.kidPlanets.keys())")
 

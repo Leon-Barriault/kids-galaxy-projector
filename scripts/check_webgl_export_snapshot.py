@@ -20,7 +20,13 @@ import httpx
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
-from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
+from check_projector import (
+    Server,
+    chromium_executable,
+    frames_reaching_the_screen,
+    kid_style_png_bytes,
+    wait_for,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = REPO_ROOT / "artifacts"
@@ -53,12 +59,18 @@ def visible_ring_extent(image: Image.Image) -> tuple[int, int, int]:
     width, height = rgba.size
     coordinates: list[tuple[int, int]] = []
 
-    # The export camera deliberately auto-fits the whole planet/decorations graph,
-    # so an absolute radius from the 700px frame centre is not a stable separator
-    # between sphere and ring. This fixture explicitly selects a white Saturn ring;
-    # use that authored colour instead. Bright near-neutral pixels survive the PBR
-    # lighting while excluding the blue/orange/green planet paint. The wide span
-    # checks below keep a small white specular highlight on the sphere from passing.
+    # The export camera auto-fits the whole planet/decorations graph, so an
+    # absolute radius from the frame centre is not a stable separator between
+    # sphere and ring - hence matching the ring's authored colour instead. This
+    # fixture asks for ring_color="#ffffff", so the target is near-white.
+    #
+    # Tighter than "bright and roughly neutral", as cheap insurance rather than
+    # because it is currently load-bearing. Measured on a freshly generated hero
+    # frame, min>=200/spread<=25 selects 18,014 pixels against the looser test's
+    # 21,120 - and the spans are identical either way (322 vs 323), so on today's
+    # render the loose test is not in fact picking up sphere highlight. The
+    # narrower window costs nothing and gives the span checks below something
+    # less ambiguous to work with if the lighting changes again.
     for y in range(height):
         for x in range(width):
             red, green, blue, alpha = rgba.getpixel((x, y))
@@ -66,7 +78,7 @@ def visible_ring_extent(image: Image.Image) -> tuple[int, int, int]:
                 continue
             minimum = min(red, green, blue)
             maximum = max(red, green, blue)
-            if minimum >= 170 and maximum - minimum <= 60:
+            if minimum >= 200 and maximum - minimum <= 25:
                 coordinates.append((x, y))
 
     if not coordinates:
@@ -201,6 +213,15 @@ def main() -> int:
             "renderer keeps submitting frames after rendered previews complete",
             failures,
         )
+        # renderFrame advances for off-screen draws too, so on its own it cannot
+        # tell a live projector from one rendering entirely into a texture.
+        destinations = frames_reaching_the_screen(page)
+        check(
+            destinations["toScreen"] > 0,
+            "frames are drawn to the screen, not only to off-screen targets "
+            f"({destinations['toScreen']} to screen, {destinations['toTarget']} to targets)",
+            failures,
+        )
         check(
             abs(motion_after["rotationY"] - motion_before["rotationY"]) > 0.001,
             "planet rotation continues after rendered previews complete",
@@ -225,6 +246,14 @@ def main() -> int:
             snapshot = Image.open(io.BytesIO(response.content)).convert("RGBA")
             check(snapshot.size == (700, 700), "projector publishes the 700x700 hero frame", failures)
             count, horizontal_span, vertical_span = visible_ring_extent(snapshot)
+            # 280/100, matching a real hero frame rather than the 380/120 these
+            # once were. Those older numbers came from artifacts/webgl-export-
+            # ringed.png as committed, which was a 700x700 fully opaque render
+            # from before the export background became transparent - a different
+            # framing entirely, measuring 520x380. A regenerated frame measures
+            # 322x177, so 380 fails on a perfectly good ring. Calibrating against
+            # a stored artifact is only safe while the thing that produced it has
+            # not changed, and here it had.
             check(count >= 500, f"selected white Saturn ring is visible ({count} pixels)", failures)
             check(horizontal_span >= 280, f"ring spans the hero frame horizontally ({horizontal_span}px)", failures)
             check(vertical_span >= 100, f"ring is visibly open rather than edge-on ({vertical_span}px)", failures)
