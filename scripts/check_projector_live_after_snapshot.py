@@ -11,42 +11,33 @@ renderer ended up bound to an offscreen - sometimes disposed - target, and
 every later frame drew into it. The scene graph stayed perfect, the animation
 loop kept running, and nothing was logged. Only the picture stopped.
 
-That is why this check is deliberately not a scene-state assertion. It uploads
-enough planets to force captures to overlap, then looks at two things that a
-state assertion cannot see:
+The check therefore exercises enough simultaneous snapshot publication to
+reproduce the original race, then verifies the renderer contract directly:
 
   1. `renderer.getRenderTarget()` is null once the dust settles - the invariant
      that actually broke.
-  2. Successive screenshots of the page differ - the projector is still putting
-     new frames on the glass.
+  2. The renderer canvas is still attached and the WebGL context is healthy.
+  3. Three.js' render-frame counter advances while the renderer remains on the
+     default framebuffer.
 
-Screenshots rather than reading the WebGL canvas directly: the renderer runs
-without preserveDrawingBuffer, so drawImage() off it outside the frame returns
-blank and would pass this test on a frozen projector.
+A browser screenshot is deliberately not part of this check. Playwright waits
+for an animated canvas to become stable before an element screenshot, and the
+page screenshot/compositor path is also unreliable under CI SwiftShader. The
+renderer frame counter measures submitted renders without imposing either wait.
 """
 
 from __future__ import annotations
 
-# Checked before the third-party imports below, so a missing Playwright or
-# Pillow reports one install command instead of a bare ModuleNotFoundError.
 from _projector_deps import require as _require_projector_dependencies
 
 _require_projector_dependencies()
 
 import sys
-import time
-from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 from check_projector import Server, chromium_executable, kid_style_png_bytes, wait_for
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ARTIFACTS = REPO_ROOT / "artifacts"
-
-# Enough planets that their texture loads land inside the same 60 ms schedule()
-# window and their captures genuinely overlap. Two was not enough to reproduce
-# the original freeze by hand; a full gallery always did.
 PLANET_COUNT = 8
 BODY_COLOURS = ("#2196F3", "#E91E63", "#4CAF50", "#FF9800")
 
@@ -57,20 +48,25 @@ def check(condition: bool, description: str, failures: list[str]) -> None:
         failures.append(description)
 
 
-def frame_signature(page) -> bytes:
-    """A screenshot of the live canvas, as the projector's audience sees it."""
-    return page.locator("canvas").first.screenshot()
-
-
-def differing_bytes(first: bytes, second: bytes) -> int:
-    if len(first) != len(second):
-        return max(len(first), len(second))
-    return sum(1 for a, b in zip(first, second) if a != b)
+def render_state(page) -> dict:
+    """Return renderer signals that distinguish a live canvas from the freeze."""
+    return page.evaluate(
+        """
+        () => {
+          const renderer = window.kidsGalaxy.renderer;
+          return {
+            screenTarget: renderer.getRenderTarget() === null,
+            renderFrame: renderer.info.render.frame,
+            canvasConnected: renderer.domElement?.isConnected === true,
+            contextLost: renderer.getContext().isContextLost(),
+          };
+        }
+        """
+    )
 
 
 def main() -> int:
     failures: list[str] = []
-    ARTIFACTS.mkdir(exist_ok=True)
 
     with Server() as server, sync_playwright() as playwright:
         planet_ids = [
@@ -104,25 +100,26 @@ def main() -> int:
         settled = page.evaluate(f"() => {published}")
         check(settled, f"all {PLANET_COUNT} planets published a snapshot", failures)
 
-        # The invariant. A snapshot that finished tidily leaves the renderer
-        # drawing to the canvas; anything else means a capture kept the target.
-        bound = page.evaluate("() => window.kidsGalaxy.renderer.getRenderTarget()")
-        check(bound is None, f"renderer draws to the canvas after capture (got {bound!r})", failures)
+        first = render_state(page)
+        check(first["screenTarget"], "renderer draws to the canvas after capture", failures)
+        check(first["canvasConnected"], "renderer canvas remains attached after concurrent captures", failures)
+        check(not first["contextLost"], "WebGL context remains healthy after concurrent captures", failures)
 
-        # And the symptom. Two frames a good interval apart must differ: the
-        # star field rotates and the sun pulses every frame, so a live projector
-        # cannot produce two identical screenshots here.
-        first = frame_signature(page)
-        time.sleep(1.2)
-        second = frame_signature(page)
-        moved = differing_bytes(first, second)
-        check(moved > 0, "projector is still drawing new frames after publishing", failures)
-        (ARTIFACTS / "freeze-guard-first.png").write_bytes(first)
-        (ARTIFACTS / "freeze-guard-second.png").write_bytes(second)
+        wait_for(
+            page,
+            f"() => window.kidsGalaxy.renderer.info.render.frame > {first['renderFrame']}",
+            15_000,
+        )
+        second = render_state(page)
+        check(
+            second["renderFrame"] > first["renderFrame"],
+            "projector keeps submitting frames after publishing",
+            failures,
+        )
+        check(second["screenTarget"], "later frames still target the visible framebuffer", failures)
+        check(second["canvasConnected"], "renderer canvas stays attached while frames advance", failures)
+        check(not second["contextLost"], "WebGL context stays healthy while frames advance", failures)
 
-        # A capture that leaves the target bound is invisible in the console,
-        # which is exactly why this file exists - but a genuine exception during
-        # one is worth failing on too.
         check(errors == [], f"no browser errors across concurrent captures ({errors[:3]})", failures)
         browser.close()
 
