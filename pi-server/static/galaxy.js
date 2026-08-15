@@ -31,6 +31,7 @@ import { installManifestStrokeSurface } from './projector/ManifestStrokeSurface.
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
 import { installPlanetRenderPipeline } from './projector/PlanetRenderPipeline.js';
+import { installPolarMagnetSweep3D } from './projector/PolarMagnetSweep3D.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
 import { ProjectorSnapshotPublisher } from './projector/ProjectorSnapshotPublisher.js';
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
@@ -101,6 +102,12 @@ const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_ST
 // null-guarded. Filling ownership before relief is computed means there is
 // nothing left to correct afterwards.
 installManifestStrokeSurface();
+// Experimental option: after the authoritative manifest renderer has produced
+// the final embossed sphere, twist each latitude ring around the real north/
+// south axis. This is intentionally outside the normal stage list so the main
+// pipeline diagnostics remain comparable while this branch tests a different
+// 3-D interpretation of the kid's drawing.
+installPolarMagnetSweep3D();
 
 const container = document.getElementById('canvas-container');
 const celebration = new CelebrationEffect({
