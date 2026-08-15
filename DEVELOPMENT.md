@@ -1,6 +1,8 @@
-# Local Development & Testing (no hardware required)
+# Local Development & Testing (no dedicated hardware required)
 
-This project is designed so you can develop and test **without a Raspberry Pi or projector**.
+This project is designed so you can develop and test without dedicated server hardware or a projector.
+
+The backend is platform-neutral and is referred to as the **server side**. The repository path `pi-server/` is historical and retained for compatibility with existing scripts and tooling; it does not imply a Raspberry Pi runtime requirement.
 
 ## Quick start (Docker)
 
@@ -13,7 +15,7 @@ docker compose up --build
 - Health: http://localhost:8000/health  
 - Optional projector mock: `docker compose --profile full up` → http://localhost:8080
 
-Point the Android emulator or a real tablet (on the same machine network) to `http://<your-host-ip>:8000/`.
+Point the Android emulator or a real tablet on the same network to `http://<your-host-ip>:8000/`.
 
 ## Running tests
 
@@ -72,21 +74,21 @@ make arch
 
 It fails the build if the Kotlin domain imports `android`/`androidx`, if either
 domain layer reaches outward, if the Python domain imports FastAPI or Pillow, or
-if any active projector module references a remote URL (which would break the
-offline deployment). Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a layer.
+if any active projector module references a remote URL that would break offline
+operation. Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a layer.
 
 ## Offline assets
 
-The projector runs on a Pi hotspot with **no internet access**, so Three.js is
-vendored into `pi-server/static/vendor/` and served locally; the page uses a
-system font stack rather than a web font. To update the pinned version:
+The projector is designed to operate on a local network with no internet access,
+so Three.js is vendored into `pi-server/static/vendor/` and served locally; the
+page uses a system font stack rather than a web font. To update the pinned version:
 
 ```bash
 make vendor-three
 ```
 
 Never reintroduce a CDN `<script>` or `@import` — `make arch` will fail, and the
-projector would render a black screen in the field.
+projector could render a black screen in an offline field deployment.
 
 ## Certificate-based authentication (mTLS)
 
@@ -108,7 +110,7 @@ SERVER_IP=10.42.0.1 ./generate_certs.sh
 
 The generator creates:
 
-- `server.crt` / `server.key` — gateway identity
+- `server.crt` / `server.key` — server-side gateway identity
 - `client.crt` / `client.p12` — drawing tablet identity (`OU=kid`)
 - `manager.crt` / `manager.p12` — manager identity (`OU=manager`)
 - `ca.crt` / `ca.key` — deployment CA
@@ -185,7 +187,9 @@ silently downgrading to unauthenticated transport.
 For production deployments, issue distinct certificates per tablet or batch and
 rotate/revoke them as operational needs require.
 
-> **Note on Wi-Fi itself**: A full EAP-TLS (WPA2-Enterprise) hotspot on the Pi is possible with hostapd + FreeRADIUS, but it is significantly more operationally heavy for a portable kids setup. mTLS protects the application path, which is the critical trust boundary. An optional EAP-TLS guide can be added later if required.
+The application-level mTLS boundary is independent of the Wi-Fi or LAN technology.
+The system may run on an existing private LAN, dedicated Wi-Fi, or another local
+network topology without changing the server-side architecture.
 
 ## Android kiosk / single-app mode
 
@@ -214,7 +218,65 @@ See `android/.../AndroidManifest.xml` and the Device Admin receiver for the hook
 
 ## Branching & Definition of Done (SDLC alignment)
 
-- Prefer `main` (production-ready) + short-lived feature branches.
-- Every change should keep the CI green (unit + integration + projector gates).
-- Update `UNRELEASED.md` (or CHANGELOG) when the project adopts changelog-driven releases.
-- A red pipeline blocks merge / release candidate creation.
+The canonical branching policy is documented in [BRANCHING.md](BRANCHING.md).
+The repository uses a lightweight GitFlow-style lifecycle:
+
+```text
+feature/*  fix/*  docs/*  experiment/*
+                │
+                ▼
+             develop
+                │
+                ▼
+          release/x.y.z
+                │
+                ▼
+              main
+                │
+                ▼
+             vX.Y.Z
+```
+
+### `develop`
+
+`develop` is the integration branch for the next release. Normal features,
+fixes, documentation, and approved experimental work branch from `develop` and
+return to it through pull requests.
+
+A green `develop` means the integrated development state passes automated gates;
+it does **not** by itself mean the version is field-ready.
+
+### `release/x.y.z`
+
+Create a temporary release branch from `develop` when the intended feature set
+is complete. During release stabilization, allow only:
+
+- release-blocking fixes;
+- version/release metadata;
+- documentation corrections;
+- deployment and physical-device validation corrections.
+
+Do not add new features to a release branch.
+
+When validation is complete, merge the release branch into `main`, tag the
+release, merge the release fixes back into `develop`, and delete the release
+branch.
+
+### `main`
+
+`main` is production/field-ready. Normal development must not happen directly on
+`main`. A merge to `main` should correspond to a version that is safe to deploy.
+
+Urgent released-version corrections use a temporary `hotfix/x.y.z` branch from
+`main`, and the fix must also be merged back into `develop`.
+
+### Definition of Done
+
+- Every change keeps CI green: lint, architecture, unit, integration, Android,
+  security, and applicable projector gates.
+- Short-lived branches are deleted after merge.
+- Release candidates receive the required server-side, tablet, projector,
+  print, and STL validation before promotion to `main`.
+- Release changes are tagged on `main` using semantic version tags such as
+  `v1.2.0`.
+- A red pipeline blocks integration or release promotion.
