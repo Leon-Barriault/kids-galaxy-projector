@@ -1,9 +1,13 @@
 # Architecture
 
-The server and Android applications follow clean-architecture layering: dependencies
+The server-side and Android applications follow clean-architecture layering: dependencies
 point inwards, and the innermost layer knows nothing about frameworks. The projector
 is a browser runtime with a different shape, but its composition rules and offline
 boundary are also explicit and enforced.
+
+The backend is platform-neutral. Documentation refers to it as the **server side**,
+**server-side application**, or **server**. The repository path `pi-server/` is a
+historical compatibility name only and does not imply a Raspberry Pi deployment.
 
 ```
         ┌──────────────────────────────────────────┐
@@ -23,7 +27,7 @@ The rule that makes this real: **the domain imports nothing outward.** It is
 enforced in CI (`architecture` job) and locally with `make arch`, so the
 boundary cannot erode quietly.
 
-## Pi server (`pi-server/`)
+## Server side (`pi-server/`)
 
 | Path | Responsibility | May import |
 |------|----------------|------------|
@@ -162,3 +166,8 @@ runtime-extension debt to be reduced safely, stage by stage.
 Run the normal application gates with `make verify`. Run the projector contract
 locally with `make check-projector`; Projector CI runs the browser contracts on
 every push/PR to protected development branches.
+
+The promotion path from integrated development to production is defined in
+[BRANCHING.md](BRANCHING.md): short-lived work integrates into `develop`, a
+`release/x.y.z` branch is used for stabilization, and only field-ready releases
+are promoted to `main` and tagged.

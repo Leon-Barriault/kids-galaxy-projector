@@ -1,16 +1,22 @@
 # AGENTS.md — current handoff
 
 Read this file before changing the repository. It records current contracts,
-owner decisions, validation gates, and failure modes that have already caused
-regressions.
+owner decisions, validation gates, branch policy, and failure modes that have
+already caused regressions.
 
 ---
 
 ## 1. What this project is
 
 Children draw a planet on an Android tablet. It appears live in a projected 3D
-galaxy running on a Raspberry Pi. The field deployment is local-network only
-and uses mTLS at the tablet-facing gateway.
+galaxy served by the server side and rendered in a browser on the projector
+machine. The field deployment is local-network only and uses mTLS at the
+tablet-facing gateway.
+
+The backend is platform-neutral. Use **server side**, **server-side application**,
+or **server** in documentation and discussion. Do not describe it as a Raspberry
+Pi server. The repository path `pi-server/` is historical and retained for
+compatibility only.
 
 Deployable pieces:
 
@@ -19,12 +25,13 @@ Deployable pieces:
 | Drawing tablet app | `android/app` | Kotlin, Jetpack Compose, AGP 9 |
 | Manager app | `android/manager` | Separate `applicationId` `com.kidsgalaxy.manager` |
 | Shared tablet connection | `android/connection` | Discovery, target parsing, mTLS |
-| Server | `pi-server/` | FastAPI, Pillow, SSE |
+| Server side | `pi-server/` | FastAPI, Pillow, SSE |
 | Projector page | `pi-server/static/` | Three.js r185, vendored, offline |
 
 `README.md` covers setup, `ARCHITECTURE.md` the layering and projector
-composition rules, `DEVELOPMENT.md` local/field workflow, and
-`android/ANDROID_STUDIO.md` Android Studio usage.
+composition rules, `DEVELOPMENT.md` local/field workflow, `BRANCHING.md` the
+SDLC branch and release model, and `android/ANDROID_STUDIO.md` Android Studio
+usage.
 
 ---
 
@@ -45,6 +52,8 @@ Do not re-litigate these unless the owner explicitly asks to change them.
   protected by the role/auth layer in secure deployments.
 - STL v1 is one slicer-friendly radial planet mesh. Rings and orbiting
   companions are intentionally omitted; kid artwork becomes raised relief.
+- The production branch model is GitFlow-lite: short-lived work → `develop` →
+  `release/x.y.z` → `main`, with release tags on `main`.
 
 ---
 
@@ -52,14 +61,14 @@ Do not re-litigate these unless the owner explicitly asks to change them.
 
 ### 3.1 Clean architecture
 
-The Python and Android application code use inward dependencies:
+The server-side and Android application code use inward dependencies:
 
 - domain: rules/entities, framework-free
 - application/use cases: orchestration through ports
 - infrastructure/data: adapters
 - API/UI: transport and presentation
 
-`make arch` and main CI enforce the important boundaries.
+`make arch` and CI enforce the important boundaries.
 
 ### 3.2 Field transport and manager mTLS
 
@@ -254,9 +263,27 @@ Dependency versions stay pinned unless a deliberate upgrade is requested.
 
 ---
 
-## 10. Working method
+## 10. Working method and branch policy
 
 TDD and clean architecture are the default. Prefer small, conventional commits.
 Do not start or leave unrelated work while CI is red. For projector work, use
 the real browser acceptance suite rather than reasoning from screenshots or
 module syntax alone.
+
+Follow [BRANCHING.md](BRANCHING.md):
+
+- branch normal work from `develop` using `feature/*`, `fix/*`, `docs/*`, or
+  `experiment/*`;
+- merge short-lived work back into `develop` through a pull request after green
+  CI;
+- create `release/x.y.z` from `develop` only when the feature set is frozen;
+- permit only stabilization, release metadata, documentation, and validation
+  fixes on a release branch;
+- promote a validated release branch to `main`, tag it, merge release fixes back
+  to `develop`, and delete the release branch;
+- use `hotfix/x.y.z` from `main` only for urgent released-version fixes, and
+  back-merge those fixes into `develop`;
+- delete short-lived feature/fix/docs/experiment branches after merge.
+
+`main` is field-ready code, not an integration branch. `develop` is the normal
+integration target for ongoing work.

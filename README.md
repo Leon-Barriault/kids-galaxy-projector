@@ -7,7 +7,7 @@ A complete, kid-friendly system where children draw a planet on an Android table
 **Network**: Local only  
 **Auth**: Certificate-based (mTLS) – no password, no user, no token at runtime
 
-The projector renderer now targets a modern laptop/desktop rather than a Raspberry Pi. That budget is intentionally used for denser geometry, native high-resolution rendering, real-time shadows, richer seasonal objects and more complex planet features. The existing `pi-server/` directory name is retained as a compatibility path; it no longer implies a Raspberry Pi runtime requirement.
+The server side is platform-neutral, and the projector renderer is designed for a modern laptop/desktop GPU so it can use denser geometry, native high-resolution rendering, real-time shadows, richer seasonal objects and more complex planet features. The existing `pi-server/` directory is a historical compatibility path used by scripts and tooling; it does not define the deployment platform.
 
 **Repository**: https://github.com/Leon-Barriault/kids-galaxy-projector
 
@@ -41,15 +41,16 @@ You will then have the full project tree (`android/`, `pi-server/`, `docker-comp
 | Local development without projector hardware | Docker Compose (`docker compose up --build`) |
 | Offline operation | Three.js is vendored locally — the projector needs no internet |
 | Live updates | Server-Sent Events push each planet instantly (polling fallback) |
-| Certificate authentication | Mutual TLS, wired on both server **and** tablet |
+| Certificate authentication | Mutual TLS, wired on both server side **and** tablet |
 | Android as the only tablet app | Lock Task Mode + Device Owner / COSU support |
 | Architecture | Clean architecture on both sides; boundaries enforced in CI |
 | Projector visual QA | Real Chromium/WebGL smoke tests exercise geometry, themes, SSE and scene behavior |
-| SDLC alignment | Lint, architecture, tests and Android build all gate every change |
+| SDLC alignment | Short-lived work → `develop` → `release/x.y.z` → `main`, with CI gating promotion |
 
 See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the layering and testing strategy,
-and **[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk
-setup, and the project Definition of Done.
+**[DEVELOPMENT.md](DEVELOPMENT.md)** for local testing, certificates, kiosk setup,
+and the project Definition of Done, and **[BRANCHING.md](BRANCHING.md)** for the
+branching and release lifecycle.
 
 ---
 
@@ -67,7 +68,7 @@ kids-galaxy-projector/
 │       │   ├── ui/              # Compose screens
 │       │   └── di/              # Composition root
 │       └── test/                # JVM unit tests (no emulator needed)
-├── pi-server/                   # Legacy path name: FastAPI backend + high-fidelity Three.js galaxy
+├── pi-server/                   # Historical path: platform-neutral server side + Three.js galaxy
 │   ├── main.py                  # ASGI entry point (app = create_app())
 │   ├── app/
 │   │   ├── domain/              # Rules + entities (no FastAPI imports)
@@ -85,6 +86,7 @@ kids-galaxy-projector/
 ├── Makefile                     # make verify runs everything CI runs
 ├── .github/workflows/ci.yml     # CI: lint, architecture, tests, Android, Docker
 ├── ARCHITECTURE.md              # Layering + testing strategy
+├── BRANCHING.md                 # SDLC branching + release promotion
 ├── UNRELEASED.md                # Changelog staging (keep-a-changelog style)
 └── DEVELOPMENT.md               # Local + SDLC guidance
 ```
@@ -116,9 +118,9 @@ The runtime machine should be a modern laptop or desktop with hardware-accelerat
 
 ### Network
 
-Connect the laptop and the Android tablets to the same private LAN/Wi-Fi. The application remains local-only and does not require internet access. A dedicated hotspot can still be used when useful, but a Raspberry Pi hotspot is no longer part of the required architecture.
+Connect the server/projector machine and the Android tablets to the same private LAN/Wi-Fi. The application remains local-only and does not require internet access. A dedicated hotspot can still be used when useful, but the network topology is not tied to a particular server platform.
 
-### Server
+### Server side
 
 ```bash
 cd pi-server
@@ -147,7 +149,7 @@ The existing `scripts/start_kiosk.sh` helper can still be used on compatible Lin
 ```bash
 # The server IP must be baked into the certificate: Android ignores the
 # Common Name and requires a subjectAltName.
-cd pi-server/certs && SERVER_IP=<LAPTOP_LAN_IP> ./generate_certs.sh
+cd pi-server/certs && SERVER_IP=<SERVER_LAN_IP> ./generate_certs.sh
 ```
 
 Then give the app its identity, and build a release APK (which uses HTTPS + mTLS):
@@ -215,7 +217,7 @@ The visual target is a polished sculpted toy/clay galaxy rather than an astronom
 
 ## 7. CI / Quality gates (Test Phase principle)
 
-Every push and pull request runs:
+Every push and pull request to the protected development/release flow runs the applicable gates:
 
 - **Lint** – Python (ruff), Dockerfile (hadolint), shell (shellcheck), Kotlin (ktlint, whole tree)
 - **Architecture** – domain layers must stay framework-free, dependencies must
@@ -228,7 +230,37 @@ Every push and pull request runs:
 - **Android** – the apps compile and their JVM unit tests run
 - **Docker** – image builds, health check passes, vendored Three.js is served
 
-A red pipeline blocks merge / release candidate creation.
+A red pipeline blocks integration or release promotion.
+
+---
+
+## 8. Branching and releases
+
+The project uses a lightweight GitFlow-style lifecycle:
+
+```text
+feature/*  fix/*  docs/*  experiment/*
+                │
+                ▼
+             develop
+                │
+                ▼
+          release/x.y.z
+                │
+                ▼
+              main
+                │
+                ▼
+             vX.Y.Z
+```
+
+- `develop` is the normal integration branch for the next version.
+- `release/x.y.z` is temporary and accepts stabilization work only.
+- `main` is field-ready production code and is tagged for releases.
+- `hotfix/x.y.z` starts from `main` only for urgent released-version corrections.
+- Short-lived branches are deleted after merge.
+
+See [BRANCHING.md](BRANCHING.md) for the complete workflow and merge/back-merge rules.
 
 ---
 
