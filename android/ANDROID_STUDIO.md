@@ -29,8 +29,8 @@ break the build with a "not compatible with AGP's 9.0 new DSL" error.
 ## 2. Opening the project
 
 Open the **`android/`** directory, not the repository root. The repo root is not
-a Gradle project — it holds the Pi server too — and pointing Studio at it gives a
-confusing half-imported state.
+a Gradle project — it holds the server-side application too — and pointing Studio
+at it gives a confusing half-imported state.
 
 ```
 File → Open → <repo>/android
@@ -376,9 +376,9 @@ with a clear message rather than silently dropping to an unauthenticated
 connection.
 
 The server certificate must carry an **IP SAN**. Modern Android ignores the
-certificate Common Name entirely, and the tablet connects to the Pi by address,
-so a CN-only certificate fails the handshake. `generate_certs.sh` handles this;
-verify with:
+certificate Common Name entirely, and the tablet connects to the server by
+address, so a CN-only certificate fails the handshake. `generate_certs.sh`
+handles this; verify with:
 
 ```bash
 openssl x509 -in server.crt -noout -ext subjectAltName
