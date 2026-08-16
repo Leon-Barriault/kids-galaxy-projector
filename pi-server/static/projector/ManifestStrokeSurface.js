@@ -14,6 +14,17 @@ import {
 const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
 const POLE_CLAIM_THRESHOLD = 0.22;
+// The widest run of background the gap fill will bridge, as a fraction of
+// latitude. Without a ceiling it bridged any gap at all, so a child drawing two
+// bands near the top and bottom of the disc had the whole 40% of planet between
+// them painted in - the trench-filler treating deliberate background as a
+// trench, and the body colour they chose surviving only as two thin caps.
+//
+// A trench is a sliver the projection left between neighbouring marks. Anything
+// approaching a quarter of the planet is a decision. 0.22 sits above the 0.16
+// that the export contract requires be bridgeable and well below the 0.40 that
+// was being swallowed.
+const MAX_INTERNAL_GAP_FRACTION = 0.22;
 const VERTICAL_ASPECT_THRESHOLD = 1.55;
 const HORIZONTAL_POLE_ASPECT_THRESHOLD = 1.1;
 const WRAP_ASPECT_THRESHOLD = 0.72;
@@ -232,6 +243,10 @@ export function fillInternalBandGaps(owner, colour, coverage, projections) {
         bandCentres.some((centre) => centre < midY) && bandCentres.some((centre) => centre > midY);
       if (!bracketed) continue;
 
+      // Wide enough to be the child's own background rather than a sliver the
+      // projection opened up.
+      if (end - start + 1 > MAX_INTERNAL_GAP_FRACTION * TEXTURE_HEIGHT) continue;
+
       const above = (start - 1) * TEXTURE_WIDTH + u;
       const below = (end + 1) * TEXTURE_WIDTH + u;
       if (owner[above] < 0 || owner[below] < 0) continue;
@@ -296,12 +311,25 @@ function paintRows(owner, colour, projection, from, to) {
 
 function choosePoleOwners(projections) {
   const candidates = projections.filter((projection) => projection.horizontalPoleCandidate);
+  // Judged on where a stroke sits, not on how far it reaches.
+  //
+  // bandFrom/bandTo are the extreme edges anywhere along a stroke, so a mark
+  // that merely points at a pole floods the whole cap. Two bands drawn near the
+  // top and bottom of a drawing therefore claimed one cap each, flooded inward,
+  // met in the middle, and erased the body colour the child chose - the planet
+  // came back entirely in the stroke's colour. A tall mark sitting at the
+  // equator qualified too, because one of its ends reached far enough north.
+  //
+  // A stroke that genuinely belongs at a pole has its middle there, not just a
+  // fingertip. The centre also cannot be tied by several strokes sharing a
+  // baseline, which is how a rainbow's four nested arcs all reported the same
+  // bandTo and handed a hemisphere to whichever sorted first.
   const north = candidates
-    .filter((projection) => projection.bandFrom <= POLE_CLAIM_THRESHOLD)
-    .sort((a, b) => a.bandFrom - b.bandFrom || a.centerY - b.centerY)[0];
+    .filter((projection) => projection.centerY <= POLE_CLAIM_THRESHOLD)
+    .sort((a, b) => a.centerY - b.centerY)[0];
   const south = candidates
-    .filter((projection) => projection.bandTo >= 1 - POLE_CLAIM_THRESHOLD)
-    .sort((a, b) => b.bandTo - a.bandTo || b.centerY - a.centerY)[0];
+    .filter((projection) => projection.centerY >= 1 - POLE_CLAIM_THRESHOLD)
+    .sort((a, b) => b.centerY - a.centerY)[0];
   return { north: north?.strokeIndex ?? -1, south: south?.strokeIndex ?? -1 };
 }
 

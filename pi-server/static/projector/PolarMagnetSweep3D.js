@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
+import { weldSeamAndPoleNormals } from './BeveledPatchRelief.js';
 
 const POLAR_MAGNET_SWEEP_DEGREES = 360;
 const POLAR_MAGNET_SWEEP_RADIANS = THREE.MathUtils.degToRad(POLAR_MAGNET_SWEEP_DEGREES);
@@ -51,6 +52,26 @@ function twistGeometryAroundPolarAxis(geometry) {
   // not enough: the deformation has shear. Rebuilding them makes the lighting
   // describe the actual twisted relief surface.
   geometry.computeVertexNormals();
+
+  // ...and then weld them again, because computeVertexNormals undoes it.
+  //
+  // The relief sphere carries duplicate vertices: a whole extra column at the
+  // UV seam so the texture has somewhere to land at u=1, and a fan of them at
+  // each pole. On a 512x256 body that is 257 seam duplicates and 1,026 pole
+  // duplicates - same position, separate indices. computeVertexNormals averages
+  // the faces that share an *index*, so each duplicate only ever sees its own
+  // side and they come out with different normals: a lit seam running pole to
+  // pole and a pinwheel at each cap.
+  //
+  // buildBeveledReliefGeometry welds them for exactly this reason, immediately
+  // after computing them. Recomputing here without welding again throws that
+  // away. The twist itself is safe - it is a function of position alone, so
+  // coincident vertices stay coincident.
+  const segments = geometry.parameters;
+  if (Number.isFinite(segments?.widthSegments) && Number.isFinite(segments?.heightSegments)) {
+    weldSeamAndPoleNormals(geometry, segments.widthSegments, segments.heightSegments);
+  }
+
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   geometry.userData.kidsGalaxyPolarMagnetSweep3D = true;
