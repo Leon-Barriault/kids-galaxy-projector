@@ -308,6 +308,11 @@ def core_render_state(page, planet_id: str) -> dict:
           const p = kg.kidPlanets.get(id);
           const g = kg.engine.galaxyScene;
           const m = p.mesh.material;
+          // Relief now lives in the vertices rather than in a displacementMap,
+          // so it is measured off the geometry. A normal that has swung away
+          // from radial is the load-bearing number: on a smooth sphere every
+          // normal is radial, and a displacementMap leaves them that way because
+          // three.js does not recompute normals after displacing.
           const relief = (() => {
             const position = p.mesh.geometry.attributes.position;
             const normal = p.mesh.geometry.attributes.normal;
@@ -345,6 +350,9 @@ def core_render_state(page, planet_id: str) -> dict:
             reliefFraction: (relief.maxRadius - relief.minRadius) / relief.minRadius,
             maxNormalTiltDeg: relief.maxNormalTiltDeg,
             occlusionMap: Boolean(m.aoMap),
+            // Paint is raised by moving vertices now. A displacement map on top
+            // of already-displaced geometry would raise every stroke twice, so
+            // its absence is the assertion, not its presence.
             displacement: Boolean(m.displacementMap),
             bump: Boolean(m.bumpMap),
             roughness: m.roughness,
@@ -352,6 +360,9 @@ def core_render_state(page, planet_id: str) -> dict:
             clearcoat: m.clearcoat || 0,
             roughnessMap: Boolean(m.roughnessMap),
             environmentLit: Boolean(m.envMap),
+            // The projector page loads three as an ES module, so THREE is not a
+            // global here and the constant has to be compared by value.
+            // NeutralToneMapping is 7 in the vendored build; ACESFilmic was 4.
             toneMapping: g.renderer.toneMapping,
             toneMappingExposure: g.renderer.toneMappingExposure,
             shadows: g.renderer.shadowMap.enabled,
@@ -523,10 +534,15 @@ def main() -> int:
         check(state["clearcoat"] > 0, "planet carries a painted-toy coat")
         check(state["roughnessMap"], "raised paint is finished separately from the body")
         check(state["environmentLit"], "planet receives image-based light")
+        # 7 is NeutralToneMapping. ACESFilmic (4) desaturates saturated colour on
+        # its way to white, which is right for photographic footage and wrong for
+        # a planet covered in flat poster paint.
         check(
             state["toneMapping"] == 7,
             f"scene tone maps with Khronos PBR Neutral, not ACES (got {state['toneMapping']})",
         )
+        # Exposure is solved against the ACES setting it replaced rather than
+        # picked, so drifting off it un-matches the brightness on purpose.
         check(
             abs(state["toneMappingExposure"] - 1.91) < 0.01,
             f"exposure holds the solved match ({state['toneMappingExposure']})",
@@ -596,6 +612,20 @@ def main() -> int:
         check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
+        # A snapshot PUT can race a deletion: the planet is gone server-side, but
+        # the projector has not processed the SSE removal yet, so it uploads a
+        # hero frame for something that no longer exists. That 404 is expected
+        # and unavoidable - the client cannot know sooner - and the browser logs
+        # it at console-error level, where no JS handler can reach it.
+        #
+        # The explicit page reload can also abort the old page's live EventSource
+        # before any HTTP response exists. That is expected only for GET /api/events
+        # with net::ERR_ABORTED; every other network-level failure remains fatal.
+        #
+        # Only those exact cases are forgiven, and only as many console errors as
+        # there were such requests. A real JS error, or a 404 on anything else,
+        # still fails. This suite deletes planets while others are mid-flight, so
+        # some tolerance is required; blanket-ignoring resource errors would not be.
         raced_snapshots = [
             failure
             for failure in failed_requests
