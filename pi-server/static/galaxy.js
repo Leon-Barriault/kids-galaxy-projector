@@ -17,7 +17,6 @@ import {
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
-import { installDominantRibbonFinish } from './projector/DominantRibbonFinish.js';
 import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
@@ -25,7 +24,6 @@ import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlane
 import { installKidArtworkComponentSurface } from './projector/KidArtworkComponentSurface.js';
 import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMask.js';
 import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
-import { installKidArtworkPresentationFix } from './projector/KidArtworkPresentationFix.js';
 import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { installManifestStrokeSurface } from './projector/ManifestStrokeSurface.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
@@ -41,9 +39,6 @@ import { installRingColorFidelity } from './projector/RingColorFidelity.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
 import { installSoftToyPlanetSurface } from './projector/SoftToyPlanetSurface.js';
 import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
-import { installSculptedArtworkRoundedSlab } from './projector/SculptedArtworkRoundedSlab.js';
-import { installSculptedArtworkRuntimeCompat } from './projector/SculptedArtworkRuntimeCompat.js';
-import { installSculptedGeometryFinish } from './projector/SculptedGeometryFinish.js';
 import { installStrokeLatitudeProjection } from './projector/StrokeLatitudeProjection.js';
 import { installStrokeWrapProjection } from './projector/StrokeWrapProjection.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
@@ -62,23 +57,28 @@ function installSphericalStrokeProjectionStage() {
   installAreaFillSphericalProjection();
 }
 
+// Five stages removed as provably dead: their only effects were on
+// entity.mesh.material (replaced wholesale by the surface stages) or on meshes
+// inside sculptedArtworkGroup (hidden by hideSculptedGeometry), and every
+// userData key they wrote was read by nothing - no other projector module and no
+// script. sculpted-artwork-runtime-compat was a pure no-op: it set a global
+// BODY_RADIUS that every consumer shadows with its own module-scope constant.
+//
+// Deliberately kept, though equally invisible: the kid-artwork stages and
+// sculpted-artwork-geometry / stroke-wrap-projection, whose userData the
+// acceptance scripts still read.
 const PLANET_RENDER_STAGES = Object.freeze([
   { name: 'kid-artwork-upgrade', install: installKidArtworkUpgrade },
   { name: 'kid-artwork-faithful-mask', install: installKidArtworkFaithfulMask },
   { name: 'kid-artwork-motif-projection', install: installKidArtworkMotifProjection },
-  { name: 'kid-artwork-presentation-fix', install: installKidArtworkPresentationFix },
   { name: 'saturn-planet-rings', install: installSaturnPlanetRings },
   { name: 'high-fidelity-planet-features', install: installHighFidelityPlanetFeatures },
   { name: 'reference-surface-tuning', install: installReferenceSurfaceTuning },
   { name: 'kid-artwork-component-surface', install: installKidArtworkComponentSurface },
   { name: 'reference-finish', install: installReferenceFinish },
   { name: 'ring-color-fidelity', install: installRingColorFidelity },
-  { name: 'sculpted-artwork-runtime-compat', install: installSculptedArtworkRuntimeCompat },
   { name: 'sculpted-artwork-geometry', install: installSculptedArtworkGeometry },
   { name: 'artwork-coverage-projection', install: installArtworkCoverageProjection },
-  { name: 'sculpted-geometry-finish', install: installSculptedGeometryFinish },
-  { name: 'sculpted-artwork-rounded-slab', install: installSculptedArtworkRoundedSlab },
-  { name: 'dominant-ribbon-finish', install: installDominantRibbonFinish },
   { name: 'reference-planet-upgrade', install: installReferencePlanetUpgrade },
   { name: 'themed-galaxy-environment', install: installThemedGalaxyEnvironment },
   { name: 'explicit-body-color', install: installExplicitBodyColor },
@@ -102,11 +102,16 @@ const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_ST
 // null-guarded. Filling ownership before relief is computed means there is
 // nothing left to correct afterwards.
 installManifestStrokeSurface();
-// Experimental option: after the authoritative manifest renderer has produced
-// the final embossed sphere, twist each latitude ring around the real north/
-// south axis. This is intentionally outside the normal stage list so the main
-// pipeline diagnostics remain comparable while this branch tests a different
-// 3-D interpretation of the kid's drawing.
+// The polar twist, applied after the manifest renderer has produced the final
+// embossed sphere: every latitude ring is rotated around the real north/south
+// axis, by an amount that grows from pole to pole. Colour, relief and the raised
+// bevel geometry are all carried round together, because this deforms the
+// finished mesh rather than the flat texture.
+//
+// It sits outside PLANET_RENDER_STAGES because it is not a surface stage - it
+// does not decide what the planet looks like, it deforms whatever the surface
+// stages produced, and it must run last. Keeping it out also leaves the
+// pipeline diagnostics the acceptance scripts read unchanged.
 installPolarMagnetSweep3D();
 
 const container = document.getElementById('canvas-container');

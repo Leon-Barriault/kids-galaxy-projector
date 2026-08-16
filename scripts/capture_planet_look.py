@@ -20,6 +20,7 @@ from _projector_deps import require as _require_projector_dependencies
 _require_projector_dependencies()
 
 import io
+import json
 import sys
 import time
 from pathlib import Path
@@ -47,7 +48,20 @@ def _chromium_path() -> str | None:
     return str(candidates[-1]) if candidates else None
 
 
-def _disc(background: str, paint) -> bytes:
+def _arc(centre_x, centre_y, radius, steps=18):
+    """Points along the upper half of a circle, as a child sweeps a finger."""
+    import math
+
+    return [
+        (
+            centre_x + radius * math.cos(math.pi + math.pi * step / steps),
+            centre_y + radius * math.sin(math.pi + math.pi * step / steps),
+        )
+        for step in range(steps + 1)
+    ]
+
+
+def _disc(background: str, strokes) -> bytes:
     """
     A drawing shaped exactly the way the tablet sends them.
 
@@ -58,61 +72,114 @@ def _disc(background: str, paint) -> bytes:
     about the product.
     """
     image = Image.new("RGB", (CANVAS, CANVAS), background)
-    strokes = Image.new("RGB", (CANVAS, CANVAS), background)
-    paint(ImageDraw.Draw(strokes))
+    painted = Image.new("RGB", (CANVAS, CANVAS), background)
+    draw = ImageDraw.Draw(painted)
+    for points, colour, width in strokes:
+        draw.line(points, fill=colour, width=width, joint="curve")
 
     mask = Image.new("L", (CANVAS, CANVAS), 0)
     ImageDraw.Draw(mask).ellipse((0, 0, CANVAS - 1, CANVAS - 1), fill=255)
-    image.paste(strokes, (0, 0), mask)
+    image.paste(painted, (0, 0), mask)
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
-def _ocean(draw: ImageDraw.ImageDraw) -> None:
-    draw.ellipse((96, 120, 250, 235), fill="#5ec46b")
-    draw.ellipse((250, 270, 400, 380), fill="#5ec46b")
-    draw.ellipse((170, 330, 250, 400), fill="#e8b23a")
+def _manifest(background: str, strokes) -> bytes:
+    """The same strokes as the sidecar the projector actually renders from.
 
-
-def _lava(draw: ImageDraw.ImageDraw) -> None:
-    draw.ellipse((110, 150, 300, 290), fill="#ff8a3d")
-    draw.ellipse((280, 300, 400, 400), fill="#e04b3a")
-    draw.line((120, 380, 380, 130), fill="#ffd166", width=26)
-
-
-def _two_tone(draw: ImageDraw.ImageDraw) -> None:
-    draw.ellipse((130, 100, 380, 250), fill="#b06ee0")
-    draw.ellipse((120, 280, 330, 420), fill="#ffd166")
-
-
-def _rainbow_arcs(draw: ImageDraw.ImageDraw) -> None:
+    Derived from the identical data as the raster above, because they were
+    previously unrelated: this script drew four distinct pictures and then let
+    the shared harness attach its default three-stroke manifest, which wins.
+    Every planet came out as the same purple/orange/green bands and only the
+    body colour differed, so the drawings here were decorative and any visual
+    judgement made from these captures was made against one shape.
     """
-    The shape a child actually draws: concentric rainbow semicircles.
+    return json.dumps(
+        {
+            "version": 1,
+            "coordinate_space": "normalized-canvas-v1",
+            "canvas": {"width": CANVAS, "height": CANVAS},
+            "background_color": background.lower(),
+            "background_explicit": True,
+            "strokes": [
+                {
+                    "stroke_id": f"stroke-{index}",
+                    "order": index,
+                    "color": colour.lower(),
+                    "width_px": width,
+                    "width_normalized": width / CANVAS,
+                    "points": [
+                        [
+                            max(0.0, min(1.0, x / CANVAS)),
+                            max(0.0, min(1.0, y / CANVAS)),
+                        ]
+                        for x, y in points
+                    ],
+                }
+                for index, (points, colour, width) in enumerate(strokes)
+            ],
+        }
+    ).encode()
 
-    These must be true semicircles - equal horizontal and vertical radii. An
-    earlier version used tall narrow ellipses, which made the innermost colour
-    the nearest paint to the centre over a huge vertical range and let green
-    swallow a third of the planet. That was the test drawing misleading the
-    test, not the mapping misbehaving.
-    """
-    centre_x, centre_y = CANVAS // 2, 390
-    for colour, radius in (("#7b3fb5", 220), ("#e8862f", 170), ("#f0d040", 120), ("#4fae54", 70)):
-        draw.arc(
-            (centre_x - radius, centre_y - radius, centre_x + radius, centre_y + radius),
-            start=180,
-            end=360,
-            fill=colour,
-            width=44,
-        )
 
+# Strokes only - no filled ellipses. The manifest format is polylines, which is
+# also what a finger produces, so a fixture built from ellipses cannot be
+# expressed as a sidecar and could never have matched what gets rendered.
+_SWIRL = [
+    ([(190, 110), (150, 195), (205, 285), (160, 385)], "#f4e04d", 24),
+    ([(252, 100), (284, 200), (240, 300), (276, 396)], "#f4e04d", 24),
+    ([(322, 120), (298, 212), (348, 300), (312, 386)], "#f4e04d", 24),
+    ([(140, 156), (118, 244), (162, 330)], "#f4e04d", 22),
+    ([(374, 164), (392, 252), (356, 342)], "#f4e04d", 22),
+]
+
+# Both regimes at once, plus a stroke that used to fall between them. The two
+# classifications now meet exactly, so the 55-degree mark is a band rather than
+# a stamp - watch that it wraps rather than sitting on one face.
+_MIXED = [
+    ([(96, 150), (200, 128), (300, 156), (410, 134)], "#4fc3f7", 40),
+    ([(100, 372), (210, 396), (320, 366), (412, 390)], "#4fc3f7", 40),
+    ([(196, 116), (168, 210), (214, 300), (176, 392)], "#ffd166", 24),
+    ([(330, 120), (356, 214), (312, 302), (344, 394)], "#ffd166", 24),
+    # spanX/spanY about 0.70 - the old dead band.
+    ([(150, 180), (260, 336)], "#ff5f8f", 26),
+]
+
+_OCEAN = [
+    ([(110, 150), (190, 175), (250, 150)], "#5ec46b", 60),
+    ([(258, 300), (330, 330), (398, 300)], "#5ec46b", 56),
+    ([(178, 350), (240, 372)], "#e8b23a", 40),
+]
+
+_LAVA = [
+    ([(120, 200), (220, 175), (300, 215)], "#ff8a3d", 62),
+    ([(288, 330), (360, 356), (400, 330)], "#e04b3a", 50),
+    ([(120, 380), (250, 255), (380, 130)], "#ffd166", 26),
+]
+
+_TWO_TONE = [
+    ([(132, 170), (255, 140), (378, 172)], "#b06ee0", 70),
+    ([(124, 340), (230, 372), (330, 340)], "#ffd166", 66),
+]
+
+_RAINBOW = [
+    (_arc(CANVAS // 2, 390, 220), "#7b3fb5", 44),
+    (_arc(CANVAS // 2, 390, 170), "#e8862f", 44),
+    (_arc(CANVAS // 2, 390, 120), "#f0d040", 44),
+    (_arc(CANVAS // 2, 390, 70), "#4fae54", 44),
+]
 
 SUBJECTS = (
-    ("rainbow", "#f2f2f2", _rainbow_arcs),
-    ("ocean", "#3aa0e8", _ocean),
-    ("lava", "#7a2f2f", _lava),
-    ("twotone", "#2f4f8f", _two_tone),
+    # First, because it is the one that shows how a tall mark wraps: several
+    # near-vertical squiggles, which used to stamp as a cluster on one face.
+    ("swirl", "#d81b60", _SWIRL),
+    ("mixed", "#37474f", _MIXED),
+    ("rainbow", "#f2f2f2", _RAINBOW),
+    ("ocean", "#3aa0e8", _OCEAN),
+    ("lava", "#7a2f2f", _LAVA),
+    ("twotone", "#2f4f8f", _TWO_TONE),
 )
 
 
@@ -122,10 +189,11 @@ def main(out_dir: Path) -> int:
         planets = {
             label: server.upload(
                 label.title(),
-                artwork=_disc(background, paint),
+                artwork=_disc(background, strokes),
+                manifest=_manifest(background, strokes),
                 body_color=background,
             )
-            for label, background, paint in SUBJECTS
+            for label, background, strokes in SUBJECTS
         }
 
         with sync_playwright() as playwright:
@@ -174,7 +242,17 @@ def main(out_dir: Path) -> int:
             # Settle: entry animations, ring rotation and the first few frames of
             # the environment prefilter all land after the surface is applied.
             page.wait_for_timeout(4000)
-            page.screenshot(path=str(out_dir / "scene.png"))
+            # Best effort, and deliberately not fatal. This is the whole-page
+            # compositor path, which is unreliable under CI SwiftShader - the
+            # same reason the export checks stopped screenshotting. It also ran
+            # before the hero frames, so one flaky screenshot threw away the
+            # entire capture. The hero frames come from readRenderTargetPixels
+            # and do not touch the compositor at all, so they are worth having
+            # even when this fails.
+            try:
+                page.screenshot(path=str(out_dir / "scene.png"), timeout=15_000)
+            except Exception as error:  # noqa: BLE001 - the frames matter, this does not
+                print(f"  ! scene.png skipped: {type(error).__name__}")
 
             failures = page.evaluate(
                 "({"

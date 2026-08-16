@@ -665,7 +665,10 @@ function buildRoughnessCanvas(height) {
 }
 
 function hideSculptedGeometry(entity) {
-  for (const key of ['sculptedArtworkGroup', 'areaFillProjectionGroup', 'strokeWrapGroup']) {
+  // strokeWrapGroup used to be here too. Nothing in the repo ever assigns it -
+  // its two siblings have one assignment each - so it was hiding a property
+  // that never existed.
+  for (const key of ['sculptedArtworkGroup', 'areaFillProjectionGroup']) {
     const group = entity[key];
     if (group) group.visible = false;
   }
