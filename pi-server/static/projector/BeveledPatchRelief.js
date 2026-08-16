@@ -50,8 +50,20 @@ import * as THREE from 'three';
 // 512x256 there is no further information in the field to resolve, and the
 // interpolation phase against texel centres starts contributing its own error.
 // 0.21 degrees of latitude is under a pixel on a gallery-sized planet.
-export const RELIEF_SEGMENTS_W = 512;
-export const RELIEF_SEGMENTS_H = 256;
+// Dropped from the matched 512x256 once the polar twist landed on top of the
+// build. Not for CPU reasons - building and twisting is 64ms a planet, 0.4s for
+// a full gallery, which is nothing. It is triangle count: six planets at 262k
+// triangles each, rendered by SwiftShader at 2560x1440 while six 700x700
+// captures queue behind them, and snapshots started failing to publish inside
+// their timeout.
+//
+// 384x192 is 147k triangles, 44% fewer. The measured cost is about a pixel of
+// hero-frame edge smoothness - the apparent edge quantises at 0.44 degrees of
+// latitude here against 0.21 at 512x256 - and in the gallery, where planets are
+// small, both are already sub-pixel. Raise it back if captures stop being the
+// constraint.
+export const RELIEF_SEGMENTS_W = 384;
+export const RELIEF_SEGMENTS_H = 192;
 
 // Width of the rounded shoulder, in mask texels, measured inward from the edge
 // of a painted region. The stages this replaced used 22 and 5-11. Twenty-two
@@ -292,7 +304,7 @@ function averageNormals(normal, indices) {
  * pinwheel at each cap. Averaging the duplicates afterwards is cheaper and more
  * exact than trying to merge vertices before the normal pass.
  */
-function weldSeamAndPoleNormals(geometry, segmentsW, segmentsH) {
+export function weldSeamAndPoleNormals(geometry, segmentsW, segmentsH) {
   const normal = geometry.attributes.normal;
   const columns = segmentsW + 1;
   const rows = segmentsH + 1;

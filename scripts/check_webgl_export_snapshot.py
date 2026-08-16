@@ -172,9 +172,18 @@ def main() -> int:
             "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 12",
             15_000,
         )
+        # Waits for whichever surface stage owns the body. This used to wait on
+        # kidsGalaxyTrueSculptedArtwork, which the sculpted stage writes to the
+        # body material and the manifest stage then replaces wholesale - so the
+        # condition could never become true. wait_for swallows its own timeout,
+        # so it silently spent twelve seconds on every run and moved on.
         wait_for(
             page,
-            f"Boolean(window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.mesh?.material?.userData?.kidsGalaxyTrueSculptedArtwork)",
+            "(() => {"
+            f"  const m = window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.mesh?.material;"
+            "  const d = m?.userData || {};"
+            "  return Boolean(d.kidsGalaxyManifestStrokeSurface || d.kidsGalaxySoftToySurface);"
+            "})()",
             12_000,
         )
         snapshot_ids_js = json.dumps(snapshot_ids)
