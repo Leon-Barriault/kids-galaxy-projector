@@ -616,21 +616,20 @@ def main() -> int:
         check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
-        # A snapshot PUT can race a deletion: the planet is gone server-side, but
-        # the projector has not processed the SSE removal yet, so it uploads a
-        # hero frame for something that no longer exists. Depending on timing,
-        # Chrome may surface that as either an HTTP 404 or net::ERR_ABORTED before
-        # an HTTP response exists. Both are expected only for planets this test
-        # explicitly removed, evicted, or cleared.
+        # Deleting, evicting, or clearing a planet can race more than its snapshot
+        # publish. The renderer may also still be fetching that planet's uploaded
+        # artwork/manifest when the server removes those files. Depending on which
+        # side wins, Chrome reports either a 404 response or an aborted request.
+        # These are expected only when the URL is scoped to a planet ID this test
+        # itself recorded as removed.
         #
         # The explicit page reload can also abort the old page's live EventSource
         # before any HTTP response exists. That is expected only for GET /api/events
         # with net::ERR_ABORTED; every other network-level failure remains fatal.
         #
         # Only those exact cases are forgiven, and only as many console errors as
-        # there were such requests. A real JS error, or a 404 on anything else,
-        # still fails. This suite deletes planets while others are mid-flight, so
-        # some tolerance is required; blanket-ignoring resource errors would not be.
+        # there were such requests. A real JS error, an unrelated asset failure,
+        # or a failed request for a live planet still fails this gate.
         raced_snapshots = [
             failure
             for failure in failed_requests
@@ -638,7 +637,14 @@ def main() -> int:
             and failure.endswith("/rendered-preview.png")
             and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
         ]
-        unexpected_requests = [f for f in failed_requests if f not in raced_snapshots]
+        raced_removed_assets = [
+            failure
+            for failure in failed_requests
+            if failure.startswith(f"404 {server.base}/uploads/")
+            and any(f"/uploads/{planet_id}_" in failure for planet_id in removed_planet_ids)
+        ]
+        expected_http_failures = raced_snapshots + raced_removed_assets
+        unexpected_requests = [f for f in failed_requests if f not in expected_http_failures]
         reload_event_aborts = [
             failure
             for failure in failed_network_requests
@@ -653,13 +659,23 @@ def main() -> int:
             and "/rendered-preview.png:" in failure
             and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
         ]
-        expected_network_failures = reload_event_aborts + raced_snapshot_aborts
+        raced_removed_asset_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith("GET ")
+            and failure.endswith("net::ERR_ABORTED")
+            and f" {server.base}/uploads/" in failure
+            and any(f"/uploads/{planet_id}_" in failure for planet_id in removed_planet_ids)
+        ]
+        expected_network_failures = (
+            reload_event_aborts + raced_snapshot_aborts + raced_removed_asset_aborts
+        )
         unexpected_network_failures = [
             failure for failure in failed_network_requests if failure not in expected_network_failures
         ]
         resource_noise = sum(1 for error in errors if "Failed to load resource" in error)
         script_errors = [error for error in errors if "Failed to load resource" not in error]
-        expected_resource_noise = len(raced_snapshots) + len(expected_network_failures)
+        expected_resource_noise = len(expected_http_failures) + len(expected_network_failures)
 
         check(
             not script_errors
@@ -671,7 +687,9 @@ def main() -> int:
             f"unexpected requests: {unexpected_requests[:3]}; "
             f"unexpected network failures: {unexpected_network_failures[:3]}; "
             f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot response(s), "
-            f"{len(raced_snapshot_aborts)} raced snapshot abort(s), and "
+            f"{len(raced_removed_assets)} removed-asset response(s), "
+            f"{len(raced_snapshot_aborts)} raced snapshot abort(s), "
+            f"{len(raced_removed_asset_aborts)} removed-asset abort(s), and "
             f"{len(reload_event_aborts)} reload-aborted event stream(s))",
         )
         browser.close()
