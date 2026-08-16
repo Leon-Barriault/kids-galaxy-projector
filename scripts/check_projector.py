@@ -460,12 +460,13 @@ def main() -> int:
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
-        # Chrome's console message for a failed request is the bare string
-        # "Failed to load resource: the server responded with a status of 404" -
-        # no URL, no method, nothing to act on. Three of those told us only that
-        # something, somewhere, three times, was missing. Recording the responses
-        # alongside gives the next person the URL.
+        # HTTP errors and browser-level network failures are different events in
+        # Playwright. A navigation can abort the old page's EventSource without
+        # ever producing an HTTP response, while Chrome still emits a generic
+        # "Failed to load resource" console error. Record both so the final gate
+        # can distinguish a deliberate reload abort from a broken asset/request.
         failed_requests: list[str] = []
+        failed_network_requests: list[str] = []
         page.on(
             "console",
             lambda message: errors.append(message.text) if message.type == "error" else None,
@@ -476,6 +477,12 @@ def main() -> int:
             lambda response: failed_requests.append(f"{response.status} {response.url}")
             if response.status >= 400
             else None,
+        )
+        page.on(
+            "requestfailed",
+            lambda request: failed_network_requests.append(
+                f"{request.method} {request.url}: {request.failure or 'unknown failure'}"
+            ),
         )
 
         print("\nload and composition")
@@ -573,8 +580,13 @@ def main() -> int:
         check(server.delete(cratered) == 200, "DELETE returns 200 in development smoke server")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 3")
         check(cratered not in planet_ids(page), "deleted planet leaves the sky")
+        removed_planet_ids = {cratered}
 
         before = {key: value for key, value in before.items() if key != cratered}
+        snapshots_drained = page.evaluate(
+            "() => window.kidsGalaxy.engine.snapshotPublisher.whenIdle(30000)"
+        )
+        check(bool(snapshots_drained), "pending projector snapshots drain before reload")
         page.reload(wait_until="load")
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3")
         after = page.evaluate(
@@ -587,12 +599,15 @@ def main() -> int:
         print("\ngallery cap and clear")
         cap = page.evaluate("window.kidsGalaxy.GALLERY_SIZE")
         oldest_remaining = ringed
+        ids_before_fillers = set(planet_ids(page))
         for index in range(cap):
             server.upload(f"Filler {index}")
         wait_for(page, f"window.kidsGalaxy.kidPlanets.size === {cap}", timeout_ms=20_000)
         ids = planet_ids(page)
+        removed_planet_ids.update(ids_before_fillers - set(ids))
         check(len(ids) == cap, f"sky is capped at {cap} planets (got {len(ids)})")
         check(oldest_remaining not in ids, "oldest planet is evicted at the gallery cap")
+        removed_planet_ids.update(ids)
         check(server.clear() == 200, "clear-all returns 200 in development smoke server")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 0")
         check(planet_ids(page) == [], "clear event empties the whole sky")
@@ -601,33 +616,81 @@ def main() -> int:
         check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
-        # A snapshot PUT can race a deletion: the planet is gone server-side, but
-        # the projector has not processed the SSE removal yet, so it uploads a
-        # hero frame for something that no longer exists. That 404 is expected
-        # and unavoidable - the client cannot know sooner - and the browser logs
-        # it at console-error level, where no JS handler can reach it.
+        # Deleting, evicting, or clearing a planet can race more than its snapshot
+        # publish. The renderer may also still be fetching that planet's uploaded
+        # artwork/manifest when the server removes those files. Depending on which
+        # side wins, Chrome reports either a 404 response or an aborted request.
+        # These are expected only when the URL is scoped to a planet ID this test
+        # itself recorded as removed.
         #
-        # Only that one request is forgiven, and only as many console errors as
-        # there were such requests. A real JS error, or a 404 on anything else,
-        # still fails. This suite deletes planets while others are mid-flight, so
-        # some tolerance is required; blanket-ignoring 404s would not be.
+        # The explicit page reload can also abort the old page's live EventSource
+        # before any HTTP response exists. That is expected only for GET /api/events
+        # with net::ERR_ABORTED; every other network-level failure remains fatal.
+        #
+        # Only those exact cases are forgiven, and only as many console errors as
+        # there were such requests. A real JS error, an unrelated asset failure,
+        # or a failed request for a live planet still fails this gate.
         raced_snapshots = [
             failure
             for failure in failed_requests
-            if failure.startswith("404 ") and failure.endswith("/rendered-preview.png")
+            if failure.startswith("404 ")
+            and failure.endswith("/rendered-preview.png")
+            and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
         ]
-        unexpected_requests = [f for f in failed_requests if f not in raced_snapshots]
+        raced_removed_assets = [
+            failure
+            for failure in failed_requests
+            if failure.startswith(f"404 {server.base}/uploads/")
+            and any(f"/uploads/{planet_id}_" in failure for planet_id in removed_planet_ids)
+        ]
+        expected_http_failures = raced_snapshots + raced_removed_assets
+        unexpected_requests = [f for f in failed_requests if f not in expected_http_failures]
+        reload_event_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith(f"GET {server.base}/api/events:")
+            and "net::ERR_ABORTED" in failure
+        ]
+        raced_snapshot_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith("PUT ")
+            and failure.endswith("net::ERR_ABORTED")
+            and "/rendered-preview.png:" in failure
+            and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
+        ]
+        raced_removed_asset_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith("GET ")
+            and failure.endswith("net::ERR_ABORTED")
+            and f" {server.base}/uploads/" in failure
+            and any(f"/uploads/{planet_id}_" in failure for planet_id in removed_planet_ids)
+        ]
+        expected_network_failures = (
+            reload_event_aborts + raced_snapshot_aborts + raced_removed_asset_aborts
+        )
+        unexpected_network_failures = [
+            failure for failure in failed_network_requests if failure not in expected_network_failures
+        ]
         resource_noise = sum(1 for error in errors if "Failed to load resource" in error)
         script_errors = [error for error in errors if "Failed to load resource" not in error]
+        expected_resource_noise = len(expected_http_failures) + len(expected_network_failures)
 
         check(
             not script_errors
             and not unexpected_requests
-            and resource_noise <= len(raced_snapshots),
+            and not unexpected_network_failures
+            and resource_noise <= expected_resource_noise,
             "no unexpected browser console errors "
             f"(script errors: {script_errors[:3]}; "
             f"unexpected requests: {unexpected_requests[:3]}; "
-            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot(s))",
+            f"unexpected network failures: {unexpected_network_failures[:3]}; "
+            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot response(s), "
+            f"{len(raced_removed_assets)} removed-asset response(s), "
+            f"{len(raced_snapshot_aborts)} raced snapshot abort(s), "
+            f"{len(raced_removed_asset_aborts)} removed-asset abort(s), and "
+            f"{len(reload_event_aborts)} reload-aborted event stream(s))",
         )
         browser.close()
 
