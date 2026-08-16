@@ -580,6 +580,7 @@ def main() -> int:
         check(server.delete(cratered) == 200, "DELETE returns 200 in development smoke server")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 3")
         check(cratered not in planet_ids(page), "deleted planet leaves the sky")
+        removed_planet_ids = {cratered}
 
         before = {key: value for key, value in before.items() if key != cratered}
         snapshots_drained = page.evaluate(
@@ -598,12 +599,15 @@ def main() -> int:
         print("\ngallery cap and clear")
         cap = page.evaluate("window.kidsGalaxy.GALLERY_SIZE")
         oldest_remaining = ringed
+        ids_before_fillers = set(planet_ids(page))
         for index in range(cap):
             server.upload(f"Filler {index}")
         wait_for(page, f"window.kidsGalaxy.kidPlanets.size === {cap}", timeout_ms=20_000)
         ids = planet_ids(page)
+        removed_planet_ids.update(ids_before_fillers - set(ids))
         check(len(ids) == cap, f"sky is capped at {cap} planets (got {len(ids)})")
         check(oldest_remaining not in ids, "oldest planet is evicted at the gallery cap")
+        removed_planet_ids.update(ids)
         check(server.clear() == 200, "clear-all returns 200 in development smoke server")
         wait_for(page, "window.kidsGalaxy.kidPlanets.size === 0")
         check(planet_ids(page) == [], "clear event empties the whole sky")
@@ -614,9 +618,10 @@ def main() -> int:
         print("\nconsole")
         # A snapshot PUT can race a deletion: the planet is gone server-side, but
         # the projector has not processed the SSE removal yet, so it uploads a
-        # hero frame for something that no longer exists. That 404 is expected
-        # and unavoidable - the client cannot know sooner - and the browser logs
-        # it at console-error level, where no JS handler can reach it.
+        # hero frame for something that no longer exists. Depending on timing,
+        # Chrome may surface that as either an HTTP 404 or net::ERR_ABORTED before
+        # an HTTP response exists. Both are expected only for planets this test
+        # explicitly removed, evicted, or cleared.
         #
         # The explicit page reload can also abort the old page's live EventSource
         # before any HTTP response exists. That is expected only for GET /api/events
@@ -629,7 +634,9 @@ def main() -> int:
         raced_snapshots = [
             failure
             for failure in failed_requests
-            if failure.startswith("404 ") and failure.endswith("/rendered-preview.png")
+            if failure.startswith("404 ")
+            and failure.endswith("/rendered-preview.png")
+            and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
         ]
         unexpected_requests = [f for f in failed_requests if f not in raced_snapshots]
         reload_event_aborts = [
@@ -638,12 +645,21 @@ def main() -> int:
             if failure.startswith(f"GET {server.base}/api/events:")
             and "net::ERR_ABORTED" in failure
         ]
+        raced_snapshot_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith("PUT ")
+            and failure.endswith("net::ERR_ABORTED")
+            and "/rendered-preview.png:" in failure
+            and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
+        ]
+        expected_network_failures = reload_event_aborts + raced_snapshot_aborts
         unexpected_network_failures = [
-            failure for failure in failed_network_requests if failure not in reload_event_aborts
+            failure for failure in failed_network_requests if failure not in expected_network_failures
         ]
         resource_noise = sum(1 for error in errors if "Failed to load resource" in error)
         script_errors = [error for error in errors if "Failed to load resource" not in error]
-        expected_resource_noise = len(raced_snapshots) + len(reload_event_aborts)
+        expected_resource_noise = len(raced_snapshots) + len(expected_network_failures)
 
         check(
             not script_errors
@@ -654,8 +670,9 @@ def main() -> int:
             f"(script errors: {script_errors[:3]}; "
             f"unexpected requests: {unexpected_requests[:3]}; "
             f"unexpected network failures: {unexpected_network_failures[:3]}; "
-            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot(s) "
-            f"and {len(reload_event_aborts)} reload-aborted event stream(s))",
+            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot response(s), "
+            f"{len(raced_snapshot_aborts)} raced snapshot abort(s), and "
+            f"{len(reload_event_aborts)} reload-aborted event stream(s))",
         )
         browser.close()
 
