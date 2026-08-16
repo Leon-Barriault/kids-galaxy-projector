@@ -55,6 +55,8 @@ jobs:
         run: python scripts/check_manifest_stroke_projection.py
       - name: Verify projector WebGL drives preview and PDF exports
         run: python scripts/check_webgl_export_snapshot.py
+      - name: Verify exported planet snapshots stay centred and unclipped
+        run: python scripts/check_projector_snapshot_framing.py
       - name: Verify the projector keeps animating after publishing previews
         run: python scripts/check_projector_live_after_snapshot.py
       - name: Verify tablet-selected Saturn ring colors
