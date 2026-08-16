@@ -308,11 +308,6 @@ def core_render_state(page, planet_id: str) -> dict:
           const p = kg.kidPlanets.get(id);
           const g = kg.engine.galaxyScene;
           const m = p.mesh.material;
-          // Relief now lives in the vertices rather than in a displacementMap,
-          // so it is measured off the geometry. A normal that has swung away
-          // from radial is the load-bearing number: on a smooth sphere every
-          // normal is radial, and a displacementMap leaves them that way because
-          // three.js does not recompute normals after displacing.
           const relief = (() => {
             const position = p.mesh.geometry.attributes.position;
             const normal = p.mesh.geometry.attributes.normal;
@@ -350,9 +345,6 @@ def core_render_state(page, planet_id: str) -> dict:
             reliefFraction: (relief.maxRadius - relief.minRadius) / relief.minRadius,
             maxNormalTiltDeg: relief.maxNormalTiltDeg,
             occlusionMap: Boolean(m.aoMap),
-            // Paint is raised by moving vertices now. A displacement map on top
-            // of already-displaced geometry would raise every stroke twice, so
-            // its absence is the assertion, not its presence.
             displacement: Boolean(m.displacementMap),
             bump: Boolean(m.bumpMap),
             roughness: m.roughness,
@@ -360,9 +352,6 @@ def core_render_state(page, planet_id: str) -> dict:
             clearcoat: m.clearcoat || 0,
             roughnessMap: Boolean(m.roughnessMap),
             environmentLit: Boolean(m.envMap),
-            // The projector page loads three as an ES module, so THREE is not a
-            // global here and the constant has to be compared by value.
-            // NeutralToneMapping is 7 in the vendored build; ACESFilmic was 4.
             toneMapping: g.renderer.toneMapping,
             toneMappingExposure: g.renderer.toneMappingExposure,
             shadows: g.renderer.shadowMap.enabled,
@@ -460,12 +449,13 @@ def main() -> int:
         )
         page = browser.new_page(viewport={"width": 2560, "height": 1440})
         errors: list[str] = []
-        # Chrome's console message for a failed request is the bare string
-        # "Failed to load resource: the server responded with a status of 404" -
-        # no URL, no method, nothing to act on. Three of those told us only that
-        # something, somewhere, three times, was missing. Recording the responses
-        # alongside gives the next person the URL.
+        # HTTP errors and browser-level network failures are different events in
+        # Playwright. A navigation can abort the old page's EventSource without
+        # ever producing an HTTP response, while Chrome still emits a generic
+        # "Failed to load resource" console error. Record both so the final gate
+        # can distinguish a deliberate reload abort from a broken asset/request.
         failed_requests: list[str] = []
+        failed_network_requests: list[str] = []
         page.on(
             "console",
             lambda message: errors.append(message.text) if message.type == "error" else None,
@@ -476,6 +466,12 @@ def main() -> int:
             lambda response: failed_requests.append(f"{response.status} {response.url}")
             if response.status >= 400
             else None,
+        )
+        page.on(
+            "requestfailed",
+            lambda request: failed_network_requests.append(
+                f"{request.method} {request.url}: {request.failure or 'unknown failure'}"
+            ),
         )
 
         print("\nload and composition")
@@ -527,15 +523,10 @@ def main() -> int:
         check(state["clearcoat"] > 0, "planet carries a painted-toy coat")
         check(state["roughnessMap"], "raised paint is finished separately from the body")
         check(state["environmentLit"], "planet receives image-based light")
-        # 7 is NeutralToneMapping. ACESFilmic (4) desaturates saturated colour on
-        # its way to white, which is right for photographic footage and wrong for
-        # a planet covered in flat poster paint.
         check(
             state["toneMapping"] == 7,
             f"scene tone maps with Khronos PBR Neutral, not ACES (got {state['toneMapping']})",
         )
-        # Exposure is solved against the ACES setting it replaced rather than
-        # picked, so drifting off it un-matches the brightness on purpose.
         check(
             abs(state["toneMappingExposure"] - 1.91) < 0.01,
             f"exposure holds the solved match ({state['toneMappingExposure']})",
@@ -575,6 +566,10 @@ def main() -> int:
         check(cratered not in planet_ids(page), "deleted planet leaves the sky")
 
         before = {key: value for key, value in before.items() if key != cratered}
+        snapshots_drained = page.evaluate(
+            "() => window.kidsGalaxy.engine.snapshotPublisher.whenIdle(30000)"
+        )
+        check(bool(snapshots_drained), "pending projector snapshots drain before reload")
         page.reload(wait_until="load")
         wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 3")
         after = page.evaluate(
@@ -601,33 +596,36 @@ def main() -> int:
         check(len(planet_ids(page)) == 1, "planets can arrive again after clear")
 
         print("\nconsole")
-        # A snapshot PUT can race a deletion: the planet is gone server-side, but
-        # the projector has not processed the SSE removal yet, so it uploads a
-        # hero frame for something that no longer exists. That 404 is expected
-        # and unavoidable - the client cannot know sooner - and the browser logs
-        # it at console-error level, where no JS handler can reach it.
-        #
-        # Only that one request is forgiven, and only as many console errors as
-        # there were such requests. A real JS error, or a 404 on anything else,
-        # still fails. This suite deletes planets while others are mid-flight, so
-        # some tolerance is required; blanket-ignoring 404s would not be.
         raced_snapshots = [
             failure
             for failure in failed_requests
             if failure.startswith("404 ") and failure.endswith("/rendered-preview.png")
         ]
         unexpected_requests = [f for f in failed_requests if f not in raced_snapshots]
+        reload_event_aborts = [
+            failure
+            for failure in failed_network_requests
+            if failure.startswith(f"GET {server.base}/api/events:")
+            and "net::ERR_ABORTED" in failure
+        ]
+        unexpected_network_failures = [
+            failure for failure in failed_network_requests if failure not in reload_event_aborts
+        ]
         resource_noise = sum(1 for error in errors if "Failed to load resource" in error)
         script_errors = [error for error in errors if "Failed to load resource" not in error]
+        expected_resource_noise = len(raced_snapshots) + len(reload_event_aborts)
 
         check(
             not script_errors
             and not unexpected_requests
-            and resource_noise <= len(raced_snapshots),
+            and not unexpected_network_failures
+            and resource_noise <= expected_resource_noise,
             "no unexpected browser console errors "
             f"(script errors: {script_errors[:3]}; "
             f"unexpected requests: {unexpected_requests[:3]}; "
-            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot(s))",
+            f"unexpected network failures: {unexpected_network_failures[:3]}; "
+            f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot(s) "
+            f"and {len(reload_event_aborts)} reload-aborted event stream(s))",
         )
         browser.close()
 
