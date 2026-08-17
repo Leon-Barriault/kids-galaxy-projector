@@ -11,7 +11,10 @@ const SNAPSHOT_FOV_DEGREES = 40;
 // second-guessed here.
 const SNAPSHOT_KEY_DISTANCE = 8;
 const MIN_CAMERA_DISTANCE = 7.4;
-const CAMERA_FRAME_PADDING = 1.14;
+// The fitted object should never run up against the 700x700 capture. In addition
+// to looking better on the print sheet, this leaves room for antialiasing and
+// small geometry changes between the bounds pass and the draw.
+const CAMERA_FRAME_PADDING = 1.2;
 // Keep the printed/exported hero almost straight-on. The live galaxy can use a
 // dramatic orbital view, but the keepsake should read like a centred product
 // photo so the kid's latitude ribbons are not compressed toward one edge.
@@ -240,13 +243,14 @@ export class ProjectorSnapshotPublisher {
     }
 
     // Compute the main planet/decorations bounds before companions and lights are
-    // added. The old camera always looked at world origin; that lets an internally
-    // offset mesh or asymmetric decoration drift toward a corner and get clipped.
-    // Framing the actual rendered object graph keeps the planet centred and gives
-    // it a predictable safe margin in every capture.
+    // added. Do this from the actual transformed vertices instead of trusting a
+    // geometry's cached bounding box. Relief and polar transforms mutate vertex
+    // positions; a stale box can therefore describe the pre-deformation sphere,
+    // making the camera believe the object is smaller than what it will draw and
+    // clipping the top or side of the exported hero frame.
     scene.updateMatrixWorld(true);
     const framingBounds = new THREE.Box3();
-    for (const object of framingObjects) framingBounds.expandByObject(object);
+    for (const object of framingObjects) framingBounds.expandByObject(object, true);
     scene.userData.kidsGalaxyExportFramingBounds = framingBounds;
 
     // Companions are visible parts of the child's selected planet design. Keep
