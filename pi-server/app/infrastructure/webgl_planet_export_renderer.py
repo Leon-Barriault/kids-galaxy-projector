@@ -32,7 +32,11 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
     DRAWING_GUIDE_STROKE_WIDTH = 6
     DRAWING_GUIDE_COLOR = "#64B5F6"
     PRINT_BACKGROUND_THRESHOLD = 28
+    PRINT_VISIBLE_THRESHOLD = 8
     PRINT_HERO_PADDING = 34
+    PRINT_PDF_DPI = 150.0
+    LETTER_PAGE_WIDTH = 1650
+    LETTER_PAGE_HEIGHT = 1275
 
     def __init__(self, snapshot_dir: Path) -> None:
         self.snapshot_dir = snapshot_dir
@@ -83,6 +87,31 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             return snapshot.read_bytes()
         return super().render_preview(planet, image_path)
 
+    def _visible_mask(self, image: Image.Image) -> Image.Image:
+        white = Image.new("RGB", image.size, "white")
+        difference = ImageChops.difference(image.convert("RGB"), white).convert("L")
+        return difference.point(
+            lambda value: 255 if value >= self.PRINT_VISIBLE_THRESHOLD else 0
+        )
+
+    @staticmethod
+    def _mask_centroid(mask: Image.Image) -> tuple[float, float] | None:
+        width, _ = mask.size
+        total = 0
+        x_total = 0
+        y_total = 0
+        for index, value in enumerate(mask.getdata()):
+            if not value:
+                continue
+            x = index % width
+            y = index // width
+            total += 1
+            x_total += x
+            y_total += y
+        if not total:
+            return None
+        return x_total / total, y_total / total
+
     def _print_hero(self, hero: Image.Image) -> Image.Image:
         """Put the isolated planet on white paper and centre it with safe margins."""
         rgba = hero.convert("RGBA")
@@ -102,20 +131,44 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
             )
 
         # Do not trust the stored frame to already be centred. Older captures can
-        # place the object toward an edge, and decorations can enlarge one side of
-        # the frame. Find the visible non-paper pixels, fit them into a padded
-        # square, and centre that exact render without reconstructing the planet.
-        white = Image.new("RGB", prepared.size, "white")
-        bounds = ImageChops.difference(prepared, white).getbbox()
+        # place the object toward an edge, and small decorations can make the raw
+        # bounding box look centred while the much larger planet body still looks
+        # shifted. Crop to visible pixels, fit the complete render safely, then
+        # centre its visible-pixel centroid so the printed planet is optically as
+        # well as geometrically centred.
+        mask = self._visible_mask(prepared)
+        bounds = mask.getbbox()
         if bounds is None:
-            return white
+            return Image.new("RGB", prepared.size, "white")
 
         visible = prepared.crop(bounds)
         max_edge = self.SNAPSHOT_SIZE - self.PRINT_HERO_PADDING * 2
         visible.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+
+        visible_mask = self._visible_mask(visible)
+        centroid = self._mask_centroid(visible_mask)
+        centre = (self.SNAPSHOT_SIZE - 1) / 2.0
+        if centroid is None:
+            x = (self.SNAPSHOT_SIZE - visible.width) // 2
+            y = (self.SNAPSHOT_SIZE - visible.height) // 2
+        else:
+            x = round(centre - centroid[0])
+            y = round(centre - centroid[1])
+
+        min_x = self.PRINT_HERO_PADDING
+        min_y = self.PRINT_HERO_PADDING
+        max_x = self.SNAPSHOT_SIZE - self.PRINT_HERO_PADDING - visible.width
+        max_y = self.SNAPSHOT_SIZE - self.PRINT_HERO_PADDING - visible.height
+        if max_x >= min_x:
+            x = min(max(x, min_x), max_x)
+        else:
+            x = (self.SNAPSHOT_SIZE - visible.width) // 2
+        if max_y >= min_y:
+            y = min(max(y, min_y), max_y)
+        else:
+            y = (self.SNAPSHOT_SIZE - visible.height) // 2
+
         centred = Image.new("RGB", (self.SNAPSHOT_SIZE, self.SNAPSHOT_SIZE), "white")
-        x = (self.SNAPSHOT_SIZE - visible.width) // 2
-        y = (self.SNAPSHOT_SIZE - visible.height) // 2
         centred.paste(visible, (x, y))
         return centred
 
@@ -198,11 +251,27 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         return output.getvalue()
 
     def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
-        """Return the server-rendered print sheet as a one-page PDF for Android printing."""
+        """Return the print sheet on a standard US/Canada Letter landscape page."""
         png = self.render_print_sheet(planet, image_path)
         sheet = Image.open(io.BytesIO(png)).convert("RGB")
+
+        # Pillow derives PDF physical size from image pixels and resolution. The
+        # old 1600x1000 sheet at 150 dpi therefore became a non-standard
+        # 10.67x6.67-inch page. Place that established sheet, unchanged, in the
+        # middle of a 1650x1275 canvas so the PDF MediaBox is exactly 11x8.5 in
+        # (Letter landscape) and common printers can print it without page-size
+        # substitution or unexpected clipping.
+        page = Image.new(
+            "RGB",
+            (self.LETTER_PAGE_WIDTH, self.LETTER_PAGE_HEIGHT),
+            "white",
+        )
+        x = (self.LETTER_PAGE_WIDTH - sheet.width) // 2
+        y = (self.LETTER_PAGE_HEIGHT - sheet.height) // 2
+        page.paste(sheet, (x, y))
+
         output = io.BytesIO()
-        sheet.save(output, format="PDF", resolution=150.0)
+        page.save(output, format="PDF", resolution=self.PRINT_PDF_DPI)
         return output.getvalue()
 
     def export_stl(self, planet: Planet, image_path: Path, diameter_mm: float) -> bytes:
