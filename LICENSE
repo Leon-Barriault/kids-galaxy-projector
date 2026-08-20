@@ -1,21 +1,121 @@
-MIT License
+Kids Galaxy Projector Non-Commercial Source License 1.0
 
 Copyright (c) 2026 Léon Barriault
+All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license applies to versions of Kids Galaxy Projector distributed with this license.
+It does not revoke rights that were previously granted for earlier versions distributed
+under different license terms.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. DEFINITIONS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+"Software" means the Kids Galaxy Projector software, source code, object code,
+documentation, assets, and associated files distributed with this license.
+
+"Non-Commercial Purpose" means use that is not primarily intended for or directed
+toward commercial advantage, monetary compensation, revenue generation, or the
+operation of a commercial product or service.
+
+"Commercial Use" includes, without limitation:
+
+- using the Software in production within a business or other for-profit organization;
+- using the Software to provide a paid product, service, event, installation, or experience;
+- incorporating the Software into a product or service that is sold, licensed, rented,
+  subscribed to, or otherwise monetized;
+- providing the Software or a modified version as SaaS, hosted software, a cloud service,
+  or another remotely accessible commercial service;
+- distributing, sublicensing, reselling, OEM-bundling, or rebranding the Software or a
+  modified version for commercial advantage; or
+- using the Software in a manner that materially supports revenue-generating operations.
+
+2. NON-COMMERCIAL LICENSE GRANT
+
+Subject to the terms of this license, the copyright holder grants you a limited,
+non-exclusive, non-transferable, non-sublicensable, revocable license to use, copy,
+and modify the Software solely for Non-Commercial Purposes.
+
+Permitted examples include:
+
+- personal and hobby use;
+- educational use;
+- academic or non-commercial research;
+- demonstrations that are not sold or monetized; and
+- evaluation, testing, and proof-of-concept use, including evaluation by a business,
+  provided the Software is not placed into production or used to provide a paid service.
+
+3. COMMERCIAL USE REQUIRES A SEPARATE LICENSE
+
+No Commercial Use rights are granted under this license.
+
+Commercial Use requires a separate written commercial license or written authorization
+from the copyright holder before such use begins.
+
+See COMMERCIAL-LICENSE.md for commercial licensing information.
+
+4. REDISTRIBUTION
+
+You may redistribute the Software or a modified version only for Non-Commercial Purposes,
+provided that:
+
+- this copyright notice is retained;
+- this license is included in the redistribution;
+- any modified version is clearly identified as modified;
+- you do not remove or misrepresent authorship or attribution notices; and
+- you do not sell, sublicense, rent, lease, monetize, or otherwise commercially exploit
+  the Software or the redistribution.
+
+You may not relicense the Software under different terms without prior written permission
+from the copyright holder.
+
+5. MODIFICATIONS
+
+You may modify the Software for uses permitted by this license.
+
+Any modified version that contains or is derived from a substantial portion of the
+Software remains subject to this license unless the copyright holder grants you a
+separate license in writing.
+
+6. OWNERSHIP AND RESERVED RIGHTS
+
+The Software is licensed, not sold.
+
+The copyright holder retains all right, title, and interest in and to the Software.
+All rights not expressly granted under this license are reserved.
+
+This license does not grant rights to trademarks, trade names, logos, product names,
+branding, or other identifiers associated with the Software or the copyright holder.
+
+7. NO PATENT OR TRADEMARK LICENSE
+
+Except for copyright permissions expressly stated in this license, no patent, trademark,
+trade secret, publicity, or other intellectual-property rights are granted by implication,
+estoppel, or otherwise.
+
+8. TERMINATION
+
+Your rights under this license terminate automatically if you violate its terms.
+
+Upon termination, you must stop using, copying, modifying, and distributing the Software,
+except to the extent that applicable law requires otherwise. The copyright holder may,
+at their discretion, reinstate your rights in writing.
+
+9. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+10. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE
+FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+11. SOURCE-AVAILABLE STATUS
+
+The source code is made available under the terms above. Because this license restricts
+Commercial Use, it is a source-available license and is not an Open Source Initiative
+approved open-source license.
+
+Copyright (c) 2026 Léon Barriault. All Rights Reserved.

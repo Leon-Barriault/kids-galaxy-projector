@@ -266,4 +266,22 @@ See [BRANCHING.md](BRANCHING.md) for the complete workflow and merge/back-merge 
 
 ## License
 
-MIT License – free for personal and commercial use. See [LICENSE](LICENSE).
+Kids Galaxy Projector uses a **source-available dual-licensing model**.
+
+| Use | License |
+|-----|---------|
+| Personal / hobby use | Permitted under the [Non-Commercial Source License](LICENSE) |
+| Education and non-commercial research | Permitted under the [Non-Commercial Source License](LICENSE) |
+| Business evaluation / proof of concept | Permitted if it is not production use or part of a paid service |
+| Production use inside a business | **Commercial license required** |
+| Paid product, installation, event, or service | **Commercial license required** |
+| SaaS / hosted commercial service | **Commercial license required** |
+| OEM integration, redistribution, resale, or rebranding | **Commercial license required** |
+
+The public license is source-available rather than OSI-approved open source because it
+restricts commercial use. See [LICENSE](LICENSE) for the public license terms and
+[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for commercial licensing information.
+
+Versions previously distributed under the MIT License remain subject to the MIT terms
+under which those copies were received; the new license does not retroactively revoke
+those previously granted permissions.
