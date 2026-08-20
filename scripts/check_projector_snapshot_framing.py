@@ -54,10 +54,13 @@ def main() -> int:
     failures: list[str] = []
 
     with Server() as server, sync_playwright() as playwright:
+        # Use the spiky style because that is the real-world shape that exposed
+        # the clipped top/right hero frame. It has more asymmetric geometry than
+        # the classic fixture and therefore exercises the safety-margin retry.
         planet_id = server.upload(
             "Snapshot Framing",
             body_color="#EC1760",
-            style="classic",
+            style="spiky",
         )
 
         browser = playwright.chromium.launch(
@@ -128,6 +131,31 @@ def main() -> int:
         check(
             framing["cameraDistance"] > 0,
             "export camera is fitted from the recovered geometry bounds",
+            failures,
+        )
+
+        frame_diagnostics = page.evaluate(
+            """
+            (id) => {
+              const data = window.kidsGalaxy?.kidPlanets?.get(id)?.userData || {};
+              return {
+                attempts: data.kidsGalaxySnapshotFrameAttempts || 0,
+                safeMargin: data.kidsGalaxySnapshotSafeMargin || 0,
+                touchesMargin: Boolean(data.kidsGalaxySnapshotTouchesSafeMargin),
+              };
+            }
+            """,
+            planet_id,
+        )
+        check(
+            frame_diagnostics["attempts"] >= 1,
+            "snapshot capture records its framing attempt count",
+            failures,
+        )
+        check(
+            frame_diagnostics["safeMargin"] >= MIN_VISIBLE_MARGIN
+            and not frame_diagnostics["touchesMargin"],
+            "final rendered pixels clear the projector snapshot safety margin",
             failures,
         )
 

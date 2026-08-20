@@ -51,8 +51,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cooldown_seconds=settings.rate_limit_seconds
     )
     image_processor = PillowImageProcessor()
+    # Projector snapshots are derived render-cache artifacts. Keep the cache
+    # generation in the directory name so a framing/rendering fix cannot keep
+    # serving an older clipped 700x700 capture after deployment. Existing planets
+    # are republished when the projector page reloads and rebuilds its gallery.
     export_renderer = WebglPlanetExportRenderer(
-        settings.state_dir / "projector-snapshots"
+        settings.state_dir / "projector-snapshots-v2"
     )
     authorizer = AuthorizationPolicy(settings)
     clock = SystemClock()
