@@ -11,10 +11,11 @@ const SNAPSHOT_FOV_DEGREES = 40;
 // second-guessed here.
 const SNAPSHOT_KEY_DISTANCE = 8;
 const MIN_CAMERA_DISTANCE = 7.4;
-// Keep substantially more headroom than the original fit. The final guard below
-// also inspects rendered alpha pixels and retries farther away if anything still
-// lands near an edge, so bounds mistakes cannot silently become clipped PDFs.
-const CAMERA_FRAME_PADDING = 1.45;
+// Keep the established hero scale for the first fit. The final guard below
+// inspects rendered alpha pixels and retries farther away only when something
+// actually lands near an edge, so ordinary and ringed planets stay large while
+// spiky or unexpectedly deformed planets still cannot be clipped silently.
+const CAMERA_FRAME_PADDING = 1.2;
 const SNAPSHOT_SAFE_MARGIN = 32;
 const SNAPSHOT_ALPHA_THRESHOLD = 16;
 const MAX_FRAME_ATTEMPTS = 3;
