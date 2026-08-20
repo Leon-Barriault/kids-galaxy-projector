@@ -11,10 +11,15 @@ const SNAPSHOT_FOV_DEGREES = 40;
 // second-guessed here.
 const SNAPSHOT_KEY_DISTANCE = 8;
 const MIN_CAMERA_DISTANCE = 7.4;
-// The fitted object should never run up against the 700x700 capture. In addition
-// to looking better on the print sheet, this leaves room for antialiasing and
-// small geometry changes between the bounds pass and the draw.
+// Keep the established hero scale for the first fit. The final guard below
+// inspects rendered alpha pixels and retries farther away only when something
+// actually lands near an edge, so ordinary and ringed planets stay large while
+// spiky or unexpectedly deformed planets still cannot be clipped silently.
 const CAMERA_FRAME_PADDING = 1.2;
+const SNAPSHOT_SAFE_MARGIN = 32;
+const SNAPSHOT_ALPHA_THRESHOLD = 16;
+const MAX_FRAME_ATTEMPTS = 3;
+const FRAME_RETRY_SCALE = 1.22;
 // Keep the printed/exported hero almost straight-on. The live galaxy can use a
 // dramatic orbital view, but the keepsake should read like a centred product
 // photo so the kid's latitude ribbons are not compressed toward one edge.
@@ -144,9 +149,27 @@ export class ProjectorSnapshotPublisher {
     throw lastError || new Error('snapshot upload failed');
   }
 
+  pixelsTouchSafeMargin(pixels) {
+    if (!pixels || pixels.length !== SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4) return false;
+    const nearEdge = (x, y) => (
+      x < SNAPSHOT_SAFE_MARGIN
+      || x >= SNAPSHOT_SIZE - SNAPSHOT_SAFE_MARGIN
+      || y < SNAPSHOT_SAFE_MARGIN
+      || y >= SNAPSHOT_SIZE - SNAPSHOT_SAFE_MARGIN
+    );
+
+    for (let y = 0; y < SNAPSHOT_SIZE; y += 1) {
+      for (let x = 0; x < SNAPSHOT_SIZE; x += 1) {
+        if (!nearEdge(x, y)) continue;
+        const alpha = pixels[(y * SNAPSHOT_SIZE + x) * 4 + 3];
+        if (alpha >= SNAPSHOT_ALPHA_THRESHOLD) return true;
+      }
+    }
+    return false;
+  }
+
   capture(entity) {
     const exportScene = this.createExportScene(entity);
-    const camera = this.createExportCamera(entity, exportScene);
     const target = new THREE.WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE, {
       depthBuffer: true,
       stencilBuffer: false,
@@ -162,6 +185,7 @@ export class ProjectorSnapshotPublisher {
     const previousClearColor = renderer.getClearColor(new THREE.Color());
     const previousClearAlpha = renderer.getClearAlpha();
     let pixels = null;
+    let frameAttempts = 0;
 
     try {
       renderer.setRenderTarget(target);
@@ -170,11 +194,18 @@ export class ProjectorSnapshotPublisher {
       renderer.setScissorTest(false);
       renderer.setClearColor(0x000000, 0);
       renderer.autoClear = true;
-      renderer.clear(true, true, true);
-      renderer.render(exportScene, camera);
 
-      pixels = new Uint8Array(SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4);
-      renderer.readRenderTargetPixels(target, 0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE, pixels);
+      for (let attempt = 0; attempt < MAX_FRAME_ATTEMPTS; attempt += 1) {
+        frameAttempts = attempt + 1;
+        const frameScale = FRAME_RETRY_SCALE ** attempt;
+        const camera = this.createExportCamera(entity, exportScene, frameScale);
+        renderer.clear(true, true, true);
+        renderer.render(exportScene, camera);
+
+        pixels = new Uint8Array(SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4);
+        renderer.readRenderTargetPixels(target, 0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE, pixels);
+        if (!this.pixelsTouchSafeMargin(pixels)) break;
+      }
     } finally {
       // Restore the live framebuffer *before* any asynchronous PNG encoding.
       // canvas.toBlob() can take long enough for multiple animation frames on a
@@ -190,6 +221,11 @@ export class ProjectorSnapshotPublisher {
       target.dispose();
       this.disposeExportScene(exportScene);
     }
+
+    entity.userData = entity.userData || {};
+    entity.userData.kidsGalaxySnapshotFrameAttempts = frameAttempts;
+    entity.userData.kidsGalaxySnapshotSafeMargin = SNAPSHOT_SAFE_MARGIN;
+    entity.userData.kidsGalaxySnapshotTouchesSafeMargin = this.pixelsTouchSafeMargin(pixels);
 
     if (!pixels) return Promise.resolve(null);
     return this.pixelsToPng(pixels);
@@ -298,7 +334,7 @@ export class ProjectorSnapshotPublisher {
     return scene;
   }
 
-  createExportCamera(entity, exportScene) {
+  createExportCamera(entity, exportScene, frameScale = 1) {
     const camera = new THREE.PerspectiveCamera(
       SNAPSHOT_FOV_DEGREES,
       1,
@@ -315,14 +351,16 @@ export class ProjectorSnapshotPublisher {
       : CAMERA_ELEVATION_RATIO;
 
     const target = new THREE.Vector3(0, 0, 0);
-    let distance = MIN_CAMERA_DISTANCE;
+    let distance = MIN_CAMERA_DISTANCE * frameScale;
     const bounds = exportScene?.userData?.kidsGalaxyExportFramingBounds;
     if (bounds?.isBox3 && !bounds.isEmpty()) {
       const sphere = bounds.getBoundingSphere(new THREE.Sphere());
       target.copy(sphere.center);
       const halfFov = THREE.MathUtils.degToRad(SNAPSHOT_FOV_DEGREES / 2);
-      const fittedDistance = (sphere.radius / Math.sin(halfFov)) * CAMERA_FRAME_PADDING;
-      distance = Math.max(MIN_CAMERA_DISTANCE, fittedDistance);
+      const fittedDistance = (
+        sphere.radius / Math.sin(halfFov)
+      ) * CAMERA_FRAME_PADDING * frameScale;
+      distance = Math.max(MIN_CAMERA_DISTANCE * frameScale, fittedDistance);
     }
 
     const elevation = distance * elevationRatio;
