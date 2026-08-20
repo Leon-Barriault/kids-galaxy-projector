@@ -619,9 +619,10 @@ def main() -> int:
         # Deleting, evicting, or clearing a planet can race more than its snapshot
         # publish. The renderer may also still be fetching that planet's uploaded
         # artwork/manifest when the server removes those files. Depending on which
-        # side wins, Chrome reports either a 404 response or an aborted request.
-        # These are expected only when the URL is scoped to a planet ID this test
-        # itself recorded as removed.
+        # side wins, Chrome reports a 404 response, an aborted request, or a
+        # content-length mismatch when response headers were committed just before
+        # the file disappeared. These are expected only when the URL is scoped to
+        # a planet ID this test itself recorded as removed.
         #
         # The explicit page reload can also abort the old page's live EventSource
         # before any HTTP response exists. That is expected only for GET /api/events
@@ -659,16 +660,19 @@ def main() -> int:
             and "/rendered-preview.png:" in failure
             and any(f"/planets/{planet_id}/" in failure for planet_id in removed_planet_ids)
         ]
-        raced_removed_asset_aborts = [
+        raced_removed_asset_failures = [
             failure
             for failure in failed_network_requests
             if failure.startswith("GET ")
-            and failure.endswith("net::ERR_ABORTED")
             and f" {server.base}/uploads/" in failure
+            and (
+                failure.endswith("net::ERR_ABORTED")
+                or failure.endswith("net::ERR_CONTENT_LENGTH_MISMATCH")
+            )
             and any(f"/uploads/{planet_id}_" in failure for planet_id in removed_planet_ids)
         ]
         expected_network_failures = (
-            reload_event_aborts + raced_snapshot_aborts + raced_removed_asset_aborts
+            reload_event_aborts + raced_snapshot_aborts + raced_removed_asset_failures
         )
         unexpected_network_failures = [
             failure for failure in failed_network_requests if failure not in expected_network_failures
@@ -689,7 +693,7 @@ def main() -> int:
             f"{resource_noise} resource error(s) against {len(raced_snapshots)} raced snapshot response(s), "
             f"{len(raced_removed_assets)} removed-asset response(s), "
             f"{len(raced_snapshot_aborts)} raced snapshot abort(s), "
-            f"{len(raced_removed_asset_aborts)} removed-asset abort(s), and "
+            f"{len(raced_removed_asset_failures)} removed-asset network failure(s), and "
             f"{len(reload_event_aborts)} reload-aborted event stream(s))",
         )
         browser.close()
