@@ -37,6 +37,7 @@ data class ClearResponse(
 data class BehaviorSettingsDto(
     @SerializedName("mode") val mode: String = "auto",
     @SerializedName("manual_theme") val manualTheme: String = "default",
+    @SerializedName("region") val region: String = "ca-qc",
     @SerializedName("planet_speed") val planetSpeed: Double = 1.0,
     @SerializedName("ambient_effects") val ambientEffects: Boolean = true,
     @SerializedName("projector_language") val projectorLanguage: String = "en",
@@ -46,7 +47,19 @@ data class BehaviorSettingsDto(
     @SerializedName("flyby_asteroids_enabled") val flybyAsteroidsEnabled: Boolean = false,
     @SerializedName("flyby_frequency") val flybyFrequency: String = "normal",
     @SerializedName("enabled_themes")
-    val enabledThemes: List<String> = listOf("default", "halloween", "easter", "christmas"),
+    val enabledThemes: List<String> =
+        listOf(
+            "default",
+            "halloween",
+            "easter",
+            "christmas",
+            "remembrance-day",
+            "canada-day",
+            "fete-nationale",
+            "thanksgiving",
+            "new-year",
+            "family-day",
+        ),
 )
 
 data class BehaviorStateDto(

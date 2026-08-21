@@ -158,6 +158,12 @@ class ManagerViewModel(
         )
     }
 
+    fun setRegion(region: String) {
+        val normalized = region.lowercase()
+        if (normalized !in CANADIAN_REGIONS) return
+        updateBehavior { it.copy(region = normalized) }
+    }
+
     fun setAsteroidBeltEnabled(enabled: Boolean) {
         updateBehavior { it.copy(asteroidBeltEnabled = enabled) }
     }
@@ -332,7 +338,21 @@ class ManagerViewModel(
 
     companion object {
         private val EVENT_FREQUENCIES = setOf("rare", "normal", "frequent")
-        private val GALAXY_THEMES = listOf("default", "halloween", "easter", "christmas")
+        private val CANADIAN_REGIONS =
+            setOf("ca-qc", "ca-on", "ca-ab", "ca-bc", "ca-sk", "ca-nb", "ca-other")
+        private val GALAXY_THEMES =
+            listOf(
+                "default",
+                "halloween",
+                "easter",
+                "christmas",
+                "remembrance-day",
+                "canada-day",
+                "fete-nationale",
+                "thanksgiving",
+                "new-year",
+                "family-day",
+            )
 
         fun factory(
             context: Context,

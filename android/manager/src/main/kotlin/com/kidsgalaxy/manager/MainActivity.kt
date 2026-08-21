@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                         onDelete = managerViewModel::deletePlanet,
                         onClearAll = managerViewModel::clearAll,
                         onClearError = managerViewModel::clearError,
+                        onRegionChange = managerViewModel::setRegion,
                         onAsteroidBeltChange = managerViewModel::setAsteroidBeltEnabled,
                         onCometsChange = managerViewModel::setCometsEnabled,
                         onCometFrequencyChange = managerViewModel::setCometFrequency,

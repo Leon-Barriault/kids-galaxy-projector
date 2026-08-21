@@ -51,6 +51,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Exercise core manifest projector contract
         run: python scripts/check_projector.py
+      - name: Exercise seasonal theme registry and holiday objects
+        run: python scripts/check_seasonal_themes.py
       - name: Verify tablet drawing manifests drive layered embossed sphere strokes
         run: python scripts/check_manifest_stroke_projection.py
       - name: Verify projector WebGL drives preview and PDF exports
