@@ -18,6 +18,7 @@ class GalaxyTheme(StrEnum):
     HALLOWEEN = "halloween"
     EASTER = "easter"
     CHRISTMAS = "christmas"
+    REMEMBRANCE_DAY = "remembrance-day"
 
 
 class BehaviorMode(StrEnum):
@@ -47,6 +48,7 @@ DEFAULT_ENABLED_THEMES = (
     GalaxyTheme.HALLOWEEN,
     GalaxyTheme.EASTER,
     GalaxyTheme.CHRISTMAS,
+    GalaxyTheme.REMEMBRANCE_DAY,
 )
 
 
@@ -101,6 +103,9 @@ class SeasonalThemeResolver:
         """Return the theme that should be active on the given calendar day."""
         if (day.month == 12 and day.day >= 20) or (day.month == 1 and day.day <= 6):
             return GalaxyTheme.CHRISTMAS
+
+        if day.month == 11 and day.day == 11:
+            return GalaxyTheme.REMEMBRANCE_DAY
 
         if (day.month == 10 and day.day >= 25) or (day.month == 11 and day.day <= 1):
             return GalaxyTheme.HALLOWEEN
