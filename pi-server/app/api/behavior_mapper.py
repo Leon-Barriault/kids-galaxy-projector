@@ -22,6 +22,7 @@ def behavior_settings_to_payload(settings: GalaxyBehaviorSettings) -> dict:
     return {
         "mode": settings.mode.value,
         "manual_theme": settings.manual_theme.value,
+        "region": settings.region.value,
         "planet_speed": settings.planet_speed,
         "ambient_effects": settings.ambient_effects,
         "projector_language": settings.projector_language.value,
