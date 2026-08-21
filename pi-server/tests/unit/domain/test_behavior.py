@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.behavior import (
     BehaviorMode,
+    CanadianRegion,
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
@@ -30,10 +31,43 @@ def test_remembrance_day_is_automatic_only_on_november_11(resolver):
     assert resolver.resolve(date(2026, 11, 12)) == GalaxyTheme.DEFAULT
 
 
-def test_christmas_window_crosses_new_year(resolver):
-    assert resolver.resolve(date(2026, 12, 20)) == GalaxyTheme.CHRISTMAS
+def test_new_year_overrides_the_surrounding_christmas_window(resolver):
+    assert resolver.resolve(date(2026, 12, 30)) == GalaxyTheme.CHRISTMAS
+    assert resolver.resolve(date(2026, 12, 31)) == GalaxyTheme.NEW_YEAR
+    assert resolver.resolve(date(2027, 1, 1)) == GalaxyTheme.NEW_YEAR
+    assert resolver.resolve(date(2027, 1, 2)) == GalaxyTheme.CHRISTMAS
     assert resolver.resolve(date(2027, 1, 6)) == GalaxyTheme.CHRISTMAS
     assert resolver.resolve(date(2027, 1, 7)) == GalaxyTheme.DEFAULT
+
+
+def test_canada_day_window_is_automatic(resolver):
+    assert resolver.resolve(date(2026, 6, 30)) == GalaxyTheme.CANADA_DAY
+    assert resolver.resolve(date(2026, 7, 1)) == GalaxyTheme.CANADA_DAY
+    assert resolver.resolve(date(2026, 7, 2)) == GalaxyTheme.CANADA_DAY
+    assert resolver.resolve(date(2026, 7, 3)) == GalaxyTheme.DEFAULT
+
+
+def test_fete_nationale_is_quebec_specific(resolver):
+    assert resolver.resolve(date(2026, 6, 23), CanadianRegion.QUEBEC) == GalaxyTheme.FETE_NATIONALE
+    assert resolver.resolve(date(2026, 6, 24), CanadianRegion.QUEBEC) == GalaxyTheme.FETE_NATIONALE
+    assert resolver.resolve(date(2026, 6, 24), CanadianRegion.ONTARIO) == GalaxyTheme.DEFAULT
+    assert resolver.resolve(date(2026, 6, 25), CanadianRegion.QUEBEC) == GalaxyTheme.DEFAULT
+
+
+def test_canadian_thanksgiving_uses_second_monday_of_october(resolver):
+    assert resolver.nth_weekday(2026, 10, weekday=0, occurrence=2) == date(2026, 10, 12)
+    assert resolver.resolve(date(2026, 10, 10)) == GalaxyTheme.THANKSGIVING
+    assert resolver.resolve(date(2026, 10, 12)) == GalaxyTheme.THANKSGIVING
+    assert resolver.resolve(date(2026, 10, 13)) == GalaxyTheme.DEFAULT
+
+
+def test_family_day_is_region_aware(resolver):
+    # Third Monday of February is February 16 in 2026.
+    assert resolver.nth_weekday(2026, 2, weekday=0, occurrence=3) == date(2026, 2, 16)
+    assert resolver.resolve(date(2026, 2, 14), CanadianRegion.ONTARIO) == GalaxyTheme.FAMILY_DAY
+    assert resolver.resolve(date(2026, 2, 16), CanadianRegion.ALBERTA) == GalaxyTheme.FAMILY_DAY
+    assert resolver.resolve(date(2026, 2, 16), CanadianRegion.QUEBEC) == GalaxyTheme.DEFAULT
+    assert resolver.resolve(date(2026, 2, 17), CanadianRegion.ONTARIO) == GalaxyTheme.DEFAULT
 
 
 def test_easter_uses_the_real_gregorian_date(resolver):
@@ -60,15 +94,26 @@ def test_manual_mode_overrides_the_calendar(resolver):
     assert behavior.ambient_effects is False
 
 
-def test_remembrance_day_can_be_selected_manually(resolver):
+@pytest.mark.parametrize(
+    "theme",
+    [
+        GalaxyTheme.REMEMBRANCE_DAY,
+        GalaxyTheme.CANADA_DAY,
+        GalaxyTheme.FETE_NATIONALE,
+        GalaxyTheme.THANKSGIVING,
+        GalaxyTheme.NEW_YEAR,
+        GalaxyTheme.FAMILY_DAY,
+    ],
+)
+def test_new_themes_can_be_selected_manually(resolver, theme):
     settings = GalaxyBehaviorSettings(
         mode=BehaviorMode.MANUAL,
-        manual_theme=GalaxyTheme.REMEMBRANCE_DAY,
+        manual_theme=theme,
     )
 
     behavior = resolver.effective(settings, date(2026, 8, 21))
 
-    assert behavior.theme == GalaxyTheme.REMEMBRANCE_DAY
+    assert behavior.theme == theme
 
 
 def test_disabled_seasonal_theme_falls_back_to_default(resolver):
@@ -99,8 +144,9 @@ def test_default_theme_cannot_be_disabled():
     assert settings.enabled_themes == (GalaxyTheme.DEFAULT, GalaxyTheme.EASTER)
 
 
-def test_auto_mode_keeps_operator_motion_language_and_environment_settings(resolver):
+def test_auto_mode_keeps_operator_motion_language_region_and_environment_settings(resolver):
     settings = GalaxyBehaviorSettings(
+        region=CanadianRegion.ONTARIO,
         planet_speed=0.75,
         ambient_effects=False,
         projector_language=ProjectorLanguage.FRENCH,
@@ -113,6 +159,7 @@ def test_auto_mode_keeps_operator_motion_language_and_environment_settings(resol
 
     behavior = resolver.effective(settings, date(2026, 12, 25))
 
+    assert settings.region == CanadianRegion.ONTARIO
     assert behavior.theme == GalaxyTheme.CHRISTMAS
     assert behavior.planet_speed == 0.75
     assert behavior.ambient_effects is False
