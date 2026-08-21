@@ -48,7 +48,13 @@ def test_default_behavior_is_auto_and_safe(tmp_path):
         "comet_frequency": "normal",
         "flyby_asteroids_enabled": False,
         "flyby_frequency": "normal",
-        "enabled_themes": ["default", "halloween", "easter", "christmas"],
+        "enabled_themes": [
+            "default",
+            "halloween",
+            "easter",
+            "christmas",
+            "remembrance-day",
+        ],
     }
     assert body["effective"]["mode"] == "auto"
     assert body["effective"]["planet_speed"] == 1.0
@@ -91,6 +97,22 @@ def test_manager_can_configure_theme_motion_language_and_space_activity(tmp_path
         "flyby_asteroids_enabled": True,
         "flyby_frequency": "rare",
     }
+
+
+def test_manager_can_select_remembrance_day_manually(tmp_path):
+    client = TestClient(create_app(app_settings(tmp_path)))
+
+    response = client.put(
+        "/api/behavior",
+        json={
+            "mode": "manual",
+            "manual_theme": "remembrance-day",
+            "enabled_themes": ["default", "remembrance-day"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["effective"]["theme"] == "remembrance-day"
 
 
 def test_behavior_settings_survive_app_recreation(tmp_path):
