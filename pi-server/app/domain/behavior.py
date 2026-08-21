@@ -19,6 +19,23 @@ class GalaxyTheme(StrEnum):
     EASTER = "easter"
     CHRISTMAS = "christmas"
     REMEMBRANCE_DAY = "remembrance-day"
+    CANADA_DAY = "canada-day"
+    FETE_NATIONALE = "fete-nationale"
+    THANKSGIVING = "thanksgiving"
+    NEW_YEAR = "new-year"
+    FAMILY_DAY = "family-day"
+
+
+class CanadianRegion(StrEnum):
+    """Canadian regional calendar used by automatic seasonal scheduling."""
+
+    QUEBEC = "ca-qc"
+    ONTARIO = "ca-on"
+    ALBERTA = "ca-ab"
+    BRITISH_COLUMBIA = "ca-bc"
+    SASKATCHEWAN = "ca-sk"
+    NEW_BRUNSWICK = "ca-nb"
+    OTHER_CANADA = "ca-other"
 
 
 class BehaviorMode(StrEnum):
@@ -49,6 +66,21 @@ DEFAULT_ENABLED_THEMES = (
     GalaxyTheme.EASTER,
     GalaxyTheme.CHRISTMAS,
     GalaxyTheme.REMEMBRANCE_DAY,
+    GalaxyTheme.CANADA_DAY,
+    GalaxyTheme.FETE_NATIONALE,
+    GalaxyTheme.THANKSGIVING,
+    GalaxyTheme.NEW_YEAR,
+    GalaxyTheme.FAMILY_DAY,
+)
+
+FAMILY_DAY_REGIONS = frozenset(
+    {
+        CanadianRegion.ONTARIO,
+        CanadianRegion.ALBERTA,
+        CanadianRegion.BRITISH_COLUMBIA,
+        CanadianRegion.SASKATCHEWAN,
+        CanadianRegion.NEW_BRUNSWICK,
+    }
 )
 
 
@@ -58,6 +90,7 @@ class GalaxyBehaviorSettings:
 
     mode: BehaviorMode = BehaviorMode.AUTO
     manual_theme: GalaxyTheme = GalaxyTheme.DEFAULT
+    region: CanadianRegion = CanadianRegion.QUEBEC
     planet_speed: float = 1.0
     ambient_effects: bool = True
     projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
@@ -97,11 +130,21 @@ class GalaxyBehavior:
 
 
 class SeasonalThemeResolver:
-    """Built-in annual scene presets with no infrastructure dependencies."""
+    """Built-in annual scene presets with Canadian regional scheduling."""
 
-    def resolve(self, day: date) -> GalaxyTheme:
+    def resolve(
+        self,
+        day: date,
+        region: CanadianRegion = CanadianRegion.QUEBEC,
+    ) -> GalaxyTheme:
         """Return the theme that should be active on the given calendar day."""
-        if (day.month == 12 and day.day >= 20) or (day.month == 1 and day.day <= 6):
+        # New Year deliberately overrides the surrounding Christmas window.
+        if (day.month == 12 and day.day == 31) or (day.month == 1 and day.day == 1):
+            return GalaxyTheme.NEW_YEAR
+
+        if (day.month == 12 and 20 <= day.day <= 30) or (
+            day.month == 1 and 2 <= day.day <= 6
+        ):
             return GalaxyTheme.CHRISTMAS
 
         if day.month == 11 and day.day == 11:
@@ -110,11 +153,41 @@ class SeasonalThemeResolver:
         if (day.month == 10 and day.day >= 25) or (day.month == 11 and day.day <= 1):
             return GalaxyTheme.HALLOWEEN
 
+        thanksgiving = self.nth_weekday(day.year, 10, weekday=0, occurrence=2)
+        if thanksgiving - timedelta(days=2) <= day <= thanksgiving:
+            return GalaxyTheme.THANKSGIVING
+
+        if (day.month == 6 and day.day == 30) or (
+            day.month == 7 and day.day <= 2
+        ):
+            return GalaxyTheme.CANADA_DAY
+
+        if region == CanadianRegion.QUEBEC and day.month == 6 and day.day in (23, 24):
+            return GalaxyTheme.FETE_NATIONALE
+
+        if region in FAMILY_DAY_REGIONS:
+            family_day = self.nth_weekday(day.year, 2, weekday=0, occurrence=3)
+            if family_day - timedelta(days=2) <= day <= family_day:
+                return GalaxyTheme.FAMILY_DAY
+
         easter = self.easter_sunday(day.year)
         if easter - timedelta(days=2) <= day <= easter + timedelta(days=1):
             return GalaxyTheme.EASTER
 
         return GalaxyTheme.DEFAULT
+
+    @staticmethod
+    def nth_weekday(
+        year: int,
+        month: int,
+        *,
+        weekday: int,
+        occurrence: int,
+    ) -> date:
+        """Return the requested 1-based weekday occurrence in a month."""
+        first = date(year, month, 1)
+        offset = (weekday - first.weekday()) % 7
+        return first + timedelta(days=offset + (occurrence - 1) * 7)
 
     @staticmethod
     def easter_sunday(year: int) -> date:
@@ -142,7 +215,7 @@ class SeasonalThemeResolver:
     ) -> GalaxyBehavior:
         """Resolve the concrete behaviour that should be applied right now."""
         candidate = (
-            self.resolve(day)
+            self.resolve(day, settings.region)
             if settings.mode == BehaviorMode.AUTO
             else settings.manual_theme
         )
