@@ -42,6 +42,22 @@ private val AdminAccent = Color(0xFF4FC3F7)
 private val AdminText = Color.White
 private val AdminMuted = Color(0xFFB0BEC5)
 
+private val ManualThemeChoices =
+    listOf(
+        "default" to R.string.theme_default,
+        "halloween" to R.string.theme_halloween,
+        "easter" to R.string.theme_easter,
+        "christmas" to R.string.theme_christmas,
+        "remembrance-day" to R.string.theme_remembrance_day,
+        "canada-day" to R.string.theme_canada_day,
+        "fete-nationale" to R.string.theme_fete_nationale,
+        "thanksgiving" to R.string.theme_thanksgiving,
+        "new-year" to R.string.theme_new_year,
+        "family-day" to R.string.theme_family_day,
+    )
+
+private val SeasonalThemeChoices = ManualThemeChoices.drop(1)
+
 @Composable
 fun GalaxyAdminScreen(
     state: ManagerUiState,
@@ -274,11 +290,19 @@ private fun ThemeCard(
                 color = AdminMuted,
                 fontSize = 13.sp,
             )
-            ThemeChoiceRow("default", R.string.theme_default, "halloween", R.string.theme_halloween, settings, enabled, onManualThemeChange)
-            ThemeChoiceRow("easter", R.string.theme_easter, "christmas", R.string.theme_christmas, settings, enabled, onManualThemeChange)
-            ThemeChoiceRow("remembrance-day", R.string.theme_remembrance_day, "canada-day", R.string.theme_canada_day, settings, enabled, onManualThemeChange)
-            ThemeChoiceRow("fete-nationale", R.string.theme_fete_nationale, "thanksgiving", R.string.theme_thanksgiving, settings, enabled, onManualThemeChange)
-            ThemeChoiceRow("new-year", R.string.theme_new_year, "family-day", R.string.theme_family_day, settings, enabled, onManualThemeChange)
+            ManualThemeChoices.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pair.forEach { (theme, labelResource) ->
+                        ThemeChoice(
+                            theme = theme,
+                            labelResource = labelResource,
+                            settings = settings,
+                            enabled = enabled,
+                            onSelect = onManualThemeChange,
+                        )
+                    }
+                }
+            }
             if (settings.manualTheme == "easter") {
                 Text(
                     text = stringResource(R.string.theme_easter_effects),
@@ -302,15 +326,15 @@ private fun ThemeCard(
             color = AdminMuted,
             fontSize = 13.sp,
         )
-        ThemeToggle("halloween", stringResource(R.string.theme_halloween), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("easter", stringResource(R.string.theme_easter), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("christmas", stringResource(R.string.theme_christmas), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("remembrance-day", stringResource(R.string.theme_remembrance_day), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("canada-day", stringResource(R.string.theme_canada_day), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("fete-nationale", stringResource(R.string.theme_fete_nationale), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("thanksgiving", stringResource(R.string.theme_thanksgiving), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("new-year", stringResource(R.string.theme_new_year), settings, enabled, onThemeEnabledChange)
-        ThemeToggle("family-day", stringResource(R.string.theme_family_day), settings, enabled, onThemeEnabledChange)
+        SeasonalThemeChoices.forEach { (theme, labelResource) ->
+            ThemeToggle(
+                theme = theme,
+                label = stringResource(labelResource),
+                settings = settings,
+                enabled = enabled,
+                onThemeEnabledChange = onThemeEnabledChange,
+            )
+        }
         ToggleSetting(
             title = stringResource(R.string.ambient_theme_effects),
             subtitle = stringResource(R.string.ambient_theme_effects_hint),
@@ -356,22 +380,6 @@ private fun RegionButton(
         label = stringResource(labelResource),
         onClick = { onSelect(value) },
     )
-}
-
-@Composable
-private fun ThemeChoiceRow(
-    firstTheme: String,
-    firstLabel: Int,
-    secondTheme: String,
-    secondLabel: Int,
-    settings: BehaviorSettingsDto,
-    enabled: Boolean,
-    onSelect: (String) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ThemeChoice(firstTheme, firstLabel, settings, enabled, onSelect)
-        ThemeChoice(secondTheme, secondLabel, settings, enabled, onSelect)
-    }
 }
 
 @Composable
