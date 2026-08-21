@@ -11,6 +11,7 @@ export class ProjectorBehaviorController {
     if (!behavior || typeof behavior !== 'object') return;
     this.current = behavior;
     this.scene.applyBehavior(behavior);
+    this.celebration.setTheme(behavior.theme);
     this.environment?.applyBehavior(behavior);
     this.celebration.setLanguage(behavior.projector_language);
   }

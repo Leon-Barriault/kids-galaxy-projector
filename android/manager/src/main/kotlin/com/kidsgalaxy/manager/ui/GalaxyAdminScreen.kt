@@ -42,6 +42,22 @@ private val AdminAccent = Color(0xFF4FC3F7)
 private val AdminText = Color.White
 private val AdminMuted = Color(0xFFB0BEC5)
 
+private val ManualThemeChoices =
+    listOf(
+        "default" to R.string.theme_default,
+        "halloween" to R.string.theme_halloween,
+        "easter" to R.string.theme_easter,
+        "christmas" to R.string.theme_christmas,
+        "remembrance-day" to R.string.theme_remembrance_day,
+        "canada-day" to R.string.theme_canada_day,
+        "fete-nationale" to R.string.theme_fete_nationale,
+        "thanksgiving" to R.string.theme_thanksgiving,
+        "new-year" to R.string.theme_new_year,
+        "family-day" to R.string.theme_family_day,
+    )
+
+private val SeasonalThemeChoices = ManualThemeChoices.drop(1)
+
 @Composable
 fun GalaxyAdminScreen(
     state: ManagerUiState,
@@ -50,6 +66,7 @@ fun GalaxyAdminScreen(
     onToggleLanguage: () -> Unit,
     onConfigureGalaxy: () -> Unit,
     onRefresh: () -> Unit,
+    onRegionChange: (String) -> Unit,
     onAsteroidBeltChange: (Boolean) -> Unit,
     onCometsChange: (Boolean) -> Unit,
     onCometFrequencyChange: (String) -> Unit,
@@ -94,6 +111,7 @@ fun GalaxyAdminScreen(
             ThemeCard(
                 settings = settings,
                 enabled = !state.isBehaviorLoading && !state.isUpdatingBehavior,
+                onRegionChange = onRegionChange,
                 onBehaviorModeChange = onBehaviorModeChange,
                 onManualThemeChange = onManualThemeChange,
                 onThemeEnabledChange = onThemeEnabledChange,
@@ -234,6 +252,7 @@ private fun EnvironmentCard(
 private fun ThemeCard(
     settings: BehaviorSettingsDto,
     enabled: Boolean,
+    onRegionChange: (String) -> Unit,
     onBehaviorModeChange: (String) -> Unit,
     onManualThemeChange: (String) -> Unit,
     onThemeEnabledChange: (String, Boolean) -> Unit,
@@ -243,6 +262,13 @@ private fun ThemeCard(
         title = stringResource(R.string.themes),
         subtitle = stringResource(R.string.themes_hint),
     ) {
+        Text(
+            text = stringResource(R.string.canadian_region),
+            color = AdminMuted,
+            fontSize = 13.sp,
+        )
+        RegionSelector(settings.region, enabled, onRegionChange)
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ChoiceButton(
                 selected = settings.mode == "auto",
@@ -264,42 +290,31 @@ private fun ThemeCard(
                 color = AdminMuted,
                 fontSize = 13.sp,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ThemeChoice(
-                    "default",
-                    R.string.theme_default,
-                    settings,
-                    enabled,
-                    onManualThemeChange,
-                )
-                ThemeChoice(
-                    "halloween",
-                    R.string.theme_halloween,
-                    settings,
-                    enabled,
-                    onManualThemeChange,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ThemeChoice(
-                    "easter",
-                    R.string.theme_easter,
-                    settings,
-                    enabled,
-                    onManualThemeChange,
-                )
-                ThemeChoice(
-                    "christmas",
-                    R.string.theme_christmas,
-                    settings,
-                    enabled,
-                    onManualThemeChange,
-                )
+            ManualThemeChoices.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pair.forEach { (theme, labelResource) ->
+                        ThemeChoice(
+                            theme = theme,
+                            labelResource = labelResource,
+                            settings = settings,
+                            enabled = enabled,
+                            onSelect = onManualThemeChange,
+                        )
+                    }
+                }
             }
             if (settings.manualTheme == "easter") {
                 Text(
                     text = stringResource(R.string.theme_easter_effects),
                     color = AdminAccent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (settings.manualTheme == "remembrance-day") {
+                Text(
+                    text = stringResource(R.string.theme_remembrance_effects),
+                    color = AdminMuted,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -311,27 +326,15 @@ private fun ThemeCard(
             color = AdminMuted,
             fontSize = 13.sp,
         )
-        ThemeToggle(
-            theme = "halloween",
-            label = stringResource(R.string.theme_halloween),
-            settings = settings,
-            enabled = enabled,
-            onThemeEnabledChange = onThemeEnabledChange,
-        )
-        ThemeToggle(
-            theme = "easter",
-            label = stringResource(R.string.theme_easter),
-            settings = settings,
-            enabled = enabled,
-            onThemeEnabledChange = onThemeEnabledChange,
-        )
-        ThemeToggle(
-            theme = "christmas",
-            label = stringResource(R.string.theme_christmas),
-            settings = settings,
-            enabled = enabled,
-            onThemeEnabledChange = onThemeEnabledChange,
-        )
+        SeasonalThemeChoices.forEach { (theme, labelResource) ->
+            ThemeToggle(
+                theme = theme,
+                label = stringResource(labelResource),
+                settings = settings,
+                enabled = enabled,
+                onThemeEnabledChange = onThemeEnabledChange,
+            )
+        }
         ToggleSetting(
             title = stringResource(R.string.ambient_theme_effects),
             subtitle = stringResource(R.string.ambient_theme_effects_hint),
@@ -340,6 +343,43 @@ private fun ThemeCard(
             onCheckedChange = onAmbientEffectsChange,
         )
     }
+}
+
+@Composable
+private fun RegionSelector(
+    selected: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        RegionButton("ca-qc", R.string.region_quebec, selected, enabled, onSelect)
+        RegionButton("ca-on", R.string.region_ontario, selected, enabled, onSelect)
+        RegionButton("ca-other", R.string.region_other_canada, selected, enabled, onSelect)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        RegionButton("ca-ab", R.string.region_alberta, selected, enabled, onSelect)
+        RegionButton("ca-bc", R.string.region_british_columbia, selected, enabled, onSelect)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        RegionButton("ca-sk", R.string.region_saskatchewan, selected, enabled, onSelect)
+        RegionButton("ca-nb", R.string.region_new_brunswick, selected, enabled, onSelect)
+    }
+}
+
+@Composable
+private fun RegionButton(
+    value: String,
+    labelResource: Int,
+    selected: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    ChoiceButton(
+        selected = selected == value,
+        enabled = enabled,
+        label = stringResource(labelResource),
+        onClick = { onSelect(value) },
+    )
 }
 
 @Composable

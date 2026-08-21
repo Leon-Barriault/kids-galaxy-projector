@@ -1,12 +1,4 @@
-const SPARKLE_COLORS = [
-  '#FFD54F',
-  '#4FC3F7',
-  '#FF8A65',
-  '#CE93D8',
-  '#A5D6A7',
-  '#FFF59D',
-  '#F48FB1',
-];
+import { arrivalEffectForTheme, normalizeTheme } from './ThemeRegistry.js';
 
 const COPY = {
   en: {
@@ -29,6 +21,8 @@ const COPY = {
   },
 };
 
+const FIREWORK_THEMES = new Set(['canada-day', 'fete-nationale', 'new-year']);
+
 /** Owns the projector's DOM feedback for arrivals, localization and empty state. */
 export class CelebrationEffect {
   constructor({ planetNameEl, statusEl, celebrationEl, sparklesEl, badgeLabelEl, hintEl }) {
@@ -40,12 +34,33 @@ export class CelebrationEffect {
     this.hintEl = hintEl;
     this.timer = null;
     this.language = 'en';
+    this.theme = 'default';
     this.state = 'waiting';
     this.lastName = null;
   }
 
   copy() {
     return COPY[this.language] || COPY.en;
+  }
+
+  arrivalEffect() {
+    return arrivalEffectForTheme(this.theme);
+  }
+
+  setTheme(theme) {
+    this.theme = normalizeTheme(theme);
+    if (this.arrivalEffect().celebrate) return;
+    this.clearCelebration();
+  }
+
+  clearCelebration() {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.celebrationEl?.classList.remove('show');
+    this.sparklesEl?.replaceChildren();
+    this.planetNameEl?.classList.remove('celebrate');
   }
 
   setLanguage(language) {
@@ -106,24 +121,54 @@ export class CelebrationEffect {
     this.setStatus(this.copy().textureFailed);
   }
 
-  burstSparkles(count = 36) {
-    if (!this.sparklesEl) return;
-    const cx = window.innerWidth * 0.5;
-    const cy = window.innerHeight * 0.35;
+  sparkleShape(el, index) {
+    if (this.theme === 'thanksgiving') {
+      el.style.width = `${6 + Math.random() * 6}px`;
+      el.style.height = `${11 + Math.random() * 8}px`;
+      el.style.borderRadius = '70% 20% 70% 20%';
+      el.style.transform = `rotate(${index * 37}deg)`;
+      return;
+    }
+    if (this.theme === 'christmas') {
+      const size = 5 + Math.random() * 8;
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.borderRadius = '50%';
+      return;
+    }
+    if (this.theme === 'halloween') {
+      const size = 7 + Math.random() * 9;
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.borderRadius = index % 3 === 0 ? '2px' : '50%';
+      el.style.transform = index % 3 === 0 ? 'rotate(45deg)' : '';
+      return;
+    }
+    const size = 8 + Math.random() * 10;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.borderRadius = '50%';
+  }
 
-    for (let i = 0; i < count; i++) {
+  burstSparkles(count, colors, originX = 0.5, originY = 0.35) {
+    if (!this.sparklesEl || !colors?.length) return;
+    const cx = window.innerWidth * originX;
+    const cy = window.innerHeight * originY;
+
+    for (let i = 0; i < count; i += 1) {
       const el = document.createElement('div');
       el.className = 'sparkle';
-      const color = SPARKLE_COLORS[i % SPARKLE_COLORS.length];
+      el.dataset.theme = this.theme;
+      const color = colors[i % colors.length];
       el.style.background = color;
       el.style.color = color;
-      el.style.left = cx + 'px';
-      el.style.top = cy + 'px';
+      el.style.left = `${cx}px`;
+      el.style.top = `${cy}px`;
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
       const dist = 80 + Math.random() * 180;
-      el.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
-      el.style.setProperty('--dy', Math.sin(angle) * dist - 40 + 'px');
-      el.style.width = el.style.height = 8 + Math.random() * 10 + 'px';
+      el.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      el.style.setProperty('--dy', `${Math.sin(angle) * dist - 40}px`);
+      this.sparkleShape(el, i);
       this.sparklesEl.appendChild(el);
       setTimeout(() => el.remove(), 1900);
     }
@@ -131,10 +176,19 @@ export class CelebrationEffect {
 
   show(payload) {
     const name = this.displayName(payload);
-    this.setPlanetName(name, true);
-    this.burstSparkles();
-    if (!this.celebrationEl) return;
+    const effect = this.arrivalEffect();
+    this.setPlanetName(name, effect.celebrate);
+    if (!effect.celebrate) return;
 
+    if (FIREWORK_THEMES.has(this.theme)) {
+      const first = Math.ceil(effect.count * 0.58);
+      this.burstSparkles(first, effect.colors, 0.43, 0.34);
+      this.burstSparkles(effect.count - first, effect.colors, 0.58, 0.3);
+    } else {
+      this.burstSparkles(effect.count, effect.colors);
+    }
+
+    if (!this.celebrationEl) return;
     const msg = this.celebrationEl.querySelector('.msg');
     if (msg) msg.textContent = this.copy().joinedSky(name);
     this.celebrationEl.classList.add('show');

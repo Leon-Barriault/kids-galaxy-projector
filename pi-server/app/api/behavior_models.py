@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from app.domain.behavior import (
     DEFAULT_ENABLED_THEMES,
     BehaviorMode,
+    CanadianRegion,
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
@@ -15,6 +16,7 @@ from app.domain.behavior import (
 class BehaviorUpdateRequest(BaseModel):
     mode: BehaviorMode = BehaviorMode.AUTO
     manual_theme: GalaxyTheme = GalaxyTheme.DEFAULT
+    region: CanadianRegion = CanadianRegion.QUEBEC
     planet_speed: float = Field(default=1.0, ge=0.25, le=2.0)
     ambient_effects: bool = True
     projector_language: ProjectorLanguage = ProjectorLanguage.ENGLISH
@@ -31,6 +33,7 @@ class BehaviorUpdateRequest(BaseModel):
         return GalaxyBehaviorSettings(
             mode=self.mode,
             manual_theme=self.manual_theme,
+            region=self.region,
             planet_speed=self.planet_speed,
             ambient_effects=self.ambient_effects,
             projector_language=self.projector_language,

@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
-import { createChristmasTree, createWitchOnBroom, normalizeTheme } from './ThemeVisualFactory.js';
+import {
+  createChristmasTree,
+  createWhiteBunny,
+  createWitchOnBroom,
+} from './ThemeVisualFactory.js';
+import { normalizeTheme } from './ThemeRegistry.js';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
@@ -261,10 +266,11 @@ function enableShadows(object) {
 
 function addChristmasTrees() {
   const up = new THREE.Vector3(0, 1, 0);
-  this._themeTerrainFeatures = [];
+  this._themeHolidayDecorations ||= [];
   this.mountainDefinitions().slice(0, 6).forEach(({ direction, width, depth, seed }, rangeIndex) => {
     const cluster = new THREE.Group();
     cluster.userData.kidsGalaxyChristmasTreeCluster = true;
+    cluster.userData.kidsGalaxyChristmasPreservesTerrain = true;
     cluster.userData.treeCount = 0;
     cluster.position.copy(direction).multiplyScalar(1.015);
     cluster.quaternion.setFromUnitVectors(up, direction);
@@ -290,8 +296,14 @@ function addChristmasTrees() {
     }
     enableShadows(cluster);
     this.mesh.add(cluster);
-    this._themeTerrainFeatures.push(cluster);
+    this._themeHolidayDecorations.push(cluster);
   });
+}
+
+function companionKind(object) {
+  if (object?.userData?.kidsGalaxyWitchOnBroom) return 'witch';
+  if (object?.userData?.kidsGalaxyWhiteBunny) return 'bunny';
+  return 'astronaut';
 }
 
 /** Install laptop-grade crater geometry and holiday planet substitutions. */
@@ -333,22 +345,28 @@ export function installHighFidelityPlanetFeatures() {
     const previous = this._kidsGalaxyVisualTheme || 'default';
     if (normalized === previous) return;
 
-    if (this.style === 'spiky') {
-      (this._themeTerrainFeatures || []).forEach(disposeChild);
-      this._themeTerrainFeatures = [];
-      if (normalized === 'christmas') addChristmasTrees.call(this);
-      else this.addMountainRanges();
+    // Holiday scenery is additive. Kid-authored mountains remain authoritative
+    // and are never removed simply because a seasonal theme becomes active.
+    (this._themeHolidayDecorations || []).forEach(disposeChild);
+    this._themeHolidayDecorations = [];
+    if (this.style === 'spiky' && normalized === 'christmas') {
+      addChristmasTrees.call(this);
     }
 
-    this.companions.forEach((record) => {
+    this.companions.forEach((record, index) => {
       if (record.type !== 'astronaut') return;
-      const isWitch = Boolean(record.object?.userData?.kidsGalaxyWitchOnBroom);
-      const shouldBeWitch = normalized === 'halloween';
-      if (isWitch === shouldBeWitch) return;
+      const easterSeed = this.animator.hashId(`${this.id}-easter-bunny-${index}`);
+      const desiredKind = normalized === 'halloween'
+        ? 'witch'
+        : normalized === 'easter' && easterSeed % 2 === 0
+          ? 'bunny'
+          : 'astronaut';
+      if (companionKind(record.object) === desiredKind) return;
+
       this.disposeObject(record.object);
-      record.object = shouldBeWitch
-        ? createWitchOnBroom()
-        : originalCreateCompanion.call(this, 'astronaut');
+      if (desiredKind === 'witch') record.object = createWitchOnBroom();
+      else if (desiredKind === 'bunny') record.object = createWhiteBunny();
+      else record.object = originalCreateCompanion.call(this, 'astronaut');
       enableShadows(record.object);
       this.scene.add(record.object);
     });

@@ -6,6 +6,7 @@ from pathlib import Path
 from app.domain.behavior import (
     DEFAULT_ENABLED_THEMES,
     BehaviorMode,
+    CanadianRegion,
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
@@ -39,6 +40,9 @@ class JsonBehaviorRepository(BehaviorRepository):
                 manual_theme=GalaxyTheme(
                     raw.get("manual_theme", GalaxyTheme.DEFAULT.value)
                 ),
+                region=CanadianRegion(
+                    raw.get("region", CanadianRegion.QUEBEC.value)
+                ),
                 planet_speed=float(raw.get("planet_speed", 1.0)),
                 ambient_effects=bool(raw.get("ambient_effects", True)),
                 projector_language=ProjectorLanguage(
@@ -69,6 +73,7 @@ class JsonBehaviorRepository(BehaviorRepository):
         payload = {
             "mode": settings.mode.value,
             "manual_theme": settings.manual_theme.value,
+            "region": settings.region.value,
             "planet_speed": settings.planet_speed,
             "ambient_effects": settings.ambient_effects,
             "projector_language": settings.projector_language.value,
