@@ -24,6 +24,12 @@ def test_halloween_window_is_automatic(resolver):
     assert resolver.resolve(date(2026, 11, 2)) == GalaxyTheme.DEFAULT
 
 
+def test_remembrance_day_is_automatic_only_on_november_11(resolver):
+    assert resolver.resolve(date(2026, 11, 10)) == GalaxyTheme.DEFAULT
+    assert resolver.resolve(date(2026, 11, 11)) == GalaxyTheme.REMEMBRANCE_DAY
+    assert resolver.resolve(date(2026, 11, 12)) == GalaxyTheme.DEFAULT
+
+
 def test_christmas_window_crosses_new_year(resolver):
     assert resolver.resolve(date(2026, 12, 20)) == GalaxyTheme.CHRISTMAS
     assert resolver.resolve(date(2027, 1, 6)) == GalaxyTheme.CHRISTMAS
@@ -52,6 +58,17 @@ def test_manual_mode_overrides_the_calendar(resolver):
     assert behavior.mode == BehaviorMode.MANUAL
     assert behavior.planet_speed == 1.4
     assert behavior.ambient_effects is False
+
+
+def test_remembrance_day_can_be_selected_manually(resolver):
+    settings = GalaxyBehaviorSettings(
+        mode=BehaviorMode.MANUAL,
+        manual_theme=GalaxyTheme.REMEMBRANCE_DAY,
+    )
+
+    behavior = resolver.effective(settings, date(2026, 8, 21))
+
+    assert behavior.theme == GalaxyTheme.REMEMBRANCE_DAY
 
 
 def test_disabled_seasonal_theme_falls_back_to_default(resolver):
