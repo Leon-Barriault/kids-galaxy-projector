@@ -1,5 +1,3 @@
-import { applySeasonalTheme } from './SeasonalThemeController.js';
-
 /** Coordinates persisted galaxy behavior with the live projector scene. */
 export class ProjectorBehaviorController {
   constructor({ scene, celebration, environment = null }) {
@@ -13,7 +11,7 @@ export class ProjectorBehaviorController {
     if (!behavior || typeof behavior !== 'object') return;
     this.current = behavior;
     this.scene.applyBehavior(behavior);
-    applySeasonalTheme(this.scene, this.celebration, behavior);
+    this.celebration.setTheme(behavior.theme);
     this.environment?.applyBehavior(behavior);
     this.celebration.setLanguage(behavior.projector_language);
   }
