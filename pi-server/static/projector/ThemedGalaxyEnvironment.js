@@ -2,17 +2,33 @@ import * as THREE from 'three';
 
 import { GalaxyEnvironment } from './GalaxyEnvironment.js';
 import {
-  asteroidStyleForTheme,
-  createAsteroidGeometry,
-  createAsteroidMaterial,
   createPumpkinStemGeometry,
   createPumpkinStemMaterial,
-  easterEggColorFor,
-  normalizeTheme,
 } from './ThemeVisualFactory.js';
+import {
+  createThemeBodyGeometry,
+  createThemeBodyMaterial,
+  instanceColorForThemeBody,
+  themeBodyHasStem,
+} from './ThemeAsteroidFactory.js';
+import {
+  normalizeTheme,
+  pickAsteroidStyle,
+  themeDefinition,
+} from './ThemeRegistry.js';
 
 const BELT_BODY_COUNT = 620;
 const BELT_DUST_COUNT = 1500;
+const SYMBOLIC_STYLES = new Set([
+  'easter-egg',
+  'golden-egg',
+  'ornament',
+  'gold-orb',
+  'silver-orb',
+  'maple-leaf',
+  'fleur-de-lis',
+  'heart',
+]);
 
 function randomBetween(minimum, maximum) {
   return minimum + Math.random() * (maximum - minimum);
@@ -34,60 +50,101 @@ function disposeObject(scene, object) {
   });
 }
 
-function applyThemeInstanceColor(bodies, style, index) {
-  if (style !== 'easter-egg') return;
-  const color = easterEggColorFor(index).offsetHSL(
-    (index % 5) * 0.006 - 0.012,
-    0.015,
-    (index % 3) * 0.012 - 0.008,
-  );
-  bodies.setColorAt(index, color);
+function styleForIndex(theme, index) {
+  const unit = (0.173 + index * 0.618033988749895) % 1;
+  return pickAsteroidStyle(theme, unit);
 }
 
-function themedBelt() {
-  const theme = normalizeTheme(this.settings?.theme);
-  const style = asteroidStyleForTheme(theme);
+function bodyScale(style, size, flyby = false) {
+  if (SYMBOLIC_STYLES.has(style)) return new THREE.Vector3(size, size, size);
+  if (flyby) {
+    return new THREE.Vector3(
+      size,
+      size * randomBetween(0.8, 1.18),
+      size * randomBetween(0.8, 1.18),
+    );
+  }
+  return new THREE.Vector3(
+    size * randomBetween(0.72, 1.32),
+    size * randomBetween(0.72, 1.22),
+    size * randomBetween(0.72, 1.32),
+  );
+}
+
+function createDescriptors(theme, count, transformFactory) {
+  const descriptors = [];
+  for (let index = 0; index < count; index += 1) {
+    const style = styleForIndex(theme, index);
+    descriptors.push({
+      index,
+      style,
+      matrix: transformFactory(style, index),
+    });
+  }
+  return descriptors;
+}
+
+function createInstancedBodies(descriptors, radius, marker) {
   const group = new THREE.Group();
-  group.userData.kidsGalaxyAsteroidBelt = true;
-  group.userData.kidsGalaxyTheme = theme;
-  group.userData.kidsGalaxyAsteroidStyle = style;
-  group.rotation.x = 0.08;
-  group.rotation.z = -0.04;
+  const byStyle = new Map();
+  descriptors.forEach((descriptor) => {
+    if (!byStyle.has(descriptor.style)) byStyle.set(descriptor.style, []);
+    byStyle.get(descriptor.style).push(descriptor);
+  });
 
-  const radius = 0.16;
-  const geometry = createAsteroidGeometry(theme, radius);
-  const material = createAsteroidMaterial(theme);
-  const bodies = new THREE.InstancedMesh(geometry, material, BELT_BODY_COUNT);
-  bodies.castShadow = true;
-  bodies.receiveShadow = true;
-  bodies.userData.kidsGalaxyAsteroidBeltRocks = true;
-  bodies.userData.kidsGalaxyThemedAsteroids = true;
-  bodies.userData.kidsGalaxyAsteroidStyle = style;
-  bodies.userData.rockCount = BELT_BODY_COUNT;
-  if (style === 'easter-egg') bodies.userData.kidsGalaxyPastelEggs = true;
+  for (const [style, entries] of byStyle.entries()) {
+    const bodies = new THREE.InstancedMesh(
+      createThemeBodyGeometry(style, radius),
+      createThemeBodyMaterial(style),
+      entries.length,
+    );
+    bodies.castShadow = true;
+    bodies.receiveShadow = true;
+    bodies.userData[marker] = true;
+    bodies.userData.kidsGalaxyThemedAsteroids = true;
+    bodies.userData.kidsGalaxyAsteroidStyle = style;
+    bodies.userData.instanceCount = entries.length;
 
-  const stems = style === 'pumpkin'
-    ? new THREE.InstancedMesh(
+    entries.forEach((descriptor, localIndex) => {
+      bodies.setMatrixAt(localIndex, descriptor.matrix);
+      const color = instanceColorForThemeBody(style, descriptor.index);
+      if (color) bodies.setColorAt(localIndex, color);
+    });
+    bodies.instanceMatrix.needsUpdate = true;
+    if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+    group.add(bodies);
+
+    if (themeBodyHasStem(style)) {
+      const stems = new THREE.InstancedMesh(
         createPumpkinStemGeometry(radius),
         createPumpkinStemMaterial(),
-        BELT_BODY_COUNT,
-      )
-    : null;
-  if (stems) {
-    stems.castShadow = true;
-    stems.receiveShadow = true;
-    stems.userData.kidsGalaxyPumpkinStems = true;
+        entries.length,
+      );
+      stems.castShadow = true;
+      stems.receiveShadow = true;
+      stems.userData.kidsGalaxyPumpkinStems = true;
+      stems.userData.kidsGalaxyAsteroidStyle = style;
+      entries.forEach((descriptor, localIndex) => {
+        stems.setMatrixAt(localIndex, descriptor.matrix);
+      });
+      stems.instanceMatrix.needsUpdate = true;
+      group.add(stems);
+    }
   }
 
+  group.userData.kidsGalaxyMixedThemeBodies = true;
+  group.userData.bodyCount = descriptors.length;
+  group.userData.styles = [...byStyle.keys()];
+  return group;
+}
+
+function createBeltDescriptors(theme) {
   const matrix = new THREE.Matrix4();
-  const stemMatrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
   const euler = new THREE.Euler();
-  const localStemScale = new THREE.Matrix4();
 
-  for (let index = 0; index < BELT_BODY_COUNT; index += 1) {
+  return createDescriptors(theme, BELT_BODY_COUNT, (style) => {
     const angle = Math.random() * Math.PI * 2;
     const orbitalRadius = randomBetween(17.5, 23.5);
     position.set(
@@ -97,34 +154,13 @@ function themedBelt() {
     );
     euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
     quaternion.setFromEuler(euler);
-    const size = randomBetween(0.55, 1.8);
-    if (style === 'easter-egg') {
-      scale.set(size, size, size);
-    } else {
-      scale.set(
-        size * randomBetween(0.72, 1.32),
-        size * randomBetween(0.72, 1.22),
-        size * randomBetween(0.72, 1.32),
-      );
-    }
-    matrix.compose(position, quaternion, scale);
-    bodies.setMatrixAt(index, matrix);
-    applyThemeInstanceColor(bodies, style, index);
+    const scale = bodyScale(style, randomBetween(0.55, 1.8));
+    return matrix.clone().compose(position, quaternion, scale);
+  });
+}
 
-    if (stems) {
-      localStemScale.makeScale(
-        1 / Math.max(scale.x, 0.001),
-        1 / Math.max(scale.y, 0.001),
-        1 / Math.max(scale.z, 0.001),
-      );
-      stemMatrix.copy(matrix).multiply(localStemScale).scale(scale);
-      stems.setMatrixAt(index, stemMatrix);
-    }
-  }
-  bodies.instanceMatrix.needsUpdate = true;
-  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
-  if (stems) stems.instanceMatrix.needsUpdate = true;
-
+function createBeltDust(theme) {
+  const definition = themeDefinition(theme);
   const dustGeometry = new THREE.BufferGeometry();
   const dustPositions = new Float32Array(BELT_DUST_COUNT * 3);
   for (let index = 0; index < BELT_DUST_COUNT; index += 1) {
@@ -135,36 +171,62 @@ function themedBelt() {
     dustPositions[index * 3 + 2] = Math.sin(angle) * orbitalRadius;
   }
   dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
-  const dustColor =
-    style === 'snowball'
-      ? 0xeaf5ff
-      : style === 'pumpkin'
-        ? 0xf2a04e
-        : style === 'easter-egg'
-          ? 0xf2c7e5
-          : 0xaaa094;
   const dust = new THREE.Points(
     dustGeometry,
     new THREE.PointsMaterial({
-      color: dustColor,
-      size: style === 'snowball' || style === 'easter-egg' ? 0.055 : 0.065,
+      color: definition.dustColor,
+      size: theme === 'default' ? 0.065 : 0.055,
       transparent: true,
-      opacity: style === 'rock' ? 0.42 : 0.28,
+      opacity: theme === 'remembrance-day' ? 0.2 : theme === 'default' ? 0.42 : 0.3,
       sizeAttenuation: true,
       depthWrite: false,
     }),
   );
   dust.userData.kidsGalaxyAsteroidBeltDust = true;
+  dust.userData.kidsGalaxyTheme = theme;
+  return dust;
+}
 
-  group.add(bodies);
-  if (stems) group.add(stems);
-  group.add(dust);
+function themedBelt() {
+  const theme = normalizeTheme(this.settings?.theme);
+  const group = new THREE.Group();
+  group.userData.kidsGalaxyAsteroidBelt = true;
+  group.userData.kidsGalaxyTheme = theme;
+  group.userData.kidsGalaxyAsteroidStyle = 'mixed';
+  group.userData.rockCount = BELT_BODY_COUNT;
+  group.rotation.x = 0.08;
+  group.rotation.z = -0.04;
+
+  const bodies = createInstancedBodies(
+    createBeltDescriptors(theme),
+    0.16,
+    'kidsGalaxyAsteroidBeltRocks',
+  );
+  group.add(bodies, createBeltDust(theme));
   return group;
+}
+
+function createFlybyDescriptors(theme, count) {
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+
+  return createDescriptors(theme, count, (style) => {
+    position.set(
+      randomBetween(-1.8, 1.8),
+      randomBetween(-1.1, 1.1),
+      randomBetween(-1.5, 1.5),
+    );
+    euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    quaternion.setFromEuler(euler);
+    const scale = bodyScale(style, randomBetween(0.55, 1.4), true);
+    return matrix.clone().compose(position, quaternion, scale);
+  });
 }
 
 function themedFlyby() {
   const theme = normalizeTheme(this.settings?.theme);
-  const style = asteroidStyleForTheme(theme);
   const direction = randomDirection();
   const start = direction.clone().multiplyScalar(randomBetween(29, 34));
   const end = direction.clone().multiplyScalar(-randomBetween(29, 34));
@@ -175,64 +237,15 @@ function themedFlyby() {
   const group = new THREE.Group();
   group.userData.kidsGalaxyAsteroidFlyby = true;
   group.userData.kidsGalaxyTheme = theme;
-  group.userData.kidsGalaxyAsteroidStyle = style;
+  group.userData.kidsGalaxyAsteroidStyle = 'mixed';
 
   const count = 8 + Math.floor(Math.random() * 5);
-  const radius = 0.26;
-  const bodies = new THREE.InstancedMesh(
-    createAsteroidGeometry(theme, radius),
-    createAsteroidMaterial(theme),
-    count,
+  const bodies = createInstancedBodies(
+    createFlybyDescriptors(theme, count),
+    0.26,
+    'kidsGalaxyAsteroidFlybyRocks',
   );
-  bodies.castShadow = true;
-  bodies.receiveShadow = true;
-  bodies.userData.kidsGalaxyAsteroidFlybyRocks = true;
-  bodies.userData.kidsGalaxyThemedAsteroids = true;
-  bodies.userData.kidsGalaxyAsteroidStyle = style;
-  if (style === 'easter-egg') bodies.userData.kidsGalaxyPastelEggs = true;
-
-  const stems = style === 'pumpkin'
-    ? new THREE.InstancedMesh(
-        createPumpkinStemGeometry(radius),
-        createPumpkinStemMaterial(),
-        count,
-      )
-    : null;
-  if (stems) {
-    stems.castShadow = true;
-    stems.receiveShadow = true;
-    stems.userData.kidsGalaxyPumpkinStems = true;
-  }
-
-  const matrix = new THREE.Matrix4();
-  const position = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-  const euler = new THREE.Euler();
-  for (let index = 0; index < count; index += 1) {
-    position.set(
-      randomBetween(-1.8, 1.8),
-      randomBetween(-1.1, 1.1),
-      randomBetween(-1.5, 1.5),
-    );
-    euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    quaternion.setFromEuler(euler);
-    const size = randomBetween(0.55, 1.4);
-    if (style === 'easter-egg') {
-      scale.setScalar(size);
-    } else {
-      scale.set(size, size * randomBetween(0.8, 1.18), size * randomBetween(0.8, 1.18));
-    }
-    matrix.compose(position, quaternion, scale);
-    bodies.setMatrixAt(index, matrix);
-    applyThemeInstanceColor(bodies, style, index + 2);
-    stems?.setMatrixAt(index, matrix);
-  }
-  bodies.instanceMatrix.needsUpdate = true;
-  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
-  if (stems) stems.instanceMatrix.needsUpdate = true;
   group.add(bodies);
-  if (stems) group.add(stems);
   this.scene.add(group);
 
   this.flybys.push({
@@ -245,7 +258,7 @@ function themedFlyby() {
   });
 }
 
-/** Install holiday substitutions for asteroid belts and intermittent fly-bys. */
+/** Install registry-driven mixed holiday substitutions for belts and fly-bys. */
 export function installThemedGalaxyEnvironment() {
   const originalApplyBehavior = GalaxyEnvironment.prototype.applyBehavior;
   if (originalApplyBehavior?.kidsGalaxyThemedEnvironment) return;
