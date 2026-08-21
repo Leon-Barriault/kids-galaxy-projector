@@ -8,6 +8,8 @@ const SPARKLE_COLORS = [
   '#F48FB1',
 ];
 
+const REMEMBRANCE_DAY_THEME = 'remembrance-day';
+
 const COPY = {
   en: {
     badge: 'Kids Galaxy Projector',
@@ -40,12 +42,26 @@ export class CelebrationEffect {
     this.hintEl = hintEl;
     this.timer = null;
     this.language = 'en';
+    this.theme = 'default';
     this.state = 'waiting';
     this.lastName = null;
   }
 
   copy() {
     return COPY[this.language] || COPY.en;
+  }
+
+  setTheme(theme) {
+    this.theme = typeof theme === 'string' ? theme : 'default';
+    if (this.theme !== REMEMBRANCE_DAY_THEME) return;
+
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.celebrationEl?.classList.remove('show');
+    this.sparklesEl?.replaceChildren();
+    this.planetNameEl?.classList.remove('celebrate');
   }
 
   setLanguage(language) {
@@ -131,7 +147,10 @@ export class CelebrationEffect {
 
   show(payload) {
     const name = this.displayName(payload);
-    this.setPlanetName(name, true);
+    const celebrateArrival = this.theme !== REMEMBRANCE_DAY_THEME;
+    this.setPlanetName(name, celebrateArrival);
+    if (!celebrateArrival) return;
+
     this.burstSparkles();
     if (!this.celebrationEl) return;
 
