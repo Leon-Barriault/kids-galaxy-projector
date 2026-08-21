@@ -96,9 +96,18 @@ def main() -> int:
                 args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
             )
             page = browser.new_page(viewport={"width": 1280, "height": 720})
-            page.goto(server.base, wait_until="networkidle")
-            wait_for(page, "() => Boolean(window.kidsGalaxy?.engine?.behaviorController?.current)")
-            wait_for(page, f"() => window.kidsGalaxy.kidPlanets.has('{planet_id}')")
+            # The projector keeps a live EventSource connection open by design,
+            # so Playwright's network-idle state may never be reached. Wait for
+            # DOM readiness and then for the actual projector composition state.
+            page.goto(server.base, wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => Boolean(window.kidsGalaxy?.engine?.behaviorController?.current)",
+                timeout=30_000,
+            )
+            page.wait_for_function(
+                f"() => window.kidsGalaxy.kidPlanets.has('{planet_id}')",
+                timeout=30_000,
+            )
 
             baseline = theme_state(page, planet_id)
             check(baseline["terrainCount"] > 0, "spiky fixture starts with kid-authored mountain terrain")
