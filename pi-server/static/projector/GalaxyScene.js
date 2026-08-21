@@ -1,41 +1,7 @@
 import * as THREE from 'three';
 
 import { applyPiRenderBudget } from './ProjectorQuality.js';
-
-const THEMES = {
-  default: {
-    background: 0x050818,
-    ambient: 0x8fa2d2,
-    ambientIntensity: 0.18,
-    fill: 0x8298cd,
-    fillIntensity: 0.13,
-    particles: null,
-  },
-  halloween: {
-    background: 0x10051d,
-    ambient: 0x9d79cc,
-    ambientIntensity: 0.18,
-    fill: 0x9b6eaf,
-    fillIntensity: 0.14,
-    particles: [0xff8a2b, 0xa66cff, 0x75ff76],
-  },
-  easter: {
-    background: 0x11172f,
-    ambient: 0xc9c8ff,
-    ambientIntensity: 0.21,
-    fill: 0xa7b5ed,
-    fillIntensity: 0.15,
-    particles: [0xffb7d9, 0xffe69a, 0xaeefff, 0xc8f7b2],
-  },
-  christmas: {
-    background: 0x03120f,
-    ambient: 0x9fdbc0,
-    ambientIntensity: 0.19,
-    fill: 0x7eaf9f,
-    fillIntensity: 0.14,
-    particles: [0xff4f4f, 0x63df84, 0xffd66b, 0xf4f8ff],
-  },
-};
+import { normalizeTheme, themeDefinition } from './ThemeRegistry.js';
 
 /** Owns Three.js scene construction, ambient bodies, lights, and rendering. */
 export class GalaxyScene {
@@ -44,8 +10,9 @@ export class GalaxyScene {
 
     this.animator = animator;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(THEMES.default.background);
-    this.scene.fog = new THREE.FogExp2(THEMES.default.background, 0.001);
+    const defaultTheme = themeDefinition('default');
+    this.scene.background = new THREE.Color(defaultTheme.background);
+    this.scene.fog = new THREE.FogExp2(defaultTheme.background, 0.001);
     this.seasonalParticles = null;
     this.starRotationSpeed = 0.0002;
 
@@ -99,12 +66,16 @@ export class GalaxyScene {
     // These lights only keep the projector's night side readable. They carry
     // no directional cue: the actual sun at the galaxy origin is the dominant
     // key light for planet highlights, crater rims, and mountain relief.
-    this.ambientLight = new THREE.AmbientLight(0x8fa2d2, THEMES.default.ambientIntensity);
+    const defaultTheme = themeDefinition('default');
+    this.ambientLight = new THREE.AmbientLight(
+      defaultTheme.ambient,
+      defaultTheme.ambientIntensity,
+    );
     this.scene.add(this.ambientLight);
     this.fillLight = new THREE.HemisphereLight(
-      THEMES.default.fill,
+      defaultTheme.fill,
       0x080b16,
-      THEMES.default.fillIntensity,
+      defaultTheme.fillIntensity,
     );
     this.scene.add(this.fillLight);
   }
@@ -114,7 +85,7 @@ export class GalaxyScene {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       const r = 90 + Math.random() * 150;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
@@ -182,8 +153,8 @@ export class GalaxyScene {
 
     // The gallery compresses astronomical distances into 6.5-14.75 scene
     // units. A high intensity with inverse-square falloff keeps the actual sun
-    // visually dominant even for the outermost kid planet, while ACES tone
-    // mapping keeps the inner planets from clipping.
+    // visually dominant even for the outermost kid planet, while tone mapping
+    // keeps the inner planets from clipping.
     this.sunLight = new THREE.PointLight(0xfff1cf, 92, 130, 2);
     this.sunGroup.add(this.sunLight);
     return sun;
@@ -192,7 +163,7 @@ export class GalaxyScene {
   createOrbitRing(a, _e, inclination, color = 0x4fc3f7, opacity = 0.3) {
     const segments = 160;
     const points = [];
-    for (let k = 0; k < segments; k++) {
+    for (let k = 0; k < segments; k += 1) {
       const angle = (k / segments) * Math.PI * 2;
       const xOrb = a * Math.cos(angle);
       const yOrb = a * Math.sin(angle);
@@ -240,20 +211,34 @@ export class GalaxyScene {
   }
 
   applyBehavior(behavior) {
-    const selected = THEMES[behavior?.theme] || THEMES.default;
+    const theme = normalizeTheme(behavior?.theme);
+    const selected = themeDefinition(theme);
     this.scene.background.setHex(selected.background);
     this.scene.fog.color.setHex(selected.background);
     this.ambientLight.color.setHex(selected.ambient);
     this.ambientLight.intensity = selected.ambientIntensity;
     this.fillLight.color.setHex(selected.fill);
     this.fillLight.intensity = selected.fillIntensity;
-    this.starRotationSpeed = behavior?.ambient_effects === false ? 0.0002 : 0.00035;
+
+    const ambientEnabled = behavior?.ambient_effects !== false;
+    this.starRotationSpeed = ambientEnabled
+      ? selected.starRotationSpeed
+      : theme === 'remembrance-day'
+        ? 0.00005
+        : 0.0002;
 
     this.disposeSeasonalParticles();
-    if (behavior?.ambient_effects !== false && selected.particles) {
-      this.seasonalParticles = this.createSeasonalParticles(selected.particles);
-      this.scene.add(this.seasonalParticles);
-    }
+    if (!ambientEnabled || !selected.particles?.length) return;
+
+    this.seasonalParticles = this.createSeasonalParticles(
+      selected.particles,
+      selected.particleCount,
+    );
+    this.seasonalParticles.material.size = selected.particleSize;
+    this.seasonalParticles.material.opacity = selected.particleOpacity;
+    this.seasonalParticles.userData.kidsGalaxySeasonalTheme = theme;
+    this.seasonalParticles.userData.kidsGalaxyThemeRegistry = true;
+    this.scene.add(this.seasonalParticles);
   }
 
   createSeasonalParticles(palette, count = 420) {
@@ -262,7 +247,7 @@ export class GalaxyScene {
     const colors = new Float32Array(count * 3);
     const color = new THREE.Color();
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       const r = 18 + Math.random() * 45;
       const theta = Math.random() * Math.PI * 2;
       const y = (Math.random() - 0.5) * 30;
