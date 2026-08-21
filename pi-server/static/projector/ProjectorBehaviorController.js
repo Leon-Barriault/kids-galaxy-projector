@@ -1,3 +1,5 @@
+import { applyRemembranceDayTheme } from './RemembranceDayTheme.js';
+
 /** Coordinates persisted galaxy behavior with the live projector scene. */
 export class ProjectorBehaviorController {
   constructor({ scene, celebration, environment = null }) {
@@ -12,6 +14,7 @@ export class ProjectorBehaviorController {
     this.current = behavior;
     this.scene.applyBehavior(behavior);
     this.environment?.applyBehavior(behavior);
+    applyRemembranceDayTheme(this.scene, this.celebration, behavior);
     this.celebration.setLanguage(behavior.projector_language);
   }
 
