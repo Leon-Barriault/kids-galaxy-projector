@@ -117,6 +117,11 @@ def open_variant(browser, server, planet_id: str, query: str) -> tuple[dict, lis
     wait_for(page, "window.kidsGalaxy && window.kidsGalaxy.kidPlanets.size === 1", 12_000)
     wait_for(
         page,
+        "window.kidsGalaxy?.engine?.behaviorController?.current?.theme === 'default'",
+        12_000,
+    )
+    wait_for(
+        page,
         f"window.kidsGalaxy.kidPlanets.get('{planet_id}')?.sculptedArtworkGroup?.userData?.kidsGalaxyStrokeLatitudeProjection === true",
         12_000,
     )
@@ -136,6 +141,12 @@ def main() -> int:
             body_color="#2d92cd",
             companions="astronaut",
         )
+        # Auto mode follows the calendar. From October 25 through November 1 the
+        # active theme is Halloween, which replaces this companion with a witch.
+        # Easter can replace it with a bunny. Those substitutions have their own
+        # acceptance script. This one is about the three astronaut models, so it
+        # holds the scene on the default theme.
+        server.update_behavior(mode="manual", manual_theme="default")
 
         browser = pw.chromium.launch(
             executable_path=chromium_executable(),
