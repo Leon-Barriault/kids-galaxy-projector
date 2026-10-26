@@ -28,7 +28,17 @@ pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
 ```
 
 From the repository root, `make verify` runs the normal application gates: lint,
-architecture boundaries, both Python suites, and Android JVM tests.
+architecture boundaries, English/French catalog parity, both Python suites, and
+Android JVM tests.
+
+`make i18n` checks that the kid app, manager app, server catalogs, and projector
+page expose the same message keys in English and Canadian French. A missing key,
+an extra key, a mismatched placeholder, or French `:`, `?`, or `!` without a
+preceding non-breaking space fails that gate. The tablet language toggle is
+stored on the device and, on first launch, follows the device locale (`fr` and
+`fr-CA` open in French). API calls send that choice as `Accept-Language`. The
+shared projector language is still chosen in the manager app so one room keeps
+one sky.
 
 The suites are separated by cost and purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)):
 

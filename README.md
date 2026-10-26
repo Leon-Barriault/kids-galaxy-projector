@@ -2,6 +2,8 @@
 
 A complete, kid-friendly system where children draw a planet on an Android tablet and watch it appear live in a projected high-fidelity 3D galaxy rendered by a laptop or desktop connected to a projector.
 
+**Français (Canada)** : [README.fr.md](README.fr.md)
+
 **Target age**: 4–10 years  
 **Hardware**: Android tablet (kiosk / single-app) + modern laptop/desktop GPU + HDMI/DisplayPort projector  
 **Network**: Local only  
@@ -126,15 +128,16 @@ Connect the server/projector machine and the Android tablets to the same private
 cd pi-server
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-# Without mTLS (dev):
+# Bench / development, cleartext, no role checks:
 uvicorn main:app --host 0.0.0.0 --port 8000
-# With mTLS (recommended):
-uvicorn main:app --host 0.0.0.0 --port 8443 \
-  --ssl-keyfile certs/server.key \
-  --ssl-certfile certs/server.crt \
-  --ssl-ca-certs certs/ca.crt \
-  --ssl-cert-reqs 2
 ```
+
+Field deployments use the local nginx mTLS gateway in
+[docker-compose.secure.yml](docker-compose.secure.yml). The gateway verifies the
+client certificate, derives `kid` or `manager` from the certificate OU, and
+forwards that role to FastAPI on loopback. Starting uvicorn itself with TLS on
+a public interface does not apply those role checks. See
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Projector browser
 
@@ -191,7 +194,7 @@ The app is designed to be the only foreground experience on the tablet (HOME cat
 - Per-client rate limiting with bounded memory
 - mTLS – certificate-based tablet authentication, implemented on both ends, with
   IP/DNS SANs so Android actually accepts the chain
-- Cleartext HTTP scoped to the configured local host only; everything else is HTTPS-only
+- Release builds reject cleartext. Debug builds permit it for bench and LAN work
 - Request logging disabled in release builds
 - Local network only by design
 
