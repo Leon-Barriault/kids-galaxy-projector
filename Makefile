@@ -1,5 +1,5 @@
 .PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
-        arch test test-unit test-integration test-android build-android \
+        arch i18n test test-unit test-integration test-android build-android \
         docker-up docker-down pi-up dev-up certs vendor-three verify check-projector
 
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make install-projector-checks - adds Playwright + Chromium for the browser checks"
 	@echo "  make lint             - lint all layers (Python, Docker, shell, Kotlin)"
 	@echo "  make arch             - enforce clean-architecture boundaries"
+	@echo "  make i18n             - English/French catalog key parity"
 	@echo "  make test-unit        - fast unit tests (domain/application/infrastructure)"
 	@echo "  make test-integration - end-to-end API tests"
 	@echo "  make test             - both Python suites"
@@ -70,6 +71,12 @@ arch:
 		|| { echo "FAIL: static assets reference remote resources"; exit 1; }
 	@echo "All architecture boundaries hold."
 
+# English and Canadian French catalogs must have the same keys. Missing or
+# extra keys, mismatched placeholders, and French punctuation without a
+# non-breaking space fail the gate.
+i18n:
+	python3 scripts/check_i18n_parity.py
+
 # -------------------- tests --------------------
 
 test-unit:
@@ -86,7 +93,7 @@ test-android:
 build-android:
 	cd android && ./gradlew assembleDebug
 
-verify: lint arch test test-android
+verify: lint arch i18n test test-android
 
 # The projector needs WebGL, a live server and a real EventSource. This target
 # drives that real page locally; Projector CI runs the same core and seasonal

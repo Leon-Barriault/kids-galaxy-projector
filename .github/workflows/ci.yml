@@ -74,6 +74,9 @@ jobs:
           /tmp/ktlint --relative --editorconfig=.editorconfig \
             "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
 
+      - name: Check English and French message catalogs
+        run: python3 scripts/check_i18n_parity.py
+
   architecture:
     name: Architecture boundaries
     runs-on: ubuntu-latest

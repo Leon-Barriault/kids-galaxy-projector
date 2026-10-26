@@ -81,7 +81,7 @@ class SubmitPlanetUseCase:
 
         drawing_manifest = normalize_drawing_manifest(drawing_manifest_bytes)
         if drawing_manifest is None:
-            raise ValidationError("Drawing manifest is required.")
+            raise ValidationError(message_key="manifest_required")
 
         style = normalize_planet_style(raw_style)
         companions = normalize_companions(raw_companions)
@@ -92,7 +92,7 @@ class SubmitPlanetUseCase:
 
         manifest_background = drawing_manifest["background_color"]
         if body_color is not None and body_color != manifest_background:
-            raise ValidationError("Drawing manifest background does not match body colour.")
+            raise ValidationError(message_key="manifest_background_mismatch")
         body_color = manifest_background
 
         # The PNG is archival/display data. Re-encoding strips metadata and

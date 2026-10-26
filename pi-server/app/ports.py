@@ -114,12 +114,24 @@ class PlanetExportRenderer(ABC):
         """Return a PNG preview using the projector artwork projection contract."""
 
     @abstractmethod
-    def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
-        """Return a PNG print sheet containing the Pi-rendered planet and kid drawing."""
+    def render_print_sheet(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
+        """Return a PNG print sheet containing the rendered planet and kid drawing."""
 
     @abstractmethod
-    def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
-        """Return the same Pi-rendered print sheet as a one-page PDF."""
+    def render_print_pdf(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
+        """Return the same print sheet as a one-page PDF."""
 
     @abstractmethod
     def export_stl(

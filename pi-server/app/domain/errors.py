@@ -14,16 +14,38 @@ leaking internal details to the client.
 class DomainError(Exception):
     """Base class for every expected, business-rule failure.
 
-    Subclasses should set a sensible default ``user_message`` that is safe to
-    show to a child or volunteer (no stack traces, no internal paths).
+    Subclasses should set a sensible default message key. The English sentence
+    is rendered from the catalog so logs and unlocalized clients stay stable,
+    and the API can render the same key in Canadian French.
     """
 
-    #: Message that is safe to show a user (no internals, no stack detail).
-    user_message = "Something went wrong."
+    #: Catalog key used when a subclass is raised without an explicit message.
+    default_message_key = "something_went_wrong"
 
-    def __init__(self, user_message: str | None = None):
-        if user_message:
+    def __init__(
+        self,
+        user_message: str | None = None,
+        *,
+        message_key: str | None = None,
+        **params: object,
+    ):
+        key = (
+            message_key
+            if message_key is not None
+            else (None if user_message else self.default_message_key)
+        )
+        self.message_key = key
+        self.message_params = dict(params)
+        if key is not None and user_message is None:
+            # Imported lazily so the domain module can be inspected without
+            # loading catalogs at class-definition time.
+            from app.i18n.catalog import render
+
+            self.user_message = render("en", key, **self.message_params)
+        elif user_message:
             self.user_message = user_message
+        else:
+            self.user_message = "Something went wrong."
         super().__init__(self.user_message)
 
 
@@ -42,7 +64,7 @@ class ImageValidationError(ValidationError):
     does not start with a recognised PNG/JPEG magic sequence.
     """
 
-    user_message = "Invalid or corrupted image."
+    default_message_key = "invalid_or_corrupted_image"
 
 
 class RateLimitedError(DomainError):
@@ -52,7 +74,7 @@ class RateLimitedError(DomainError):
     image-processing pipeline.
     """
 
-    user_message = "Please wait a few seconds before sending another planet."
+    default_message_key = "rate_limited"
 
 
 class NotFoundError(DomainError):
@@ -62,4 +84,4 @@ class NotFoundError(DomainError):
     failures.
     """
 
-    user_message = "Planet not found."
+    default_message_key = "planet_not_found"

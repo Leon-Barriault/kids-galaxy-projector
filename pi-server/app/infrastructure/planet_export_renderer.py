@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from app.domain.planet import Planet
+from app.i18n.catalog import print_sheet_copy
 from app.ports import PlanetExportRenderer
 
 
@@ -68,7 +69,13 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         preview.save(output, format="PNG", compress_level=4)
         return output.getvalue()
 
-    def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
+    def render_print_sheet(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
         source = Image.open(image_path).convert("RGB")
         sphere = self._render_projector_mapped_sphere(source, planet)
         drawing = source.copy()
@@ -78,37 +85,37 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         draw = ImageDraw.Draw(canvas)
         font = self._font(32)
         label_font = self._font(22)
+        labels = print_sheet_copy(
+            locale,
+            variant="mapped",
+            style=planet.style,
+            planet_id=planet.id,
+            projection_width=int(self.STROKE_WRAP_DEGREES),
+            projection_height=int(self.STROKE_LATITUDE_DEGREES),
+        )
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
-        draw.text((70, 92), "Projector-mapped planet", fill="#4b5563", font=label_font)
-        draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
+        draw.text((70, 92), labels["heading"], fill="#4b5563", font=label_font)
+        draw.text((895, 92), labels["kid_drawing"], fill="#4b5563", font=label_font)
         canvas.paste(sphere, (60, 145), sphere)
         x = 895 + (620 - drawing.width) // 2
         y = 145 + (620 - drawing.height) // 2
         canvas.paste(drawing, (x, y))
         draw.rounded_rectangle((875, 130, 1535, 790), radius=24, outline="#d1d5db", width=3)
-        draw.text(
-            (70, 870),
-            (
-                f"Style: {planet.style}   Planet ID: {planet.id}   "
-                f"Projection: {int(self.STROKE_WRAP_DEGREES)}° x "
-                f"{int(self.STROKE_LATITUDE_DEGREES)}°"
-            ),
-            fill="#6b7280",
-            font=label_font,
-        )
-        draw.text(
-            (70, 915),
-            "Kids Galaxy Projector · rendered by the Pi server",
-            fill="#9ca3af",
-            font=label_font,
-        )
+        draw.text((70, 870), labels["meta"], fill="#6b7280", font=label_font)
+        draw.text((70, 915), labels["footer"], fill="#9ca3af", font=label_font)
         output = io.BytesIO()
         canvas.save(output, format="PNG", compress_level=4)
         return output.getvalue()
 
-    def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
-        """Return the Pi-rendered print sheet as a one-page PDF for Android printing."""
-        png = self.render_print_sheet(planet, image_path)
+    def render_print_pdf(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
+        """Return the print sheet as a one-page PDF for Android printing."""
+        png = self.render_print_sheet(planet, image_path, locale=locale)
         sheet = Image.open(io.BytesIO(png)).convert("RGB")
         output = io.BytesIO()
         sheet.save(output, format="PDF", resolution=150.0)
@@ -409,12 +416,8 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
         ring_index = len(outer_rows) - 2
         for lon in range(self.LON_SEGMENTS):
             nxt = (lon + 1) % self.LON_SEGMENTS
-            triangles.append(
-                (outer_rows[ring_index][lon], outer_rows[ring_index][nxt], outer_pole)
-            )
-            triangles.append(
-                (inner_rows[ring_index][nxt], inner_rows[ring_index][lon], inner_pole)
-            )
+            triangles.append((outer_rows[ring_index][lon], outer_rows[ring_index][nxt], outer_pole))
+            triangles.append((inner_rows[ring_index][nxt], inner_rows[ring_index][lon], inner_pole))
         return triangles
 
     @staticmethod

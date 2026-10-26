@@ -16,7 +16,9 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw
 
+from app.domain.errors import ValidationError
 from app.domain.planet import Planet
+from app.i18n.catalog import print_sheet_copy
 from app.infrastructure.manifest_lithophane import (
     load_manifest_for_image,
     manifest_relief_sampler,
@@ -50,20 +52,24 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
 
     def store_projector_snapshot(self, planet: Planet, png_bytes: bytes) -> None:
         if not png_bytes or len(png_bytes) > self.MAX_SNAPSHOT_BYTES:
-            raise ValueError("Projector snapshot is empty or too large")
+            raise ValidationError(message_key="snapshot_empty_or_large")
         if not png_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
-            raise ValueError("Projector snapshot is not a PNG")
+            raise ValidationError(message_key="snapshot_not_png")
 
         try:
             with Image.open(io.BytesIO(png_bytes)) as image:
                 image.verify()
             with Image.open(io.BytesIO(png_bytes)) as image:
                 if image.size != (self.SNAPSHOT_SIZE, self.SNAPSHOT_SIZE):
-                    raise ValueError(
-                        f"Projector snapshot must be {self.SNAPSHOT_SIZE}x{self.SNAPSHOT_SIZE}"
+                    raise ValidationError(
+                        message_key="snapshot_wrong_size",
+                        width=self.SNAPSHOT_SIZE,
+                        height=self.SNAPSHOT_SIZE,
                     )
+        except ValidationError:
+            raise
         except (OSError, SyntaxError) as error:
-            raise ValueError("Projector snapshot PNG is invalid") from error
+            raise ValidationError(message_key="snapshot_invalid_png") from error
 
         target = self._snapshot_path(planet)
         temporary = target.with_suffix(".tmp")
@@ -90,9 +96,7 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
     def _visible_mask(self, image: Image.Image) -> Image.Image:
         white = Image.new("RGB", image.size, "white")
         difference = ImageChops.difference(image.convert("RGB"), white).convert("L")
-        return difference.point(
-            lambda value: 255 if value >= self.PRINT_VISIBLE_THRESHOLD else 0
-        )
+        return difference.point(lambda value: 255 if value >= self.PRINT_VISIBLE_THRESHOLD else 0)
 
     @staticmethod
     def _mask_centroid(mask: Image.Image) -> tuple[float, float] | None:
@@ -201,19 +205,27 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         )
         return drawing
 
-    def render_print_sheet(self, planet: Planet, image_path: Path) -> bytes:
+    def render_print_sheet(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
         """Compose a kid-friendly print sheet, preferring the projector WebGL frame."""
         source = Image.open(image_path).convert("RGB")
         hero = self._projector_snapshot(planet)
         if hero is not None:
-            heading = "Projector WebGL render"
-            provenance = "projector WebGL"
-            footer = "Kids Galaxy Projector · captured from the live Three.js planet renderer"
+            variant = "webgl"
         else:
             hero = self._render_projector_mapped_sphere(source, planet)
-            heading = "Planet preview"
-            provenance = "server render"
-            footer = "Kids Galaxy Projector · rendered by the galaxy server"
+            variant = "preview"
+        labels = print_sheet_copy(
+            locale,
+            variant=variant,
+            style=planet.style,
+            planet_id=planet.id,
+        )
 
         hero = self._print_hero(hero)
         drawing = self._drawing_with_guide(source)
@@ -224,8 +236,8 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         font = self._font(32)
         label_font = self._font(22)
         draw.text((70, 45), planet.display_name, fill="#111827", font=font)
-        draw.text((70, 92), heading, fill="#4b5563", font=label_font)
-        draw.text((895, 92), "Kid drawing", fill="#4b5563", font=label_font)
+        draw.text((70, 92), labels["heading"], fill="#4b5563", font=label_font)
+        draw.text((895, 92), labels["kid_drawing"], fill="#4b5563", font=label_font)
 
         hero_x = 60 + (700 - hero.width) // 2
         hero_y = 145 + (700 - hero.height) // 2
@@ -235,24 +247,22 @@ class WebglPlanetExportRenderer(PillowPlanetExportRenderer):
         y = 145 + (620 - drawing.height) // 2
         canvas.paste(drawing, (x, y))
         draw.rounded_rectangle((875, 130, 1535, 790), radius=24, outline="#d1d5db", width=3)
-        draw.text(
-            (70, 870),
-            (
-                f"Style: {planet.style}   Planet ID: {planet.id}   "
-                f"Visual source: {provenance}"
-            ),
-            fill="#6b7280",
-            font=label_font,
-        )
-        draw.text((70, 915), footer, fill="#9ca3af", font=label_font)
+        draw.text((70, 870), labels["meta"], fill="#6b7280", font=label_font)
+        draw.text((70, 915), labels["footer"], fill="#9ca3af", font=label_font)
 
         output = io.BytesIO()
         canvas.save(output, format="PNG", compress_level=4)
         return output.getvalue()
 
-    def render_print_pdf(self, planet: Planet, image_path: Path) -> bytes:
+    def render_print_pdf(
+        self,
+        planet: Planet,
+        image_path: Path,
+        *,
+        locale: str = "en",
+    ) -> bytes:
         """Return the print sheet on a standard US/Canada Letter landscape page."""
-        png = self.render_print_sheet(planet, image_path)
+        png = self.render_print_sheet(planet, image_path, locale=locale)
         sheet = Image.open(io.BytesIO(png)).convert("RGB")
 
         # Pillow derives PDF physical size from image pixels and resolution. The
