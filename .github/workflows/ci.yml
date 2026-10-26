@@ -53,7 +53,10 @@ jobs:
       - name: Lint shell scripts
         run: |
           shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
-            scripts/dev-up.sh pi-server/certs/generate_certs.sh
+            scripts/dev-up.sh scripts/setup_room.sh scripts/stop_room.sh \
+            scripts/open_projector.sh scripts/prepare_kid_tablet.sh \
+            scripts/prepare_manager_tablet.sh scripts/build_tablets.sh \
+            pi-server/certs/generate_certs.sh
 
       - name: Set up Java (for ktlint)
         uses: actions/setup-java@v5
