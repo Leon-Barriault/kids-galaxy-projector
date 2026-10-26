@@ -1,5 +1,9 @@
 # Local Development & Testing (no dedicated hardware required)
 
+Parents, teachers, and daycare staff should use the plain-language guides in
+[docs/user/en/](docs/user/en/install.md) or [docs/user/fr/](docs/user/fr/install.md).
+This file is for people who change the code.
+
 This project is designed so you can develop and test without dedicated server hardware or a projector.
 
 The backend is platform-neutral and is referred to as the **server side**. The repository path `pi-server/` is historical and retained for compatibility with existing scripts and tooling; it does not imply a Raspberry Pi runtime requirement.

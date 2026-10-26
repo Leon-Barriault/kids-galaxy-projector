@@ -21,6 +21,11 @@ then leave a fresh `Unreleased` heading behind.
   [docs/release-readiness.md](docs/release-readiness.md).
 - Print-sheet headings, style names, and footers in English and Canadian
   French. The tablet `Accept-Language` header selects them.
+- Plain-language room guides for parents, teachers, and daycare staff in
+  English and Canadian French under [docs/user/](docs/user/en/install.md).
+  The same sections and steps are required in both languages.
+- `bash scripts/setup_room.sh` starts the galaxy computer, and
+  `scripts/build_tablets.sh` builds both tablet apps for that room.
 
 ### Changed
 

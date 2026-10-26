@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fail when English and Canadian French catalogs disagree.
 
-Checks Android string resources, the server message catalogs, and the
-projector message module. Missing keys, extra keys, mismatched format
-placeholders, and French punctuation that is missing its required
-non-breaking space are all failures.
+Checks Android string resources, the server message catalogs, the
+projector message module, and the parent/teacher guides. Missing keys,
+extra keys, mismatched format placeholders, French punctuation without a
+non-breaking space, and user-guide sections that do not match are failures.
 """
 
 from __future__ import annotations
@@ -85,12 +85,10 @@ def compare_named(
     for key in sorted(set(english) & set(french)):
         en_text = decode(english[key])
         fr_text = decode(french[key])
-        en_formats = ANDROID_FORMAT.findall(en_text) or PLACEHOLDER.findall(en_text)
-        fr_formats = ANDROID_FORMAT.findall(fr_text) or PLACEHOLDER.findall(fr_text)
-        # Compare the placeholder family that is actually used, not both.
-        if ANDROID_FORMAT.findall(en_text) or ANDROID_FORMAT.findall(fr_text):
-            if ANDROID_FORMAT.findall(en_text) != ANDROID_FORMAT.findall(fr_text):
-                problems.append(f"{label}: format mismatch for {key}")
+        en_android = ANDROID_FORMAT.findall(en_text)
+        fr_android = ANDROID_FORMAT.findall(fr_text)
+        if (en_android or fr_android) and en_android != fr_android:
+            problems.append(f"{label}: format mismatch for {key}")
         if PLACEHOLDER.findall(en_text) != PLACEHOLDER.findall(fr_text):
             problems.append(f"{label}: placeholder mismatch for {key}")
         for issue in french_punctuation_issues(fr_text):
@@ -130,6 +128,127 @@ def js_locale_entries(source: str) -> dict[str, dict[str, str]]:
     return entries
 
 
+MARKER = re.compile(r"<!--\s*(section|step|fix|problem|photo):\s*([a-z0-9-]+)\s*-->")
+CODE_FENCE = re.compile(r"```.*?```", re.DOTALL)
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+INLINE_CODE = re.compile(r"`[^`]+`")
+SENTENCE_SPLIT = re.compile(r"[^.!?]+[.!?]")
+USER_GUIDES = ("install.md", "daily.md", "troubleshooting.md", "quick-start.md")
+MAX_SENTENCE_WORDS = 22
+MAX_AVERAGE_WORDS = 16
+MAX_ENGLISH_GRADE = 8.5
+
+
+def marker_sequence(text: str) -> list[tuple[str, str]]:
+    return [(kind, name) for kind, name in MARKER.findall(text)]
+
+
+def prose_for_reading(text: str) -> str:
+    stripped = CODE_FENCE.sub(" ", text)
+    stripped = HTML_COMMENT.sub(" ", stripped)
+    stripped = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", stripped)
+    stripped = MARKDOWN_LINK.sub(r"\1", stripped)
+    stripped = INLINE_CODE.sub(" ", stripped)
+    kept_lines: list[str] = []
+    for line in stripped.splitlines():
+        if line.strip().startswith("|"):
+            continue
+        kept_lines.append(line)
+    return "\n".join(kept_lines)
+
+
+def sentences_of(text: str) -> list[str]:
+    found: list[str] = []
+    for paragraph in re.split(r"\n\s*\n", text):
+        cleaned = re.sub(r"^[#>*\-\d.\)\s]+", " ", paragraph, flags=re.MULTILINE)
+        for match in SENTENCE_SPLIT.findall(cleaned):
+            words = re.findall(r"[A-Za-zÀ-ÿ0-9']+", match)
+            if len(words) >= 3:
+                found.append(match.strip())
+    return found
+
+
+def word_count(sentence: str) -> int:
+    return len(re.findall(r"[A-Za-zÀ-ÿ0-9']+", sentence))
+
+
+def syllable_count(word: str) -> int:
+    letters = re.sub(r"[^a-z]", "", word.lower())
+    if not letters:
+        return 1
+    groups = re.findall(r"[aeiouy]+", letters)
+    count = len(groups)
+    if letters.endswith("e") and count > 1:
+        count -= 1
+    return max(1, count)
+
+
+def flesch_kincaid_grade(sentences: list[str]) -> float:
+    words = [word for sentence in sentences for word in re.findall(r"[A-Za-z0-9']+", sentence)]
+    if not sentences or not words:
+        return 0.0
+    syllables = sum(syllable_count(word) for word in words)
+    return 0.39 * (len(words) / len(sentences)) + 11.8 * (syllables / len(words)) - 15.59
+
+
+def reading_problems(label: str, text: str, *, english: bool) -> list[str]:
+    problems: list[str] = []
+    prose = prose_for_reading(text)
+    found = sentences_of(prose)
+    if not found:
+        return [f"{label}: no sentences to check"]
+    lengths = [word_count(sentence) for sentence in found]
+    too_long = [sentence for sentence in found if word_count(sentence) > MAX_SENTENCE_WORDS]
+    for sentence in too_long[:5]:
+        problems.append(f"{label}: sentence is too long ({word_count(sentence)} words): {sentence}")
+    if len(too_long) > 5:
+        problems.append(
+            f"{label}: {len(too_long)} sentences are longer than {MAX_SENTENCE_WORDS} words"
+        )
+    average = sum(lengths) / len(lengths)
+    if average > MAX_AVERAGE_WORDS:
+        problems.append(f"{label}: average sentence is {average:.1f} words")
+    if english:
+        grade = flesch_kincaid_grade(found)
+        if grade > MAX_ENGLISH_GRADE:
+            problems.append(f"{label}: reading grade is {grade:.1f}, above {MAX_ENGLISH_GRADE}")
+    return problems
+
+
+def user_guide_problems() -> list[str]:
+    problems: list[str] = []
+    english_root = ROOT / "docs" / "user" / "en"
+    french_root = ROOT / "docs" / "user" / "fr"
+    for name in USER_GUIDES:
+        english_path = english_root / name
+        french_path = french_root / name
+        if not english_path.is_file() or not french_path.is_file():
+            problems.append(f"user guide missing pair: {name}")
+            continue
+        english = english_path.read_text(encoding="utf-8")
+        french = french_path.read_text(encoding="utf-8")
+        english_markers = marker_sequence(english)
+        french_markers = marker_sequence(french)
+        if english_markers != french_markers:
+            problems.append(f"user guide {name}: English and French sections or steps differ")
+            english_ids = [f"{kind}:{marker}" for kind, marker in english_markers]
+            french_ids = [f"{kind}:{marker}" for kind, marker in french_markers]
+            missing = [item for item in english_ids if item not in french_ids]
+            extra = [item for item in french_ids if item not in english_ids]
+            if missing:
+                problems.append(f"user guide {name}: missing in French: {', '.join(missing)}")
+            if extra:
+                problems.append(f"user guide {name}: extra in French: {', '.join(extra)}")
+        if not english_markers:
+            problems.append(f"user guide {name}: no section markers")
+        problems.extend(reading_problems(f"user guide en/{name}", english, english=True))
+        problems.extend(reading_problems(f"user guide fr/{name}", french, english=False))
+        for issue in french_punctuation_issues(prose_for_reading(french)):
+            problems.append(f"user guide fr/{name}: French punctuation: {issue}")
+    return problems
+
+
 def collect_problems() -> list[str]:
     problems: list[str] = []
     for module in ("app", "manager"):
@@ -152,6 +271,7 @@ def collect_problems() -> list[str]:
     projector = (ROOT / "pi-server/static/projector/messages.js").read_text(encoding="utf-8")
     locales = js_locale_entries(projector)
     problems.extend(compare_named("projector", locales["en"], locales["fr"], decode=decode_js))
+    problems.extend(user_guide_problems())
     return problems
 
 
@@ -162,7 +282,7 @@ def main() -> int:
         for problem in problems:
             print(f"- {problem}", file=sys.stderr)
         return 1
-    print("i18n catalogs match for English and Canadian French.")
+    print("i18n catalogs and user guides match for English and Canadian French.")
     return 0
 
 

@@ -2,6 +2,13 @@
 
 Système pour les enfants : ils dessinent une planète sur une tablette Android et la voient apparaître en direct dans une galaxie 3D projetée, servie par l’application serveur et affichée dans un navigateur sur la machine du projecteur.
 
+**Parents, personnel enseignant et personnel de la garderie, commencez ici.** Ces pages utilisent des étapes courtes et des mots simples. Les notes des programmeurs restent dans ce fichier et dans [DEVELOPMENT.md](DEVELOPMENT.md).
+
+- [Installer la salle](docs/user/fr/install.md)
+- [Chaque jour](docs/user/fr/daily.md)
+- [Quand quelque chose ne va pas](docs/user/fr/troubleshooting.md)
+- [Fiche d’une page](docs/user/fr/quick-start.md) ([PDF](docs/user/fr/quick-start.pdf))
+
 **Version anglaise** : [README.md](README.md)
 
 **Âge visé** : 4 à 10 ans  
