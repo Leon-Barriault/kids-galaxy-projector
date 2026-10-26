@@ -55,6 +55,7 @@ import com.kidsgalaxy.domain.model.PlanetCompanion
 import com.kidsgalaxy.domain.model.PlanetStyle
 import com.kidsgalaxy.presentation.DrawingUiState
 import com.kidsgalaxy.presentation.DrawingViewModel
+import com.kidsgalaxy.presentation.SendFailure
 
 private val SIDE_PANEL_WIDTH = 340.dp
 private val MIN_CANVAS_HEIGHT = 220.dp
@@ -97,11 +98,13 @@ fun PlanetDrawerScreen(
                             },
                     ) {
                         Text(
-                            if (language == UiLanguage.ENGLISH) {
-                                "EN ●  FR"
-                            } else {
-                                "EN  ● FR"
-                            },
+                            stringResource(
+                                if (language == UiLanguage.ENGLISH) {
+                                    R.string.language_toggle_english_selected
+                                } else {
+                                    R.string.language_toggle_french_selected
+                                },
+                            ),
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -158,11 +161,11 @@ fun PlanetDrawerScreen(
         }
     }
 
-    state.errorMessage?.let { error ->
+    state.error?.let { failure ->
         AlertDialog(
             onDismissRequest = viewModel::clearError,
             title = { Text(stringResource(R.string.oops)) },
-            text = { Text(error) },
+            text = { Text(sendFailureText(failure)) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearError) {
                     Text(stringResource(R.string.ok))
@@ -190,6 +193,17 @@ fun PlanetDrawerScreen(
         )
     }
 }
+
+@Composable
+private fun sendFailureText(failure: SendFailure): String =
+    when (failure) {
+        SendFailure.NothingDrawn -> stringResource(R.string.error_draw_first)
+        SendFailure.RateLimited -> stringResource(R.string.error_rate_limited)
+        SendFailure.InvalidPlanet -> stringResource(R.string.error_invalid_planet)
+        SendFailure.Server -> stringResource(R.string.error_server_hiccup)
+        is SendFailure.Rejected -> stringResource(R.string.error_send_code, failure.statusCode)
+        SendFailure.Unreachable -> stringResource(R.string.error_wifi)
+    }
 
 @Composable
 private fun StepHeader(step: CreationStep) {
@@ -268,11 +282,14 @@ private fun StyleStep(
             selected = selected,
             onSelect = onSelect,
         )
-        Text(
-            stringResource(R.string.style_spiky_help),
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
+        val spikyHelp = stringResource(R.string.style_spiky_help)
+        if (spikyHelp.isNotBlank()) {
+            Text(
+                spikyHelp,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
         Button(
             onClick = onNext,
             modifier =

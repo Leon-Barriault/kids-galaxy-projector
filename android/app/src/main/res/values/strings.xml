@@ -104,4 +104,15 @@
 
     <!-- Default planet name when the child leaves the field blank -->
     <string name="default_planet_name">My Awesome Planet</string>
+
+    <string name="language_toggle_english_selected">EN ●  FR</string>
+    <string name="language_toggle_french_selected">EN  ● FR</string>
+    <string name="default_galaxy_name">Default Galaxy</string>
+    <string name="manual_galaxy">Manual Galaxy</string>
+    <string name="galaxy_address_placeholder">10.42.0.1:8000</string>
+    <string name="galaxy_not_projector">That address is not a Kids Galaxy projector</string>
+    <string name="galaxy_answered_http">Galaxy answered with HTTP %1$d</string>
+    <string name="discovery_search_failed">Could not search for galaxies (error %1$d)</string>
+    <string name="discovery_search_unavailable">Could not search for galaxies</string>
+    <string name="discovery_stop_failed">Could not stop galaxy search (error %1$d)</string>
 </resources>

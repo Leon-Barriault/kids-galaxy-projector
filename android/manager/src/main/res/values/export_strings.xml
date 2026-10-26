@@ -18,4 +18,7 @@
     <string name="print_start_failed">Android could not open the print dialog: %1$s</string>
     <string name="print_start_failed_saving">Android could not open the print dialog (%1$s). A save dialog will open for the server PDF instead.</string>
     <string name="print_fallback_saved">Print PDF saved. Open it from Files or a PDF application to print it.</string>
+
+    <string name="print_job_name">%1$s - Kids Galaxy</string>
+    <string name="print_write_failed">Could not write the print PDF</string>
 </resources>

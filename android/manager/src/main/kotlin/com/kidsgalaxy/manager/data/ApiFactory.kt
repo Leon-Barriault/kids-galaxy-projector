@@ -2,6 +2,7 @@ package com.kidsgalaxy.manager.data
 
 import android.content.Context
 import com.kidsgalaxy.connection.MutualTls
+import com.kidsgalaxy.connection.acceptUiLanguage
 import com.kidsgalaxy.manager.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -24,6 +25,7 @@ object ApiFactory {
                 .Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
                 .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+                .acceptUiLanguage(context.applicationContext)
 
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(
