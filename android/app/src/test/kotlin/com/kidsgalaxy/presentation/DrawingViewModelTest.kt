@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -143,7 +142,7 @@ class DrawingViewModelTest {
             advanceUntilIdle()
 
             assertEquals(0, repository.calls)
-            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertEquals(SendFailure.NothingDrawn, viewModel.uiState.value.error)
             assertFalse(viewModel.uiState.value.isSending)
         }
 
@@ -158,7 +157,7 @@ class DrawingViewModelTest {
             assertEquals("Sparkle World", repository.lastName)
             assertTrue(viewModel.uiState.value.showSuccess)
             assertFalse(viewModel.uiState.value.isSending)
-            assertNull(viewModel.uiState.value.errorMessage)
+            assertNull(viewModel.uiState.value.error)
         }
 
     @Test
@@ -169,7 +168,7 @@ class DrawingViewModelTest {
             viewModel.sendPlanet("Doomed World")
             advanceUntilIdle()
 
-            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertEquals(SendFailure.Unreachable, viewModel.uiState.value.error)
             assertFalse(viewModel.uiState.value.isSending)
             assertFalse(viewModel.uiState.value.showSuccess)
         }
@@ -190,10 +189,10 @@ class DrawingViewModelTest {
         runTest {
             viewModel.sendPlanet("") // empty drawing -> error
             advanceUntilIdle()
-            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertEquals(SendFailure.NothingDrawn, viewModel.uiState.value.error)
 
             viewModel.clearError()
-            assertNull(viewModel.uiState.value.errorMessage)
+            assertNull(viewModel.uiState.value.error)
         }
 
     @Test
@@ -216,9 +215,7 @@ class DrawingViewModelTest {
             viewModel.sendPlanet("Too Fast")
             advanceUntilIdle()
 
-            val message = viewModel.uiState.value.errorMessage
-            assertNotNull(message)
-            assertTrue("should mention slowing down: $message", message!!.contains("Slow down"))
+            assertEquals(SendFailure.RateLimited, viewModel.uiState.value.error)
         }
 
     @Test
@@ -229,10 +226,7 @@ class DrawingViewModelTest {
             viewModel.sendPlanet("Broken")
             advanceUntilIdle()
 
-            assertTrue(
-                viewModel.uiState.value.errorMessage!!
-                    .contains("hiccup"),
-            )
+            assertEquals(SendFailure.Server, viewModel.uiState.value.error)
         }
 
     @Test
@@ -243,10 +237,7 @@ class DrawingViewModelTest {
             viewModel.sendPlanet("Teapot")
             advanceUntilIdle()
 
-            assertTrue(
-                viewModel.uiState.value.errorMessage!!
-                    .contains("418"),
-            )
+            assertEquals(SendFailure.Rejected(418), viewModel.uiState.value.error)
         }
 
     @Test
@@ -257,10 +248,7 @@ class DrawingViewModelTest {
             viewModel.sendPlanet("Offline")
             advanceUntilIdle()
 
-            assertTrue(
-                viewModel.uiState.value.errorMessage!!
-                    .contains("KidsGalaxy Wi-Fi"),
-            )
+            assertEquals(SendFailure.Unreachable, viewModel.uiState.value.error)
         }
 
     @Test

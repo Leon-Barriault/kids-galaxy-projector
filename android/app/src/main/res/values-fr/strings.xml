@@ -5,7 +5,7 @@
     <string name="step_style">1  Style</string>
     <string name="step_draw">2  Dessine</string>
     <string name="step_friends">3  Amis</string>
-    <string name="style_intro_title">D’abord, choisis la forme de ta planète!</string>
+    <string name="style_intro_title">D’abord, choisis la forme de ta planète\u00A0!</string>
     <string name="style_intro_body">Tu vas la peindre à l’écran suivant.</string>
     <string name="style_classic">Classique</string>
     <string name="style_ringed">Avec anneau</string>
@@ -14,7 +14,7 @@
     <string name="style_spiky_help"></string>
     <string name="picked">✓ Choisi</string>
     <string name="tap_to_pick">Touche pour choisir</string>
-    <string name="next_paint">Suivant : Peins-la!  🎨</string>
+    <string name="next_paint">Suivant\u00A0: Peins-la\u00A0!  🎨</string>
     <string name="paint_your_planet">Peins ta planète %1$s</string>
     <string name="ring_color_title">Couleur de l’anneau</string>
     <string name="ring_color_hint">Choisis la couleur de l’anneau autour de ta planète.</string>
@@ -23,9 +23,9 @@
     <string name="mountain_color_title">Couleur des montagnes</string>
     <string name="mountain_color_hint">Choisis la couleur des sommets montagneux.</string>
     <string name="back_style">← Style</string>
-    <string name="next_friends">Suivant : Amis de l’espace  🚀</string>
-    <string name="friends_title">Ajoute des amis de l’espace!</string>
-    <string name="friends_body">Choisis-en autant que tu veux. Ils bougeront autour de ta planète!</string>
+    <string name="next_friends">Suivant\u00A0: Amis de l’espace  🚀</string>
+    <string name="friends_title">Ajoute des amis de l’espace\u00A0!</string>
+    <string name="friends_body">Choisis-en autant que tu veux. Ils bougeront autour de ta planète\u00A0!</string>
     <string name="friend_moon">Lune</string>
     <string name="friend_stars">Étoiles</string>
     <string name="friend_satellite">Satellite</string>
@@ -33,7 +33,7 @@
     <string name="added">✓ Ajouté</string>
     <string name="tap_to_add">Touche pour ajouter</string>
     <string name="back_paint">← Peindre</string>
-    <string name="launch">🚀  Lancer!</string>
+    <string name="launch">🚀  Lancer\u00A0!</string>
     <string name="launching">En route vers la galaxie…</string>
     <string name="language_toggle">EN / FR</string>
     <string name="language_toggle_description">Basculer entre l’anglais et le français</string>
@@ -49,7 +49,7 @@
     <string name="brush_big">Grand</string>
     <string name="undo">Annuler</string>
     <string name="clear">Effacer</string>
-    <string name="launch_into_galaxy">Lancer dans la galaxie!</string>
+    <string name="launch_into_galaxy">Lancer dans la galaxie\u00A0!</string>
     <string name="sending_to_galaxy">Envoi vers la galaxie…</string>
     <string name="drawing_canvas_description">Zone de dessin. Glisse ton doigt pour peindre ta planète.</string>
 
@@ -72,7 +72,7 @@
     <string name="color_custom">Couleur personnalisée</string>
 
     <string name="choose_galaxy">Choisis une galaxie</string>
-    <string name="current_galaxy">Actuelle : %1$s</string>
+    <string name="current_galaxy">Actuelle\u00A0: %1$s</string>
     <string name="searching_local_network">Recherche sur le réseau local…</string>
     <string name="nearby_galaxies">Galaxies à proximité</string>
     <string name="galaxy_checking">Vérification…</string>
@@ -85,16 +85,27 @@
     <string name="use_this_address">Utiliser cette adresse</string>
     <string name="cancel">Annuler</string>
 
-    <string name="oops">Oups!</string>
+    <string name="oops">Oups\u00A0!</string>
     <string name="ok">OK</string>
-    <string name="launched_title">🚀 Planète lancée!</string>
-    <string name="launched_body">Ta planète vole maintenant dans la galaxie!\nRegarde le projecteur!</string>
-    <string name="awesome">Super!</string>
-    <string name="error_draw_first">Dessine quelque chose d’abord!</string>
-    <string name="error_rate_limited">Attends un petit moment — la galaxie accueille encore ta dernière planète!</string>
-    <string name="error_invalid_planet">Cette planète n’a pas pu être envoyée. Vérifie son style et réessaie!</string>
+    <string name="launched_title">🚀 Planète lancée\u00A0!</string>
+    <string name="launched_body">Ta planète vole maintenant dans la galaxie\u00A0!\nRegarde le projecteur\u00A0!</string>
+    <string name="awesome">Super\u00A0!</string>
+    <string name="error_draw_first">Dessine quelque chose d’abord\u00A0!</string>
+    <string name="error_rate_limited">Attends un petit moment — la galaxie accueille encore ta dernière planète\u00A0!</string>
+    <string name="error_invalid_planet">Cette planète n’a pas pu être envoyée. Vérifie son style et réessaie\u00A0!</string>
     <string name="error_server_hiccup">Le serveur de la galaxie a un petit problème. Réessaie dans un moment.</string>
     <string name="error_send_code">Impossible d’envoyer la planète (erreur %1$d).</string>
-    <string name="error_wifi">Impossible de joindre la galaxie. La tablette est-elle connectée au Wi-Fi KidsGalaxy?</string>
+    <string name="error_wifi">Impossible de joindre la galaxie. La tablette est-elle connectée au Wi-Fi KidsGalaxy\u00A0?</string>
     <string name="default_planet_name">Ma super planète</string>
+
+    <string name="language_toggle_english_selected">EN ●  FR</string>
+    <string name="language_toggle_french_selected">EN  ● FR</string>
+    <string name="default_galaxy_name">Galaxie par défaut</string>
+    <string name="manual_galaxy">Galaxie manuelle</string>
+    <string name="galaxy_address_placeholder">10.42.0.1:8000</string>
+    <string name="galaxy_not_projector">Cette adresse n’est pas un projecteur Kids Galaxy</string>
+    <string name="galaxy_answered_http">La galaxie a répondu avec HTTP %1$d</string>
+    <string name="discovery_search_failed">Impossible de chercher des galaxies (erreur %1$d)</string>
+    <string name="discovery_search_unavailable">Impossible de chercher des galaxies</string>
+    <string name="discovery_stop_failed">Impossible d’arrêter la recherche de galaxies (erreur %1$d)</string>
 </resources>

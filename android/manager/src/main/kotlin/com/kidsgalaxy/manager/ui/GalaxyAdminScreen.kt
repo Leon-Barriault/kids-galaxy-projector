@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -160,13 +162,23 @@ private fun AdminHeader(
                 strokeWidth = 2.dp,
             )
         }
+        val configureGalaxy = stringResource(R.string.choose_managed_galaxy)
         TextButton(onClick = onToggleLanguage) {
             Text(
-                if (language == UiLanguage.ENGLISH) "EN ●  FR" else "EN  ● FR",
+                stringResource(
+                    if (language == UiLanguage.ENGLISH) {
+                        R.string.language_toggle_english_selected
+                    } else {
+                        R.string.language_toggle_french_selected
+                    },
+                ),
                 fontWeight = FontWeight.Bold,
             )
         }
-        TextButton(onClick = onConfigureGalaxy) {
+        TextButton(
+            onClick = onConfigureGalaxy,
+            modifier = Modifier.semantics { contentDescription = configureGalaxy },
+        ) {
             Text("🌌")
         }
         TextButton(onClick = onRefresh) {

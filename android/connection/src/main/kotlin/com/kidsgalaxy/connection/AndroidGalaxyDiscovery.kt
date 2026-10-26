@@ -5,6 +5,17 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 
+/** A discovery failure the tablet UI can localize without embedding English. */
+enum class DiscoveryProblem {
+    SEARCH,
+    STOP,
+}
+
+data class DiscoveryFailure(
+    val problem: DiscoveryProblem,
+    val errorCode: Int? = null,
+)
+
 /**
  * Discovers Kids Galaxy servers advertised through DNS-SD / mDNS.
  *
@@ -21,7 +32,7 @@ class AndroidGalaxyDiscovery(
     interface Listener {
         fun onTargetsChanged(targets: List<GalaxyTarget>)
 
-        fun onError(message: String)
+        fun onError(failure: DiscoveryFailure)
     }
 
     private val appContext = context.applicationContext
@@ -60,14 +71,14 @@ class AndroidGalaxyDiscovery(
             ) {
                 started = false
                 releaseMulticastLock()
-                listener?.onError("Could not search for galaxies (error $errorCode)")
+                listener?.onError(DiscoveryFailure(DiscoveryProblem.SEARCH, errorCode))
             }
 
             override fun onStopDiscoveryFailed(
                 serviceType: String,
                 errorCode: Int,
             ) {
-                listener?.onError("Could not stop galaxy search (error $errorCode)")
+                listener?.onError(DiscoveryFailure(DiscoveryProblem.STOP, errorCode))
             }
         }
 
@@ -85,7 +96,7 @@ class AndroidGalaxyDiscovery(
         } catch (error: RuntimeException) {
             started = false
             releaseMulticastLock()
-            listener.onError(error.message ?: "Could not search for galaxies")
+            listener.onError(DiscoveryFailure(DiscoveryProblem.SEARCH))
         }
     }
 

@@ -5,10 +5,19 @@ import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+/** Why a galaxy probe did not succeed. The UI maps these to localized copy. */
+enum class ProbeProblem {
+    HTTP_STATUS,
+    NOT_A_GALAXY,
+    UNREACHABLE,
+    INVALID_ADDRESS,
+}
+
 /** Result of probing a candidate galaxy's public identity endpoint. */
 data class GalaxyVerification(
     val reachable: Boolean,
-    val message: String? = null,
+    val problem: ProbeProblem? = null,
+    val statusCode: Int? = null,
 )
 
 /**
@@ -40,7 +49,8 @@ class GalaxyTargetVerifier(
                 if (!response.isSuccessful) {
                     return GalaxyVerification(
                         reachable = false,
-                        message = "Galaxy answered with HTTP ${response.code}",
+                        problem = ProbeProblem.HTTP_STATUS,
+                        statusCode = response.code,
                     )
                 }
 
@@ -48,7 +58,7 @@ class GalaxyTargetVerifier(
                 if (!hasGalaxyMarker(payload)) {
                     return GalaxyVerification(
                         reachable = false,
-                        message = "That address is not a Kids Galaxy projector",
+                        problem = ProbeProblem.NOT_A_GALAXY,
                     )
                 }
 
@@ -57,12 +67,12 @@ class GalaxyTargetVerifier(
         } catch (_error: IOException) {
             GalaxyVerification(
                 reachable = false,
-                message = "Galaxy could not be reached",
+                problem = ProbeProblem.UNREACHABLE,
             )
         } catch (_error: IllegalArgumentException) {
             GalaxyVerification(
                 reachable = false,
-                message = "Galaxy address is invalid",
+                problem = ProbeProblem.INVALID_ADDRESS,
             )
         }
     }

@@ -18,18 +18,18 @@ RGB_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 STROKE_ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
-def _number(value, *, field: str, minimum: float, maximum: float) -> float:
+def _number(value, *, field_key: str, minimum: float, maximum: float) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValidationError(f"Invalid drawing manifest {field}.")
+        raise ValidationError(message_key="invalid_manifest_field", field_key=field_key)
     number = float(value)
     if not math.isfinite(number) or number < minimum or number > maximum:
-        raise ValidationError(f"Invalid drawing manifest {field}.")
+        raise ValidationError(message_key="invalid_manifest_field", field_key=field_key)
     return number
 
 
-def _colour(value, *, field: str) -> str:
+def _colour(value, *, field_key: str) -> str:
     if not isinstance(value, str) or not RGB_HEX.fullmatch(value.strip()):
-        raise ValidationError(f"Invalid drawing manifest {field}.")
+        raise ValidationError(message_key="invalid_manifest_field", field_key=field_key)
     return value.strip().lower()
 
 
@@ -37,7 +37,7 @@ def _stroke_id(value, *, index: int) -> str:
     if value is None:
         return f"stroke-{index:04d}"
     if not isinstance(value, str) or not STROKE_ID.fullmatch(value.strip()):
-        raise ValidationError("Invalid drawing manifest stroke ID.")
+        raise ValidationError(message_key="invalid_manifest_stroke_id")
     return value.strip()
 
 
@@ -46,77 +46,77 @@ def normalize_drawing_manifest(raw: bytes | None) -> dict | None:
     if raw is None:
         return None
     if not raw or len(raw) > MAX_MANIFEST_BYTES:
-        raise ValidationError("Invalid drawing manifest size.")
+        raise ValidationError(message_key="invalid_manifest_size")
 
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValidationError("Invalid drawing manifest JSON.") from error
+        raise ValidationError(message_key="invalid_manifest_json") from error
 
     if not isinstance(payload, dict) or payload.get("version") != DRAWING_MANIFEST_VERSION:
-        raise ValidationError("Unsupported drawing manifest version.")
+        raise ValidationError(message_key="unsupported_manifest_version")
     if payload.get("coordinate_space") != "normalized-canvas-v1":
-        raise ValidationError("Unsupported drawing manifest coordinate space.")
+        raise ValidationError(message_key="unsupported_manifest_coordinate_space")
 
     canvas = payload.get("canvas")
     if not isinstance(canvas, dict):
-        raise ValidationError("Invalid drawing manifest canvas.")
+        raise ValidationError(message_key="invalid_manifest_canvas")
     width = _number(
         canvas.get("width"),
-        field="canvas width",
+        field_key="field_canvas_width",
         minimum=1.0,
         maximum=MAX_CANVAS_DIMENSION,
     )
     height = _number(
         canvas.get("height"),
-        field="canvas height",
+        field_key="field_canvas_height",
         minimum=1.0,
         maximum=MAX_CANVAS_DIMENSION,
     )
 
-    background = _colour(payload.get("background_color"), field="background colour")
+    background = _colour(payload.get("background_color"), field_key="field_background_colour")
     background_explicit = bool(payload.get("background_explicit", False))
     strokes = payload.get("strokes")
     if not isinstance(strokes, list) or len(strokes) > MAX_STROKES:
-        raise ValidationError("Invalid drawing manifest strokes.")
+        raise ValidationError(message_key="invalid_manifest_strokes")
 
     normalized_strokes: list[dict] = []
     seen_stroke_ids: set[str] = set()
     total_points = 0
     for index, stroke in enumerate(strokes):
         if not isinstance(stroke, dict):
-            raise ValidationError("Invalid drawing manifest stroke.")
+            raise ValidationError(message_key="invalid_manifest_stroke")
         stroke_id = _stroke_id(stroke.get("stroke_id"), index=index)
         if stroke_id in seen_stroke_ids:
-            raise ValidationError("Drawing manifest stroke IDs must be unique.")
+            raise ValidationError(message_key="duplicate_stroke_ids")
         seen_stroke_ids.add(stroke_id)
 
-        colour = _colour(stroke.get("color"), field="stroke colour")
+        colour = _colour(stroke.get("color"), field_key="field_stroke_colour")
         width_px = _number(
             stroke.get("width_px"),
-            field="stroke width",
+            field_key="field_stroke_width",
             minimum=0.1,
             maximum=MAX_CANVAS_DIMENSION,
         )
         width_normalized = _number(
             stroke.get("width_normalized"),
-            field="normalized stroke width",
+            field_key="field_normalized_stroke_width",
             minimum=0.00001,
             maximum=1.0,
         )
         points = stroke.get("points")
         if not isinstance(points, list) or not 2 <= len(points) <= MAX_POINTS_PER_STROKE:
-            raise ValidationError("Invalid drawing manifest stroke points.")
+            raise ValidationError(message_key="invalid_manifest_points")
         total_points += len(points)
         if total_points > MAX_TOTAL_POINTS:
-            raise ValidationError("Drawing manifest contains too many points.")
+            raise ValidationError(message_key="too_many_points")
 
         normalized_points: list[list[float]] = []
         for point in points:
             if not isinstance(point, list) or len(point) != 2:
-                raise ValidationError("Invalid drawing manifest point.")
-            x = _number(point[0], field="point x", minimum=0.0, maximum=1.0)
-            y = _number(point[1], field="point y", minimum=0.0, maximum=1.0)
+                raise ValidationError(message_key="invalid_manifest_point")
+            x = _number(point[0], field_key="field_point_x", minimum=0.0, maximum=1.0)
+            y = _number(point[1], field_key="field_point_y", minimum=0.0, maximum=1.0)
             normalized_points.append([x, y])
 
         normalized_strokes.append(

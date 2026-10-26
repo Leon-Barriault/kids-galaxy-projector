@@ -136,7 +136,7 @@ class DrawingViewModel(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
+        _uiState.update { it.copy(error = null) }
     }
 
     fun dismissSuccess() {
@@ -167,7 +167,7 @@ class DrawingViewModel(
     fun sendPlanet(planetName: String) {
         if (_uiState.value.isSending) return
 
-        _uiState.update { it.copy(isSending = true, errorMessage = null) }
+        _uiState.update { it.copy(isSending = true, error = null) }
         val stateAtLaunch = _uiState.value
 
         viewModelScope.launch {
@@ -175,33 +175,32 @@ class DrawingViewModel(
             _uiState.update { state ->
                 when (result) {
                     is SendPlanetResult.Success ->
-                        state.copy(isSending = false, showSuccess = true, errorMessage = null)
+                        state.copy(isSending = false, showSuccess = true, error = null)
 
                     is SendPlanetResult.NothingDrawn ->
-                        state.copy(isSending = false, errorMessage = "Draw something first!")
+                        state.copy(isSending = false, error = SendFailure.NothingDrawn)
 
                     is SendPlanetResult.Failed ->
-                        state.copy(isSending = false, errorMessage = messageFor(result.cause))
+                        state.copy(isSending = false, error = failureFor(result.cause))
                 }
             }
         }
     }
 
     /**
-     * Map a failure cause into a short, reassuring message suitable for a
-     * 4–10-year-old (and the volunteer helping them).
+     * Map a failure cause into a code the UI localizes for a 4–10-year-old
+     * and the volunteer helping them.
      */
-    private fun messageFor(cause: Throwable?): String =
-        when {
-            cause is UploadRejectedException ->
+    private fun failureFor(cause: Throwable?): SendFailure =
+        when (cause) {
+            is UploadRejectedException ->
                 when (cause.statusCode) {
-                    429 -> "Slow down a moment - the galaxy is still catching your last planet!"
-                    400 -> "That planet could not be sent. Check its style and try again!"
-                    in 500..599 -> "The galaxy server is having a hiccup. Try again in a moment."
-                    else -> "Could not send planet (error ${cause.statusCode})."
+                    429 -> SendFailure.RateLimited
+                    400 -> SendFailure.InvalidPlanet
+                    in 500..599 -> SendFailure.Server
+                    else -> SendFailure.Rejected(cause.statusCode)
                 }
 
-            else ->
-                "Could not reach the galaxy. Is the tablet connected to the KidsGalaxy Wi-Fi?"
+            else -> SendFailure.Unreachable
         }
 }

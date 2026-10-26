@@ -279,7 +279,7 @@ fun ManagerScreen(
             title = { Text(stringResource(R.string.something_went_wrong)) },
             text = { Text(managerErrorText(error)) },
             confirmButton = {
-                TextButton(onClick = onClearError) { Text("OK") }
+                TextButton(onClick = onClearError) { Text(stringResource(R.string.ok)) }
             },
         )
     }
@@ -335,11 +335,13 @@ private fun ProjectorLanguageControl(
                         },
                 ) {
                     Text(
-                        if (selectedLanguage == "fr") {
-                            "EN  ● FR"
-                        } else {
-                            "EN ●  FR"
-                        },
+                        stringResource(
+                            if (selectedLanguage == "fr") {
+                                R.string.language_toggle_french_selected
+                            } else {
+                                R.string.language_toggle_english_selected
+                            },
+                        ),
                         fontWeight = FontWeight.Bold,
                     )
                 }

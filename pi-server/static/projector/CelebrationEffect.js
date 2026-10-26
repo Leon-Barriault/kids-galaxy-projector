@@ -1,25 +1,5 @@
 import { arrivalEffectForTheme, normalizeTheme } from './ThemeRegistry.js';
-
-const COPY = {
-  en: {
-    badge: 'Kids Galaxy Projector',
-    waiting: 'Waiting for a planet…',
-    drawHint: 'Draw on the tablet and launch into space!',
-    orbitHint: '✨ Your planet orbits the sun and spins in space',
-    textureFailed: 'One planet is still finding its way here…',
-    newPlanet: 'A new planet',
-    joinedSky: (name) => `${name} joined the sky!`,
-  },
-  fr: {
-    badge: 'Projecteur Kids Galaxy',
-    waiting: 'En attente d’une planète…',
-    drawHint: 'Dessine sur la tablette et lance ta planète dans l’espace!',
-    orbitHint: '✨ Ta planète tourne autour du soleil et sur elle-même',
-    textureFailed: 'Une planète cherche encore son chemin jusqu’ici…',
-    newPlanet: 'Une nouvelle planète',
-    joinedSky: (name) => `${name} a rejoint le ciel!`,
-  },
-};
+import { formatProjectorMessage, projectorCopy } from './messages.js';
 
 const FIREWORK_THEMES = new Set(['canada-day', 'fete-nationale', 'new-year']);
 
@@ -37,10 +17,15 @@ export class CelebrationEffect {
     this.theme = 'default';
     this.state = 'waiting';
     this.lastName = null;
+    this.setLanguage(this.language);
   }
 
   copy() {
-    return COPY[this.language] || COPY.en;
+    return projectorCopy(this.language);
+  }
+
+  joinedSky(name) {
+    return formatProjectorMessage(this.language, 'joinedSky', { name });
   }
 
   arrivalEffect() {
@@ -65,8 +50,9 @@ export class CelebrationEffect {
 
   setLanguage(language) {
     this.language = language === 'fr' ? 'fr' : 'en';
-    document.documentElement.lang = this.language;
+    document.documentElement.lang = this.language === 'fr' ? 'fr-CA' : 'en';
     const copy = this.copy();
+    if (copy.title) document.title = copy.title;
     if (this.badgeLabelEl) this.badgeLabelEl.textContent = copy.badge;
     if (this.hintEl) this.hintEl.textContent = copy.orbitHint;
 
@@ -81,7 +67,7 @@ export class CelebrationEffect {
 
     if (this.celebrationEl?.classList.contains('show') && this.lastName) {
       const msg = this.celebrationEl.querySelector('.msg');
-      if (msg) msg.textContent = copy.joinedSky(this.lastName);
+      if (msg) msg.textContent = this.joinedSky(this.lastName);
     }
   }
 
@@ -190,7 +176,7 @@ export class CelebrationEffect {
 
     if (!this.celebrationEl) return;
     const msg = this.celebrationEl.querySelector('.msg');
-    if (msg) msg.textContent = this.copy().joinedSky(name);
+    if (msg) msg.textContent = this.joinedSky(name);
     this.celebrationEl.classList.add('show');
 
     if (this.timer !== null) clearTimeout(this.timer);

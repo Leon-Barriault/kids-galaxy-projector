@@ -36,24 +36,25 @@ def detect_image_kind(content: bytes) -> ImageKind | None:
 
 def ensure_content_type_allowed(content_type: str | None) -> None:
     if content_type not in ALLOWED_CONTENT_TYPES:
-        raise ImageValidationError("Only PNG and JPEG images are allowed.")
+        raise ImageValidationError(message_key="only_png_jpeg")
 
 
 def ensure_not_empty(size: int) -> None:
     if size == 0:
-        raise ImageValidationError("Empty file.")
+        raise ImageValidationError(message_key="empty_file")
 
 
 def ensure_size_within(size: int, max_size: int) -> None:
     if size > max_size:
         megabytes = max_size // 1024 // 1024
-        raise ImageValidationError(f"File too large (max {megabytes} MB).")
+        raise ImageValidationError(message_key="file_too_large", megabytes=megabytes)
 
 
 def ensure_dimensions_within(width: int, height: int, max_dimension: int) -> None:
     if width > max_dimension or height > max_dimension:
         raise ImageValidationError(
-            f"Image dimensions too large (max {max_dimension}px)."
+            message_key="dimensions_too_large",
+            max_dimension=max_dimension,
         )
 
 
@@ -61,5 +62,5 @@ def ensure_recognised_image(content: bytes) -> ImageKind:
     """Combine the magic-byte check with a clear error for anything else."""
     kind = detect_image_kind(content)
     if kind is None:
-        raise ImageValidationError("File content is not a valid PNG or JPEG.")
+        raise ImageValidationError(message_key="not_png_or_jpeg")
     return kind

@@ -63,6 +63,7 @@ private class PrintStageException(
 private class ServerPdfPrintAdapter(
     private val jobName: String,
     private val pdfBytes: ByteArray,
+    private val writeFailedMessage: String,
 ) : PrintDocumentAdapter() {
     override fun onLayout(
         oldAttributes: PrintAttributes?,
@@ -103,7 +104,7 @@ private class ServerPdfPrintAdapter(
             callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
         } catch (error: IOException) {
             Log.e(EXPORT_LOG_TAG, "Could not stream server PDF to Android printing", error)
-            callback.onWriteFailed(error.message ?: "Could not write print PDF")
+            callback.onWriteFailed(error.message ?: writeFailedMessage)
         }
     }
 }
@@ -176,8 +177,9 @@ fun PlanetExportActions(
                         try {
                             startAndroidPrint(
                                 context = context,
-                                jobName = "${planet.name} - Kids Galaxy",
+                                jobName = context.getString(R.string.print_job_name, planet.name),
                                 pdfBytes = pdfBytes,
+                                writeFailedMessage = context.getString(R.string.print_write_failed),
                             )
                         } catch (error: PrintStageException) {
                             if (error.stage != PrintFailureStage.LAUNCH) {
@@ -261,6 +263,7 @@ private fun startAndroidPrint(
     context: Context,
     jobName: String,
     pdfBytes: ByteArray,
+    writeFailedMessage: String,
 ) {
     val activity =
         context.findActivity()
@@ -291,7 +294,7 @@ private fun startAndroidPrint(
                 .build()
         printManager.print(
             jobName,
-            ServerPdfPrintAdapter(jobName, pdfBytes),
+            ServerPdfPrintAdapter(jobName, pdfBytes, writeFailedMessage),
             attributes,
         )
     } catch (error: RuntimeException) {
