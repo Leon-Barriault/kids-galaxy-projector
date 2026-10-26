@@ -1,6 +1,7 @@
 .PHONY: help install-dev lint lint-python lint-docker lint-shell lint-kotlin \
-        arch test test-unit test-integration test-android build-android \
-        docker-up docker-down pi-up dev-up certs vendor-three verify check-projector
+        arch i18n test test-unit test-integration test-android build-android \
+        docker-up docker-down pi-up dev-up certs setup-room stop-room \
+        open-projector vendor-three verify check-projector
 
 help:
 	@echo "Kids Galaxy Projector - common targets"
@@ -8,6 +9,7 @@ help:
 	@echo "  make install-projector-checks - adds Playwright + Chromium for the browser checks"
 	@echo "  make lint             - lint all layers (Python, Docker, shell, Kotlin)"
 	@echo "  make arch             - enforce clean-architecture boundaries"
+	@echo "  make i18n             - English/French catalog key parity"
 	@echo "  make test-unit        - fast unit tests (domain/application/infrastructure)"
 	@echo "  make test-integration - end-to-end API tests"
 	@echo "  make test             - both Python suites"
@@ -20,6 +22,9 @@ help:
 	@echo "  make docker-up        - start local stack (no hardware needed)"
 	@echo "  make pi-up            - deploy on the Pi, discoverable over mDNS"
 	@echo "  make docker-down"
+	@echo "  make setup-room       - start the galaxy computer for a real room"
+	@echo "  make stop-room        - stop the galaxy program and keep the planets"
+	@echo "  make open-projector   - open the galaxy page full screen"
 	@echo "  make certs            - generate mTLS certificates"
 	@echo "  make vendor-three     - refresh the vendored Three.js build"
 
@@ -41,7 +46,10 @@ lint-docker:
 	hadolint --config .hadolint.yaml pi-server/Dockerfile
 
 lint-shell:
-	shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh scripts/dev-up.sh pi-server/certs/generate_certs.sh
+	shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh scripts/dev-up.sh \
+		scripts/setup_room.sh scripts/stop_room.sh scripts/open_projector.sh \
+		scripts/prepare_kid_tablet.sh scripts/prepare_manager_tablet.sh \
+		scripts/build_tablets.sh pi-server/certs/generate_certs.sh
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
@@ -70,6 +78,12 @@ arch:
 		|| { echo "FAIL: static assets reference remote resources"; exit 1; }
 	@echo "All architecture boundaries hold."
 
+# English and Canadian French catalogs must have the same keys. Missing or
+# extra keys, mismatched placeholders, and French punctuation without a
+# non-breaking space fail the gate.
+i18n:
+	python3 scripts/check_i18n_parity.py
+
 # -------------------- tests --------------------
 
 test-unit:
@@ -86,7 +100,7 @@ test-android:
 build-android:
 	cd android && ./gradlew assembleDebug
 
-verify: lint arch test test-android
+verify: lint arch i18n test test-android
 
 # The projector needs WebGL, a live server and a real EventSource. This target
 # drives that real page locally; Projector CI runs the same core and seasonal
@@ -123,6 +137,16 @@ pi-up:
 
 certs:
 	cd pi-server/certs && chmod +x generate_certs.sh && ./generate_certs.sh
+
+# One first-time start for the computer that feeds the projector.
+setup-room:
+	bash scripts/setup_room.sh
+
+stop-room:
+	bash scripts/stop_room.sh
+
+open-projector:
+	bash scripts/open_projector.sh
 
 # Refresh the vendored Three.js build. Pinned so the offline projector and the
 # import map cannot drift apart.

@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 class PillowImageProcessor(ImageProcessor):
     """Concrete ImageProcessor that uses Pillow for decode / re-encode."""
 
-    def normalize_to_png(
-        self, content: bytes, max_dimension: int, target_size: int
-    ) -> bytes:
+    def normalize_to_png(self, content: bytes, max_dimension: int, target_size: int) -> bytes:
         """Decode, validate, and return a security-normalised PNG.
 
         Args:
@@ -60,7 +58,7 @@ class PillowImageProcessor(ImageProcessor):
             raise
         except Exception as e:
             logger.warning("Image validation failed: %s", e)
-            raise ImageValidationError("Invalid or corrupted image.") from e
+            raise ImageValidationError(message_key="invalid_or_corrupted_image") from e
 
         ensure_dimensions_within(width, height, max_dimension)
 
@@ -75,15 +73,9 @@ class PillowImageProcessor(ImageProcessor):
         """
         try:
             with Image.open(BytesIO(content)) as img:
-                cleaned = (
-                    img.convert("RGBA")
-                    if img.mode in ("RGBA", "P")
-                    else img.convert("RGB")
-                )
+                cleaned = img.convert("RGBA") if img.mode in ("RGBA", "P") else img.convert("RGB")
                 if max(cleaned.size) > target_size:
-                    cleaned.thumbnail(
-                        (target_size, target_size), Image.Resampling.LANCZOS
-                    )
+                    cleaned.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
 
                 buffer = BytesIO()
                 # No optimize=True: it costs several hundred milliseconds of zlib
@@ -94,4 +86,4 @@ class PillowImageProcessor(ImageProcessor):
                 return buffer.getvalue()
         except Exception as e:
             logger.error("Failed to process image: %s", e)
-            raise ImageValidationError("Could not process the image.") from e
+            raise ImageValidationError(message_key="could_not_process_image") from e

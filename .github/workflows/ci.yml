@@ -53,7 +53,10 @@ jobs:
       - name: Lint shell scripts
         run: |
           shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
-            scripts/dev-up.sh pi-server/certs/generate_certs.sh
+            scripts/dev-up.sh scripts/setup_room.sh scripts/stop_room.sh \
+            scripts/open_projector.sh scripts/prepare_kid_tablet.sh \
+            scripts/prepare_manager_tablet.sh scripts/build_tablets.sh \
+            pi-server/certs/generate_certs.sh
 
       - name: Set up Java (for ktlint)
         uses: actions/setup-java@v5
@@ -73,6 +76,9 @@ jobs:
           # same gate as their application code.
           /tmp/ktlint --relative --editorconfig=.editorconfig \
             "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
+
+      - name: Check English and French message catalogs
+        run: python3 scripts/check_i18n_parity.py
 
   architecture:
     name: Architecture boundaries
@@ -227,7 +233,7 @@ jobs:
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Cache Gradle
         uses: actions/cache@v4

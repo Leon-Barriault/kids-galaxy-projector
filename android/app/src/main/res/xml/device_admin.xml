@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lock Task itself does not require a device-admin policy. force-lock is the
+  only policy kept so the receiver can be activated. Wipe, password reset,
+  and login watching are intentionally absent on a tablet used by children.
+-->
 <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-policies>
-        <limit-password />
-        <watch-login />
-        <reset-password />
         <force-lock />
-        <wipe-data />
     </uses-policies>
 </device-admin>

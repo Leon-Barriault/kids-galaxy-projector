@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.kidsgalaxy.BuildConfig
 import com.kidsgalaxy.connection.MutualTls
+import com.kidsgalaxy.connection.acceptUiLanguage
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -26,6 +27,7 @@ object ApiClient {
                 .readTimeout(20, TimeUnit.SECONDS)
                 .writeTimeout(20, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
+                .acceptUiLanguage(context.applicationContext)
 
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(

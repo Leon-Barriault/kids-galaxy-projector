@@ -1,5 +1,6 @@
 package com.kidsgalaxy.manager.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,8 +25,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.kidsgalaxy.connection.AndroidGalaxyDiscovery
+import com.kidsgalaxy.connection.DiscoveryFailure
+import com.kidsgalaxy.connection.DiscoveryProblem
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.GalaxyTargetVerifier
+import com.kidsgalaxy.connection.GalaxyVerification
+import com.kidsgalaxy.connection.ProbeProblem
 import com.kidsgalaxy.manager.R
 import com.kidsgalaxy.manager.data.ApiFactory
 import kotlinx.coroutines.Dispatchers
@@ -62,8 +67,6 @@ fun GalaxyPickerDialog(
     var manualAddress by remember { mutableStateOf("") }
     var manualError by remember { mutableStateOf<String?>(null) }
     var checkingManual by remember { mutableStateOf(false) }
-    val couldNotReach = stringResource(R.string.galaxy_could_not_be_reached)
-    val invalidAddress = stringResource(R.string.invalid_galaxy_address)
     val manualGalaxyName = stringResource(R.string.manual_galaxy)
 
     fun checkDiscovered(target: GalaxyTarget) {
@@ -98,7 +101,7 @@ fun GalaxyPickerDialog(
             if (result.reachable) {
                 onSelect(target)
             } else {
-                discoveryError = result.message ?: couldNotReach
+                discoveryError = context.probeMessage(result)
             }
         }
     }
@@ -114,8 +117,8 @@ fun GalaxyPickerDialog(
                     discoveryError = null
                 }
 
-                override fun onError(message: String) {
-                    discoveryError = message
+                override fun onError(failure: DiscoveryFailure) {
+                    discoveryError = context.discoveryMessage(failure)
                 }
             },
         )
@@ -166,7 +169,7 @@ fun GalaxyPickerDialog(
                         manualAddress = it
                         manualError = null
                     },
-                    placeholder = { Text("10.42.0.1:8000") },
+                    placeholder = { Text(stringResource(R.string.galaxy_address_placeholder)) },
                     singleLine = true,
                     isError = manualError != null,
                     supportingText = manualError?.let { message -> { Text(message) } },
@@ -181,8 +184,8 @@ fun GalaxyPickerDialog(
                                     defaultScheme = fallbackScheme,
                                     name = manualGalaxyName,
                                 )
-                            } catch (error: IllegalArgumentException) {
-                                manualError = error.message ?: invalidAddress
+                            } catch (_error: IllegalArgumentException) {
+                                manualError = context.getString(R.string.invalid_galaxy_address)
                                 return@Button
                             }
 
@@ -194,7 +197,7 @@ fun GalaxyPickerDialog(
                             if (result.reachable) {
                                 onSelect(target)
                             } else {
-                                manualError = result.message ?: couldNotReach
+                                manualError = context.probeMessage(result)
                             }
                         }
                     },
@@ -214,3 +217,21 @@ fun GalaxyPickerDialog(
         },
     )
 }
+
+private fun Context.probeMessage(result: GalaxyVerification): String =
+    when (result.problem) {
+        ProbeProblem.HTTP_STATUS ->
+            getString(R.string.galaxy_answered_http, result.statusCode ?: 0)
+        ProbeProblem.NOT_A_GALAXY -> getString(R.string.galaxy_not_projector)
+        ProbeProblem.INVALID_ADDRESS -> getString(R.string.invalid_galaxy_address)
+        ProbeProblem.UNREACHABLE, null -> getString(R.string.galaxy_could_not_be_reached)
+    }
+
+private fun Context.discoveryMessage(failure: DiscoveryFailure): String =
+    when (failure.problem) {
+        DiscoveryProblem.SEARCH ->
+            failure.errorCode?.let { getString(R.string.discovery_search_failed, it) }
+                ?: getString(R.string.discovery_search_unavailable)
+        DiscoveryProblem.STOP ->
+            getString(R.string.discovery_stop_failed, failure.errorCode ?: 0)
+    }

@@ -20,6 +20,12 @@ services:
       AUTHORIZATION_ENABLED: "true"
       TRUSTED_ROLE_PROXY_HOSTS: 127.0.0.1,::1
       GALAXY_NAME: ${GALAXY_NAME:-Kids Galaxy}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       - ./pi-server/uploads:/app/uploads
       - ./pi-server/state:/app/state

@@ -10,6 +10,7 @@ This module is deliberately thin. It:
 """
 
 import logging
+from html import escape
 
 from fastapi import (
     APIRouter,
@@ -51,9 +52,23 @@ from app.domain.planet_customization import (
     DEFAULT_MOUNTAIN_COLOR,
     DEFAULT_RING_COLOR,
 )
+from app.i18n.catalog import negotiate, public_message, render
 from app.ports import EventPublisher, PlanetExportRenderer, PlanetRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _detail(request: Request, error: DomainError) -> str:
+    return public_message(
+        request.headers.get("accept-language"),
+        message_key=error.message_key,
+        message_params=error.message_params,
+        fallback=error.user_message,
+    )
+
+
+def _localized(request: Request, key: str, **params: object) -> str:
+    return render(negotiate(request.headers.get("accept-language")), key, **params)
 
 
 def _status_for(error: DomainError) -> int:
@@ -122,21 +137,28 @@ def build_router(
     kid_only = authorizer.dependency(ClientRole.KID)
     manager_only = authorizer.dependency(ClientRole.MANAGER)
 
-    def export_target(planet_id: str):
+    def export_target(http_request: Request, planet_id: str):
         try:
             planet = get_planet.execute(planet_id)
         except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+            raise HTTPException(
+                status_code=_status_for(e),
+                detail=_detail(http_request, e),
+            ) from e
         image_path = repository.resolve_image(planet.filename)
         if image_path is None:
-            raise HTTPException(status_code=404, detail="Planet drawing not found")
+            raise HTTPException(
+                status_code=404,
+                detail=_localized(http_request, "planet_drawing_not_found"),
+            )
         return planet, image_path
 
     @router.get("/", response_class=HTMLResponse, dependencies=[Depends(projector_only)])
-    async def galaxy_page():
+    async def galaxy_page(request: Request):
         index_path = settings.static_dir / "index.html"
         if not index_path.exists():
-            return HTMLResponse("<h1>Galaxy visualization not found</h1>", status_code=404)
+            message = escape(_localized(request, "galaxy_page_missing"))
+            return HTMLResponse(f"<h1>{message}</h1>", status_code=404)
         return FileResponse(index_path)
 
     @router.get("/health")
@@ -173,26 +195,35 @@ def build_router(
         dependencies=[Depends(projector_only)],
     )
     async def store_projector_preview(planet_id: str, request: Request):
-        planet, _image_path = export_target(planet_id)
+        planet, _image_path = export_target(request, planet_id)
         content = await request.body()
         if len(content) > settings.max_file_size:
-            raise HTTPException(status_code=413, detail="Projector snapshot is too large")
+            raise HTTPException(
+                status_code=413,
+                detail=_localized(request, "snapshot_too_large"),
+            )
         try:
             export_renderer.store_projector_snapshot(planet, content)
-        except (ValueError, OSError) as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+        except DomainError as error:
+            raise HTTPException(
+                status_code=_status_for(error),
+                detail=_detail(request, error),
+            ) from error
+        except OSError as error:
+            raise HTTPException(
+                status_code=400,
+                detail=_localized(request, "snapshot_store_failed"),
+            ) from error
         return {"status": "stored", "planet_id": planet.id, "source": "projector-webgl"}
 
     @router.get(
         "/api/admin/planets/{planet_id}/preview.png",
         dependencies=[Depends(manager_only)],
     )
-    async def preview_planet(planet_id: str):
-        planet, image_path = export_target(planet_id)
+    async def preview_planet(planet_id: str, request: Request):
+        planet, image_path = export_target(request, planet_id)
         source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
-        content = await run_in_threadpool(
-            export_renderer.render_preview, planet, image_path
-        )
+        content = await run_in_threadpool(export_renderer.render_preview, planet, image_path)
         return Response(
             content=content,
             media_type="image/png",
@@ -206,11 +237,14 @@ def build_router(
         "/api/admin/planets/{planet_id}/print.png",
         dependencies=[Depends(manager_only)],
     )
-    async def print_planet_png(planet_id: str):
-        planet, image_path = export_target(planet_id)
+    async def print_planet_png(planet_id: str, request: Request):
+        planet, image_path = export_target(request, planet_id)
         source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
         content = await run_in_threadpool(
-            export_renderer.render_print_sheet, planet, image_path
+            export_renderer.render_print_sheet,
+            planet,
+            image_path,
+            locale=negotiate(request.headers.get("accept-language")),
         )
         return Response(
             content=content,
@@ -225,11 +259,14 @@ def build_router(
         "/api/admin/planets/{planet_id}/print.pdf",
         dependencies=[Depends(manager_only)],
     )
-    async def print_planet_pdf(planet_id: str):
-        planet, image_path = export_target(planet_id)
+    async def print_planet_pdf(planet_id: str, request: Request):
+        planet, image_path = export_target(request, planet_id)
         source = "webgl" if export_renderer.has_projector_snapshot(planet) else "fallback"
         content = await run_in_threadpool(
-            export_renderer.render_print_pdf, planet, image_path
+            export_renderer.render_print_pdf,
+            planet,
+            image_path,
+            locale=negotiate(request.headers.get("accept-language")),
         )
         return Response(
             content=content,
@@ -246,18 +283,17 @@ def build_router(
     )
     async def export_planet_stl(
         planet_id: str,
+        request: Request,
         diameter_mm: float = Query(default=80.0, ge=40.0, le=200.0),
     ):
-        planet, image_path = export_target(planet_id)
+        planet, image_path = export_target(request, planet_id)
         content = await run_in_threadpool(
             export_renderer.export_stl, planet, image_path, diameter_mm
         )
         return Response(
             content=content,
             media_type="application/sla",
-            headers={
-                "Content-Disposition": f'attachment; filename="{planet.id}_planet.stl"'
-            },
+            headers={"Content-Disposition": f'attachment; filename="{planet.id}_planet.stl"'},
         )
 
     @router.post("/api/upload", dependencies=[Depends(kid_only)])
@@ -274,11 +310,14 @@ def build_router(
         mountain_color: str = Form(DEFAULT_MOUNTAIN_COLOR),
     ):
         if file.size is not None:
-            _guard(lambda: ensure_size_within(file.size, settings.max_file_size))
+            _guard(request, lambda: ensure_size_within(file.size, settings.max_file_size))
         content = await file.read(settings.max_file_size + 1)
 
         if manifest.size is not None and manifest.size > MAX_MANIFEST_BYTES:
-            raise HTTPException(status_code=413, detail="Drawing manifest is too large")
+            raise HTTPException(
+                status_code=413,
+                detail=_localized(request, "manifest_too_large"),
+            )
         manifest_content = await manifest.read(MAX_MANIFEST_BYTES + 1)
 
         try:
@@ -299,7 +338,7 @@ def build_router(
                 target_size=settings.texture_size,
             )
         except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+            raise HTTPException(status_code=_status_for(e), detail=_detail(request, e)) from e
 
         logger.info(
             "Planet received from %s: %s (%s, %s)",
@@ -310,7 +349,7 @@ def build_router(
         )
         return {
             "status": "success",
-            "message": "Your planet is flying to the galaxy!",
+            "message": _localized(request, "upload_success"),
             "planet_id": planet.id,
             "name": planet.display_name,
             "url": planet.url,
@@ -329,18 +368,21 @@ def build_router(
         return {"status": "cleared", "removed": removed}
 
     @router.delete("/api/planets/{planet_id}", dependencies=[Depends(manager_only)])
-    async def delete_planet_route(planet_id: str):
+    async def delete_planet_route(planet_id: str, request: Request):
         try:
             planet = delete_planet.execute(planet_id)
         except DomainError as e:
-            raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+            raise HTTPException(status_code=_status_for(e), detail=_detail(request, e)) from e
         return {"status": "deleted", "planet_id": planet.id, "name": planet.display_name}
 
     @router.get("/uploads/{filename}")
-    async def serve_upload(filename: str):
+    async def serve_upload(filename: str, request: Request):
         path = repository.resolve_image(filename)
         if path is None:
-            raise HTTPException(status_code=404, detail="Planet not found")
+            raise HTTPException(
+                status_code=404,
+                detail=_localized(request, "planet_not_found"),
+            )
         return FileResponse(path)
 
     @router.get("/api/events", dependencies=[Depends(projector_only)])
@@ -350,8 +392,8 @@ def build_router(
     return router
 
 
-def _guard(action) -> None:
+def _guard(request: Request, action) -> None:
     try:
         action()
     except DomainError as e:
-        raise HTTPException(status_code=_status_for(e), detail=e.user_message) from e
+        raise HTTPException(status_code=_status_for(e), detail=_detail(request, e)) from e

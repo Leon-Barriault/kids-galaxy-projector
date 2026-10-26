@@ -20,7 +20,7 @@ class GalaxyTargetVerifierTest {
         val result = verifier.verify(target())
 
         assertTrue(result.reachable)
-        assertEquals(null, result.message)
+        assertEquals(null, result.problem)
     }
 
     @Test
@@ -30,7 +30,7 @@ class GalaxyTargetVerifierTest {
         val result = verifier.verify(target())
 
         assertFalse(result.reachable)
-        assertEquals("That address is not a Kids Galaxy projector", result.message)
+        assertEquals(ProbeProblem.NOT_A_GALAXY, result.problem)
     }
 
     @Test
@@ -40,7 +40,8 @@ class GalaxyTargetVerifierTest {
         val result = verifier.verify(target())
 
         assertFalse(result.reachable)
-        assertEquals("Galaxy answered with HTTP 503", result.message)
+        assertEquals(ProbeProblem.HTTP_STATUS, result.problem)
+        assertEquals(503, result.statusCode)
     }
 
     @Test
@@ -54,7 +55,7 @@ class GalaxyTargetVerifierTest {
         val result = GalaxyTargetVerifier(client).verify(target())
 
         assertFalse(result.reachable)
-        assertEquals("Galaxy could not be reached", result.message)
+        assertEquals(ProbeProblem.UNREACHABLE, result.problem)
     }
 
     @Test

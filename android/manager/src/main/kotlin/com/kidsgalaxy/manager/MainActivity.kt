@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
@@ -52,9 +53,10 @@ class MainActivity : ComponentActivity() {
             val store = remember { SharedPreferencesGalaxyTargetStore(this) }
             val languageStore = remember { SharedPreferencesUiLanguageStore(this) }
             val language = remember { languageStore.load() }
+            val defaultGalaxyName = stringResource(R.string.default_galaxy_name)
             val defaultTarget =
-                remember {
-                    GalaxyTarget.create("Default Galaxy", BuildConfig.SERVER_BASE_URL)
+                remember(defaultGalaxyName) {
+                    GalaxyTarget.create(defaultGalaxyName, BuildConfig.SERVER_BASE_URL)
                 }
             var selectedGalaxy by remember { mutableStateOf(store.load(defaultTarget)) }
             var showGalaxyPicker by remember { mutableStateOf(false) }

@@ -38,8 +38,8 @@ data class DrawingUiState(
     val currentStrokeWidth: Float = DEFAULT_STROKE_WIDTH,
     /** True while a send request is in flight. */
     val isSending: Boolean = false,
-    /** User-visible error message, or null when there is none. */
-    val errorMessage: String? = null,
+    /** Launch failure for the UI to localize, or null when there is none. */
+    val error: SendFailure? = null,
     /** True after a successful send so the UI can show a celebration. */
     val showSuccess: Boolean = false,
 ) {

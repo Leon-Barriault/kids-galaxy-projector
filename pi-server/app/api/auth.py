@@ -11,6 +11,7 @@ from enum import StrEnum
 from fastapi import HTTPException, Request
 
 from app.config import Settings
+from app.i18n.catalog import negotiate, render
 
 ROLE_HEADER = "x-kids-galaxy-role"
 VERIFIED_HEADER = "x-kids-galaxy-client-verified"
@@ -45,8 +46,7 @@ class AuthorizationPolicy:
         """
         host = request.client.host if request.client else ""
         return (
-            host in self._trusted_proxy_hosts
-            and request.headers.get(PROXY_HEADER) == PROXY_MARKER
+            host in self._trusted_proxy_hosts and request.headers.get(PROXY_HEADER) == PROXY_MARKER
         )
 
     def client_identity(self, request: Request) -> str | None:
@@ -108,7 +108,10 @@ class AuthorizationPolicy:
         if role not in allowed:
             raise HTTPException(
                 status_code=403,
-                detail="This client is not allowed to do that",
+                detail=render(
+                    negotiate(request.headers.get("accept-language")),
+                    "not_allowed",
+                ),
             )
         return role
 
