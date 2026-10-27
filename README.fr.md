@@ -5,6 +5,8 @@ Système pour les enfants : ils dessinent une planète sur une tablette Android
 **Parents, personnel enseignant et personnel de la garderie, commencez ici.** Ces pages utilisent des étapes courtes et des mots simples. Les notes des programmeurs restent dans ce fichier et dans [DEVELOPMENT.md](DEVELOPMENT.md).
 
 - [Installer la salle](docs/user/fr/install.md)
+- [Mise en production](docs/user/fr/production-setup.md)
+- [La tablette enfant](docs/user/fr/kid-tablet.md)
 - [Chaque jour](docs/user/fr/daily.md)
 - [Quand quelque chose ne va pas](docs/user/fr/troubleshooting.md)
 - [Fiche d’une page](docs/user/fr/quick-start.md) ([PDF](docs/user/fr/quick-start.pdf))
