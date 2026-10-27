@@ -129,7 +129,8 @@ shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
  scripts/restore_room.sh scripts/update_room.sh scripts/rollback_room.sh \
  scripts/production_certs.sh scripts/check_production_certs.sh \
  scripts/create_tablet_keystore.sh scripts/provision_kid_tablet.sh \
- scripts/replace_kid_tablet.sh scripts/lib/room.sh \
+ scripts/replace_kid_tablet.sh scripts/wsl_bringup.sh \
+ scripts/check_wsl_detect.sh scripts/lib/room.sh scripts/lib/wsl.sh \
  pi-server/certs/generate_certs.sh
 cd android && ktlint --relative --editorconfig=.editorconfig \
     "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"

@@ -6,6 +6,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/lib/wsl.sh
+source "$ROOT/scripts/lib/wsl.sh"
 
 usage() {
   cat <<'EOF'
@@ -44,8 +46,30 @@ target_user="${SUDO_USER:-}"
 if [[ -n "$target_user" && "$target_user" != "root" ]]; then
   usermod -aG docker "$target_user"
   echo "Docker was allowed for ${target_user}."
-  echo "Log out and log back in before the next step."
+fi
+
+if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
+  systemctl enable docker
+  systemctl start docker
+  echo "Docker will start with Ubuntu."
+elif command -v service >/dev/null 2>&1; then
+  service docker start || true
 fi
 
 echo "The galaxy computer programs are installed."
+if is_wsl; then
+  echo "This Ubuntu is inside Windows. Docker Desktop is not used."
+  echo "Close the Ubuntu window and open it again before the next step."
+  echo "Do not run the hotspot script. Use the home router Wi-Fi."
+  if [[ ! -d /run/systemd/system ]]; then
+    echo "systemd is not running yet."
+    echo "Add these lines to /etc/wsl.conf if they are missing:"
+    echo "  [boot]"
+    echo "  systemd=true"
+    echo "Then in Windows PowerShell run: wsl --shutdown"
+    echo "Open Ubuntu and run this host line again."
+  fi
+else
+  echo "Log out and log back in before the next step."
+fi
 echo "Next: bash scripts/setup_room.sh"

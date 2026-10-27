@@ -154,6 +154,182 @@ Le point d’accès du guide d’installation est seulement un secours.
 > 2. Demandez de réserver l’adresse.
 > 3. N’utilisez pas le Wi-Fi public d’un café.
 
+<!-- section: wsl -->
+
+## Windows avec Ubuntu
+
+Cette salle utilise le PC Windows nommé `DESKTOP-VJV7DLM`.
+Ubuntu tourne à l’intérieur, avec l’utilisateur `omega`.
+Faites cette section avant de préparer l’ordinateur de la galaxie.
+Le Wi-Fi est le routeur de la maison. Le PC et les tablettes joignent ce même réseau.
+
+<!-- step: wsl-version -->
+
+1. Ouvrez PowerShell sur Windows.
+   Collez cette ligne.
+
+```powershell
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+```
+
+   Puis collez cette ligne.
+
+```powershell
+wsl -l -v
+```
+
+   **Ce que vous devez voir.** Le nom du PC et une ligne `Ubuntu-22.04`.
+   Windows 11 version 22H2 ou plus récent peut utiliser le mode miroir.
+   Windows 10 utilise le mode NAT.
+
+   **Sinon.** Demandez de l’aide avant de continuer. Le nom du PC doit être `DESKTOP-VJV7DLM`.
+
+<!-- step: wsl-mirrored -->
+
+2. Sur Windows 11, ouvrez le Bloc-notes.
+   Enregistrez ce fichier sous `C:\Users\votre-nom\.wslconfig`.
+   Le point devant le nom est obligatoire.
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+   Dans PowerShell, collez `wsl --shutdown`.
+   Ouvrez Ubuntu de nouveau.
+   Dans Ubuntu, collez `hostname -I`.
+
+   **Ce que vous devez voir.** Une adresse qui commence par `192.168`.
+   Elle doit correspondre à la carte papier.
+
+   **Sinon.** Le fichier est dans le mauvais dossier, ou `wsl --shutdown` n’a pas été lancé.
+   Utilisez alors l’étape NAT.
+
+<!-- step: wsl-nat -->
+
+3. Sur Windows 10, ou si le mode miroir ne tient pas, gardez le mode NAT.
+   Ouvrez Ubuntu une fois pour qu’il ait une adresse.
+   Ouvrez PowerShell en tant qu’administrateur.
+   Collez cette ligne.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-portproxy.ps1
+```
+
+   **Ce que vous devez voir.** Une ligne qui dit que le port `8443` pointe vers une adresse qui commence par `172`.
+   Les tablettes utilisent quand même l’adresse Windows de la carte papier.
+
+   **Sinon.** Ouvrez Ubuntu d’abord. Le transfert a besoin qu’Ubuntu soit allumé.
+   Relancez la même ligne après chaque `wsl --shutdown`.
+   La tâche d’ouverture de session fait ce rafraîchissement pour vous.
+
+<!-- step: wsl-firewall -->
+
+4. Dans la même fenêtre PowerShell administrateur, collez cette ligne.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-firewall.ps1
+```
+
+   **Ce que vous devez voir.** Des règles pour `8443`, `8000` et `5353`.
+   Sur Windows 11 en mode miroir, une ligne parle aussi du pare-feu Hyper-V.
+   Les règles visent seulement un réseau privé.
+
+   **Sinon.** La fenêtre n’est pas une fenêtre administrateur.
+   Fermez-la et ouvrez PowerShell avec Exécuter en tant qu’administrateur.
+   Pour retirer les règles plus tard, ajoutez `-Remove` à la fin de la ligne.
+
+<!-- step: wsl-mdns -->
+
+5. Le nom `kids-galaxy.local` est un confort.
+   En mode miroir, il peut marcher si le pare-feu laisse passer le port `5353`.
+   Un routeur de maison peut quand même cacher ce nom.
+   En mode NAT, ce nom ne rejoint pas les tablettes.
+   Ubuntu annoncerait une adresse `172` que les tablettes ne peuvent pas utiliser.
+   Le script de transfert ne transporte que le port `8443`.
+   Il ne transporte pas le nom.
+   Dans les deux modes, écrivez l’adresse Windows sur la carte papier.
+   Les tablettes doivent utiliser cette adresse.
+
+   **Ce que vous devez voir.** La carte papier montre une adresse `192.168`, pas une adresse `172`.
+
+   **Sinon.** Reprenez l’étape miroir ou l’étape NAT avant de construire les applications.
+
+<!-- step: wsl-docker -->
+
+6. Installez Docker dans Ubuntu.
+   N’installez pas Docker Desktop.
+   Docker Desktop cache le réseau d’Ubuntu, alors les tablettes ne rejoignent pas la porte.
+   Dans Ubuntu, collez la ligne des programmes de la section suivante.
+   Ce script voit Windows et démarre Docker avec systemd.
+   Il ne crée pas de point d’accès Wi-Fi.
+
+   **Ce que vous devez voir.** Les mots `The galaxy computer programs are installed.`
+   Puis une ligne qui dit que Docker est permis pour votre utilisateur.
+
+   **Sinon.** Si systemd manque, ajoutez ces lignes dans `/etc/wsl.conf`.
+
+```ini
+[boot]
+systemd=true
+```
+
+   Lancez `wsl --shutdown` dans PowerShell, ouvrez Ubuntu, et relancez la ligne de l’hôte.
+   Fermez Ubuntu et rouvrez-le avant `setup_room.sh`.
+   Sinon Docker refuse encore votre utilisateur.
+
+<!-- step: wsl-hotspot -->
+
+7. Ne lancez pas le script de point d’accès.
+   Ubuntu dans Windows ne possède pas la carte Wi-Fi de la salle.
+   Le PC et les tablettes joignent le routeur de la maison.
+   Le nom de réseau sur la carte papier est ce Wi-Fi.
+
+   **Ce que vous devez voir.** Le PC et une tablette montrent le même nom de Wi-Fi.
+
+   **Sinon.** Éteignez l’isolation des invités sur le routeur, comme dans la section réseau.
+
+<!-- step: wsl-start -->
+
+8. Windows n’ouvre pas Ubuntu tout seul après un redémarrage.
+   Dans une fenêtre PowerShell administrateur, collez cette ligne.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-autostart.ps1
+```
+
+   **Ce que vous devez voir.** Les mots `The start task is in place.`
+   La prochaine fois que vous ouvrez une session Windows, le programme de la galaxie démarre.
+
+   **Sinon.** Ouvrez Ubuntu une fois avant cette ligne, pour que Windows voie le fichier.
+   La tâche peut être lancée de nouveau sans risque.
+   Si Windows demande une permission à l’ouverture de session, choisissez Oui.
+
+<!-- step: wsl-wall -->
+
+9. Branchez le projecteur sur le port HDMI.
+   Appuyez ensemble sur la touche Windows et la touche P.
+   Choisissez `Second screen only` pour le spectacle.
+   Dans Ubuntu, collez cette ligne.
+
+```bash
+bash scripts/open_projector.sh
+```
+
+   Chrome s’ouvre en plein écran sur Windows à `http://127.0.0.1:8000/`.
+   Un raccourci du Bureau nommé `Kids Galaxy wall` ouvre cette page en mode kiosque.
+   Gardez le PC éveillé. Dans PowerShell, collez ces deux lignes.
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change monitor-timeout-ac 0
+```
+
+   **Ce que vous devez voir.** Le mur montre la galaxie, et le PC branché ne s’endort pas.
+
+   **Sinon.** Ouvrez Chrome vous-même à `http://127.0.0.1:8000/` et appuyez sur F11.
+   Si l’image est sur l’écran du portable, appuyez sur la touche Windows, Maj, et la flèche droite.
+
 <!-- section: specs -->
 
 ## Specs minimales des tablettes
@@ -235,7 +411,8 @@ Environ 40 minutes la première fois.
 <!-- step: computer-linux -->
 
 1. Allumez l’ordinateur et joignez le Wi-Fi de la salle.
-   Ouvrez Terminal.
+   Sur ce PC Windows, finissez d’abord la section Windows.
+   Ouvrez la fenêtre Ubuntu. Cette fenêtre est Terminal.
 
    **Ce que vous devez voir.** Un curseur qui clignote.
 

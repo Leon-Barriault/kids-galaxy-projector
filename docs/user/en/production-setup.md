@@ -154,6 +154,182 @@ The hotspot in the install guide is only a backup.
 > 2. Ask a helper to reserve the address.
 > 3. Do not use the public cafe Wi-Fi.
 
+<!-- section: wsl -->
+
+## Windows with Ubuntu
+
+This room uses the Windows PC named `DESKTOP-VJV7DLM`.
+Ubuntu runs inside it, as the user `omega`.
+Do this section before you prepare the galaxy computer.
+The Wi-Fi is the home router. The PC and the tablets join that same network.
+
+<!-- step: wsl-version -->
+
+1. Open PowerShell on Windows.
+   Paste this line.
+
+```powershell
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+```
+
+   Then paste this line.
+
+```powershell
+wsl -l -v
+```
+
+   **What you should see.** The PC name and a line `Ubuntu-22.04`.
+   Windows 11 version 22H2 or newer can use mirrored mode.
+   Windows 10 uses NAT mode.
+
+   **If not.** Ask a helper before you go on. The PC name should be `DESKTOP-VJV7DLM`.
+
+<!-- step: wsl-mirrored -->
+
+2. On Windows 11, open Notepad.
+   Save this file as `C:\Users\your-name\.wslconfig`.
+   The dot in front of the name is required.
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+   In PowerShell, paste `wsl --shutdown`.
+   Open Ubuntu again.
+   In Ubuntu, paste `hostname -I`.
+
+   **What you should see.** An address that starts with `192.168`.
+   It should match the paper card.
+
+   **If not.** The file is in the wrong folder, or `wsl --shutdown` was not run.
+   Use the NAT step instead.
+
+<!-- step: wsl-nat -->
+
+3. On Windows 10, or if mirrored mode does not stick, keep NAT mode.
+   Open Ubuntu once so it has an address.
+   Open PowerShell as administrator.
+   Paste this line.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-portproxy.ps1
+```
+
+   **What you should see.** A line that says port `8443` forwards to an address that starts with `172`.
+   Tablets still use the Windows address on the paper card.
+
+   **If not.** Open Ubuntu first. The forward needs Ubuntu to be awake.
+   Run the same line again after every `wsl --shutdown`.
+   The sign-in task does this refresh for you.
+
+<!-- step: wsl-firewall -->
+
+4. In the same admin PowerShell window, paste this line.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-firewall.ps1
+```
+
+   **What you should see.** Rules for `8443`, `8000`, and `5353`.
+   On Windows 11 mirrored mode, a line also mentions the Hyper-V firewall.
+   The rules apply to a private network only.
+
+   **If not.** The window is not an admin window.
+   Close it and open PowerShell with Run as administrator.
+   To take the rules away later, add `-Remove` at the end of the line.
+
+<!-- step: wsl-mdns -->
+
+5. The name `kids-galaxy.local` is a convenience.
+   In mirrored mode it can work when the firewall allows port `5353`.
+   A home router can still hide that name.
+   In NAT mode the name does not reach the tablets.
+   Ubuntu would announce a `172` address that tablets cannot use.
+   The forward script carries port `8443` only.
+   It cannot carry the name.
+   In both modes, write the Windows address on the paper card.
+   The tablets must use that address.
+
+   **What you should see.** The paper card shows a `192.168` address, not a `172` address.
+
+   **If not.** Repeat the mirrored step or the NAT step before you build the apps.
+
+<!-- step: wsl-docker -->
+
+6. Install Docker inside Ubuntu.
+   Do not install Docker Desktop.
+   Docker Desktop hides the Ubuntu network, so tablets cannot reach the door.
+   In Ubuntu, paste the program line from the next section.
+   That script sees Windows and starts Docker with systemd.
+   It does not create a Wi-Fi hotspot.
+
+   **What you should see.** The words `The galaxy computer programs are installed.`
+   Then a line that says Docker is allowed for your user.
+
+   **If not.** If systemd is missing, add these lines to `/etc/wsl.conf`.
+
+```ini
+[boot]
+systemd=true
+```
+
+   Run `wsl --shutdown` in PowerShell, open Ubuntu, and run the host line again.
+   Close Ubuntu and open it again before `setup_room.sh`.
+   Otherwise Docker still refuses your user.
+
+<!-- step: wsl-hotspot -->
+
+7. Do not run the hotspot script.
+   Ubuntu inside Windows does not own the room Wi-Fi card.
+   The PC and the tablets join the home router.
+   The network name on the paper card is that Wi-Fi.
+
+   **What you should see.** The PC and a tablet show the same Wi-Fi name.
+
+   **If not.** Turn off guest isolation on the router, as in the network section.
+
+<!-- step: wsl-start -->
+
+8. Windows does not open Ubuntu by itself after a restart.
+   In an admin PowerShell window, paste this line.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-autostart.ps1
+```
+
+   **What you should see.** The words `The start task is in place.`
+   The next time you sign in to Windows, the galaxy program starts.
+
+   **If not.** Open Ubuntu once before this line, so Windows can see the file.
+   The task is safe to run again.
+   If Windows asks for permission at sign-in, choose Yes.
+
+<!-- step: wsl-wall -->
+
+9. Plug the projector into the HDMI port.
+   Press the Windows key and P together.
+   Choose `Second screen only` for the show.
+   In Ubuntu, paste this line.
+
+```bash
+bash scripts/open_projector.sh
+```
+
+   Chrome opens full screen on Windows at `http://127.0.0.1:8000/`.
+   A desktop shortcut named `Kids Galaxy wall` opens that page in kiosk mode.
+   Keep the PC awake. In PowerShell, paste these two lines.
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change monitor-timeout-ac 0
+```
+
+   **What you should see.** The wall shows the galaxy, and the plugged-in PC does not sleep.
+
+   **If not.** Open Chrome yourself at `http://127.0.0.1:8000/` and press F11.
+   If the picture is on the laptop screen, press the Windows key, Shift, and the Right arrow.
+
 <!-- section: specs -->
 
 ## Minimum tablet specs
@@ -235,7 +411,8 @@ About 40 minutes the first time.
 <!-- step: computer-linux -->
 
 1. Turn on the computer and join the room Wi-Fi.
-   Open Terminal.
+   On this Windows PC, finish the Windows section first.
+   Open the Ubuntu window. That window is Terminal.
 
    **What you should see.** A blinking cursor.
 

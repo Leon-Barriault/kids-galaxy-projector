@@ -217,7 +217,11 @@ The scripts behind them:
 
 | Script | Role |
 | --- | --- |
-| `scripts/setup_host.sh` | Install Docker, OpenSSL, and adb |
+| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it does not use Docker Desktop |
+| `scripts/wsl_bringup.sh` | Start Docker and the room after a Windows sign-in |
+| `scripts/windows/kids-galaxy-firewall.ps1` | Private-profile firewall rules, plus the Hyper-V rule in mirrored mode |
+| `scripts/windows/kids-galaxy-portproxy.ps1` | NAT-mode forward of port 8443, refreshed when the Ubuntu address changes |
+| `scripts/windows/kids-galaxy-autostart.ps1` | Sign-in task that runs `wsl -d Ubuntu-22.04 -u omega` |
 | `scripts/production_certs.sh` | Idempotent CA, server renewal, per-tablet cards, CRL revoke |
 | `scripts/setup_room.sh` | Calls `production_certs.sh init`, then the secure compose stack |
 | `scripts/check_room.sh` | Health, tablet door, certificate dates, disk, backup presence |

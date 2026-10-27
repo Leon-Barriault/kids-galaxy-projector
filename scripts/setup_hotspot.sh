@@ -4,6 +4,17 @@
 
 set -e
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/lib/wsl.sh
+source "$ROOT/scripts/lib/wsl.sh"
+if is_wsl; then
+  echo "This Ubuntu is inside Windows."
+  echo "The hotspot command is for a Linux computer with its own Wi-Fi card."
+  echo "Use the home router Wi-Fi."
+  echo "Put this PC and the tablets on that same Wi-Fi."
+  exit 1
+fi
+
 SSID="KidsGalaxy"
 PASSWORD="DrawPlanet1"
 IFACE="wlan0"
