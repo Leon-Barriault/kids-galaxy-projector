@@ -85,6 +85,35 @@ issue_client "manager" "$SUBJ_MANAGER" "$MANAGER_P12_PASSWORD"
 
 rm -f ./*.csr ./ca.srl
 
+# An empty cancel list lets the tablet door start. This lab script replaces the
+# room card on every run, so it does not keep a per-tablet cancel database.
+# Room setup uses scripts/production_certs.sh, which can cancel one lost tablet.
+crl_db="$(mktemp -d)"
+: > "${crl_db}/index.txt"
+echo 'unique_subject = no' > "${crl_db}/index.txt.attr"
+echo 1000 > "${crl_db}/serial"
+echo 1000 > "${crl_db}/crlnumber"
+cat > "${crl_db}/openssl.cnf" <<EOF
+[ ca ]
+default_ca = room_ca
+[ room_ca ]
+dir               = ${crl_db}
+database          = \$dir/index.txt
+new_certs_dir     = \$dir
+certificate       = ${PWD}/ca.crt
+private_key       = ${PWD}/ca.key
+serial            = \$dir/serial
+crlnumber         = \$dir/crlnumber
+default_crl_days  = ${DAYS}
+default_md        = sha256
+policy            = room_policy
+[ room_policy ]
+commonName = supplied
+EOF
+openssl ca -batch -config "${crl_db}/openssl.cnf" -gencrl -out ca.crl >/dev/null
+rm -rf "${crl_db}"
+chmod 644 ca.crl
+
 echo ""
 echo "Certificates generated in $(pwd):"
 echo "  ca.crt / ca.key                - Certificate Authority"
@@ -106,3 +135,4 @@ echo "  mkdir -p ../../android/manager/src/main/assets"
 echo "  cp manager.p12 ca.crt ../../android/manager/src/main/assets/"
 echo ""
 echo "Run the field deployment behind the mTLS gateway, not uvicorn TLS directly."
+echo "For a real room, use scripts/production_certs.sh so one lost tablet can be cancelled."
