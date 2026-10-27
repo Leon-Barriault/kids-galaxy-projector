@@ -341,6 +341,21 @@ reload_gateway() {
   fi
 }
 
+# A reload keeps the old door process for a moment. That process can still
+# accept a card that was just cancelled. A restart closes that gap.
+restart_gateway() {
+  if ! have_docker; then
+    echo "The galaxy program is not running. The cancel list is saved for the next start."
+    return 0
+  fi
+  if compose ps --status running --services 2>/dev/null | grep -qx 'mtls-gateway'; then
+    compose restart mtls-gateway
+    echo "The tablet door was restarted so cancelled cards stop working now."
+  else
+    echo "The tablet door is stopped. The cancel list is saved for the next start."
+  fi
+}
+
 use_tablet() {
   local name="$1"
   local dir role assets_dir asset_name
@@ -439,7 +454,7 @@ cmd_revoke() {
     if [[ ${#retired_cert[@]} -gt 0 ]]; then
       echo "The card for ${name} is already cancelled."
       renew_crl
-      reload_gateway
+      restart_gateway
       return 0
     fi
     die "No card named ${name}."
@@ -448,7 +463,7 @@ cmd_revoke() {
   if revoked_in_index "$serial"; then
     echo "The card for ${name} is already cancelled."
     renew_crl
-    reload_gateway
+    restart_gateway
     return 0
   fi
   write_config "${SERVER_IP:-127.0.0.1}" "$SERVER_DNS"
@@ -459,7 +474,7 @@ cmd_revoke() {
   mv "$dir" "$retired"
   echo "The card for ${name} is cancelled."
   echo "Build the app again before that tablet is used."
-  reload_gateway
+  restart_gateway
 }
 
 COMMAND=""

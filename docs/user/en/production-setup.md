@@ -439,6 +439,7 @@ bash scripts/production_certs.sh revoke-tablet --name kid-1
 ```
 
    **What you should see.** The words `The card for kid-1 is cancelled.`
+   The next line says the tablet door was restarted.
 
    **If not.** Check the name with the list command and run the line again.
 

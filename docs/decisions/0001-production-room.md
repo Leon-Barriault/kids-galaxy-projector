@@ -69,7 +69,7 @@ These are not fixed by this procedure. They need a decision or a room test.
 - Export routes for print and STL stay open on purpose. Destructive routes stay role-gated.
 - USB debugging on the kid tablet is a physical-access path. The case must leave the port usable, and the cable must stay with the adult.
 - A child who gets out of Lock Task can still open Settings, because Wi-Fi changes were not forbidden. Android 8 is weaker on the shade than Android 9.
-- CRL reload depends on the gateway running. A cancelled card is enforced at the next gateway start if reload cannot run.
+- Cancelling a tablet restarts the tablet door so the old card stops at once. A reload alone can leave the old door process accepting that card for a moment. If the door is stopped, the cancel list applies at the next start.
 - The p12 password and the keystore password appear in local files. Backup files contain them. They must not be emailed.
 - Boot-on-charge cannot be scripted. A dead tablet may sit on the charger until someone presses power.
 - Certificate lifetime is 825 days until the owner picks another number.

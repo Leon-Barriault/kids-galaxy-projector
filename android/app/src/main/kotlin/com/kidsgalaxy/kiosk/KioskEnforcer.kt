@@ -45,7 +45,8 @@ internal object KioskEnforcer {
         }
         for (restriction in KidTabletPolicy.userRestrictions) {
             try {
-                policy.setUserRestriction(admin, restriction, true)
+                // API 37 keeps addUserRestriction. The boolean form is gone.
+                policy.addUserRestriction(admin, restriction)
             } catch (error: SecurityException) {
                 Log.w(TAG, "Restriction was rejected: $restriction", error)
             }
