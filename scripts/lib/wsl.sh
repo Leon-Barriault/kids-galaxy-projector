@@ -80,6 +80,139 @@ choose_tablet_address() {
   printf '\nnone\n'
 }
 
+wsl_distro_name() {
+  if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    printf '%s' "$WSL_DISTRO_NAME"
+    return 0
+  fi
+  if [[ -n "${KIDS_WSL_DISTRO:-}" ]]; then
+    printf '%s' "$KIDS_WSL_DISTRO"
+    return 0
+  fi
+  return 1
+}
+
+wsl_linux_user() {
+  if [[ -n "${WSL_LINUX_USER:-}" ]]; then
+    printf '%s' "$WSL_LINUX_USER"
+    return 0
+  fi
+  if [[ -n "${KIDS_WSL_USER:-}" && "${KIDS_WSL_USER}" != "root" ]]; then
+    printf '%s' "$KIDS_WSL_USER"
+    return 0
+  fi
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    printf '%s' "$SUDO_USER"
+    return 0
+  fi
+  if [[ -n "${USER:-}" && "${USER}" != "root" ]]; then
+    printf '%s' "$USER"
+    return 0
+  fi
+  id -un
+}
+
+wsl_home_path() {
+  if [[ -n "${WSL_LINUX_HOME:-}" ]]; then
+    printf '%s' "$WSL_LINUX_HOME"
+    return 0
+  fi
+  local user home
+  user="$(wsl_linux_user)"
+  home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6)"
+  [[ -n "$home" ]] || return 1
+  printf '%s' "$home"
+}
+
+# \\wsl$\<distro>\<home>\kids-galaxy-projector
+wsl_unc_repo() {
+  local distro="$1"
+  local home_path="$2"
+  local repo_name="${3:-kids-galaxy-projector}"
+  local rel="${home_path#/}"
+  rel="${rel//\//\\}"
+  printf '\\\\wsl$\\%s\\%s\\%s' "$distro" "$rel" "$repo_name"
+}
+
+kids_powershell() {
+  if [[ -n "${KIDS_POWERSHELL:-}" && -x "${KIDS_POWERSHELL}" ]]; then
+    printf '%s' "$KIDS_POWERSHELL"
+    return 0
+  fi
+  if command -v powershell.exe >/dev/null 2>&1; then
+    command -v powershell.exe
+    return 0
+  fi
+  local candidate="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+  if [[ -x "$candidate" ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+# running, stopped, or absent. DOCKER_DESKTOP_STATE skips Windows.
+docker_desktop_state() {
+  if [[ -n "${DOCKER_DESKTOP_STATE:-}" ]]; then
+    case "$DOCKER_DESKTOP_STATE" in
+      running|stopped|absent) printf '%s' "$DOCKER_DESKTOP_STATE" ;;
+      *) printf 'absent' ;;
+    esac
+    return 0
+  fi
+  local exe="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
+  local installed=0
+  local ps running
+  [[ -f "$exe" ]] && installed=1
+  ps="$(kids_powershell || true)"
+  if [[ -n "$ps" ]]; then
+    running="$("$ps" -NoProfile -Command 'if (Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue) { "running" } else { "stopped" }' 2>/dev/null | tr -d '\r' | awk 'NF { print; exit }' || true)"
+    if [[ "$running" == "running" ]]; then
+      printf 'running'
+      return 0
+    fi
+    if [[ "$installed" -eq 1 ]]; then
+      printf 'stopped'
+      return 0
+    fi
+  elif [[ "$installed" -eq 1 ]]; then
+    printf 'stopped'
+    return 0
+  fi
+  printf 'absent'
+}
+
+windows_admin_lines() {
+  local distro user home unc base
+  distro="$(wsl_distro_name)" || return 1
+  user="$(wsl_linux_user)"
+  home="$(wsl_home_path)" || return 1
+  unc="$(wsl_unc_repo "$distro" "$home")"
+  base="${unc}\\scripts\\windows"
+  cat <<EOF
+Distro: ${distro}
+User: ${user}
+Windows folder: ${unc}
+
+Open PowerShell as administrator. Paste one line at a time.
+
+Firewall:
+powershell -NoProfile -ExecutionPolicy Bypass -File "${base}\\kids-galaxy-firewall.ps1"
+
+Sign-in task:
+powershell -NoProfile -ExecutionPolicy Bypass -File "${base}\\kids-galaxy-autostart.ps1" -Distro ${distro} -User ${user}
+
+Port forward, only when mirrored mode is off:
+powershell -NoProfile -ExecutionPolicy Bypass -File "${base}\\kids-galaxy-portproxy.ps1" -Distro ${distro} -User ${user}
+
+Hotspot plan, without starting it:
+powershell -NoProfile -ExecutionPolicy Bypass -File "${base}\\kids-galaxy-hotspot.ps1" -WhatIf
+
+Check the distro name in PowerShell:
+wsl -l -q
+EOF
+}
+
 windows_lan_ip() {
   local script="${WSL_LIB_DIR}/../windows/kids-galaxy-lan-ip.ps1"
   local win_script ip

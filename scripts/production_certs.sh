@@ -28,6 +28,7 @@ A second run keeps the room card. It does not start over.
 Commands:
   init              Make the room card, the address card, and the first tablets.
   reissue-server    Make a new address card. Tablet cards stay valid.
+  add-addresses     Add names to the address card. The room card stays.
   issue-tablet      Make one tablet card.
   revoke-tablet     Cancel a lost tablet. The wall stops trusting that card.
   use-tablet        Copy one tablet card into the matching app folder.
@@ -38,11 +39,14 @@ Commands:
 Options:
   --role kid|manager   Used with issue-tablet.
   --name NAME          Short name such as kid-2. Letters, numbers, and dashes.
+  --ip ADDRESS         Extra address for add-addresses. Repeat for each one.
+  --dns NAME           Extra name for add-addresses. Repeat for each one.
   --yes                Required with rotate-ca.
   --help               Show this help.
 
 The computer address comes from SERVER_IP. The name kids-galaxy.local is the
-default. Set SERVER_DNS to use another name. Cards last 825 days unless DAYS
+default. Set SERVER_DNS to use another name. add-addresses keeps every saved
+name, the room card, and the tablet cards. Cards last 825 days unless DAYS
 is set. Passwords stay in pi-server/certs/p12-password on this computer.
 EOF
 }
@@ -79,10 +83,101 @@ read_password() {
   printf '%s\n' "$generated"
 }
 
+server_names_file() {
+  printf '%s/server-names.txt' "$CERT_DIR"
+}
+
+valid_ip() {
+  local ip="$1" o1 o2 o3 o4 o
+  [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+  o1="${BASH_REMATCH[1]}"
+  o2="${BASH_REMATCH[2]}"
+  o3="${BASH_REMATCH[3]}"
+  o4="${BASH_REMATCH[4]}"
+  for o in "$o1" "$o2" "$o3" "$o4"; do
+    if ((10#$o > 255)); then
+      return 1
+    fi
+  done
+}
+
+valid_dns() {
+  local name="$1"
+  [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] || return 1
+  [[ "$name" != *..* ]] || return 1
+}
+
+add_server_name() {
+  local kind="$1"
+  local value="$2"
+  local path
+  path="$(server_names_file)"
+  mkdir -p "$CERT_DIR"
+  if [[ -f "$path" ]] && grep -qxF -- "${kind} ${value}" "$path"; then
+    return 0
+  fi
+  printf '%s %s\n' "$kind" "$value" >>"$path"
+}
+
+ensure_recorded_names() {
+  local ip="$1"
+  local dns="$2"
+  valid_ip "$ip" || die "Bad address: ${ip}"
+  valid_dns "$dns" || die "Bad name: ${dns}"
+  add_server_name ip "$ip"
+  add_server_name dns "$dns"
+  add_server_name dns localhost
+  add_server_name ip 127.0.0.1
+}
+
+san_has() {
+  case ",${1}," in
+    *",${2},"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+san_line() {
+  local kind value item parts="" path
+  path="$(server_names_file)"
+  [[ -f "$path" ]] || return 1
+  while read -r kind value; do
+    [[ -z "${kind:-}" || -z "${value:-}" ]] && continue
+    [[ "$kind" == \#* ]] && continue
+    case "$kind" in
+      ip) item="IP:${value}" ;;
+      dns) item="DNS:${value}" ;;
+      *) continue ;;
+    esac
+    if ! san_has "$parts" "$item"; then
+      if [[ -z "$parts" ]]; then
+        parts="$item"
+      else
+        parts="${parts},${item}"
+      fi
+    fi
+  done <"$path"
+  for item in DNS:localhost IP:127.0.0.1; do
+    if ! san_has "$parts" "$item"; then
+      if [[ -z "$parts" ]]; then
+        parts="$item"
+      else
+        parts="${parts},${item}"
+      fi
+    fi
+  done
+  printf '%s' "$parts"
+}
+
 write_config() {
   local ip="$1"
   local dns="$2"
   local db="$CERT_DIR/ca-db"
+  local san
+  san="$(san_line || true)"
+  if [[ -z "$san" ]]; then
+    san="IP:${ip},DNS:${dns},DNS:localhost,IP:127.0.0.1"
+  fi
   mkdir -p "$db"
   if [[ ! -f "$db/index.txt" ]]; then
     : >"$db/index.txt"
@@ -128,7 +223,7 @@ authorityKeyIdentifier = keyid:always
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
-subjectAltName = IP:${ip},DNS:${dns},DNS:localhost,IP:127.0.0.1
+subjectAltName = ${san}
 
 [ client_ext ]
 basicConstraints = critical,CA:FALSE
@@ -179,16 +274,41 @@ effective_days() {
   printf '%s\n' "$DAYS"
 }
 
+name_in_san() {
+  local kind="$1"
+  local value="$2"
+  local san="$3"
+  case "$kind" in
+    ip)
+      [[ "$san" == *"IP Address:${value}"* || "$san" == *"IP:${value}"* ]]
+      ;;
+    dns)
+      [[ "$san" == *"DNS:${value}"* ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 server_is_current() {
   local cert="$CERT_DIR/server.crt"
   local ip="$1"
-  local san
+  local san path kind value
   [[ -f "$cert" && -f "$CERT_DIR/server.key" ]] || return 1
   if ! openssl x509 -checkend "$((RENEW_WITHIN_DAYS * 24 * 3600))" -noout -in "$cert" >/dev/null 2>&1; then
     return 1
   fi
   san="$(openssl x509 -in "$cert" -noout -ext subjectAltName 2>/dev/null || true)"
-  [[ "$san" == *"IP Address:${ip}"* || "$san" == *"IP:${ip}"* ]]
+  path="$(server_names_file)"
+  if [[ -f "$path" ]]; then
+    while read -r kind value; do
+      [[ -z "${kind:-}" || -z "${value:-}" ]] && continue
+      name_in_san "$kind" "$value" "$san" || return 1
+    done <"$path"
+    return 0
+  fi
+  name_in_san ip "$ip" "$san"
 }
 
 issue_server() {
@@ -213,8 +333,9 @@ ensure_server() {
   local ip="$1"
   local dns="$2"
   local force="${3:-0}"
+  ensure_recorded_names "$ip" "$dns"
   if [[ "$force" != "1" ]] && server_is_current "$ip"; then
-    echo "The address card already matches ${ip}."
+    echo "The address card already covers the saved names."
     return 0
   fi
   echo "Making the address card for ${ip}."
@@ -482,6 +603,8 @@ ROLE=""
 NAME=""
 YES=0
 FORCE_SERVER=0
+EXTRA_IPS=()
+EXTRA_DNS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -503,11 +626,21 @@ while [[ $# -gt 0 ]]; do
       YES=1
       shift
       ;;
+    --ip)
+      [[ $# -ge 2 ]] || die "Add an address after --ip."
+      EXTRA_IPS+=("$2")
+      shift 2
+      ;;
+    --dns)
+      [[ $# -ge 2 ]] || die "Add a name after --dns."
+      EXTRA_DNS+=("$2")
+      shift 2
+      ;;
     --force-server)
       FORCE_SERVER=1
       shift
       ;;
-    init|reissue-server|issue-tablet|revoke-tablet|use-tablet|list|renew-crl|rotate-ca)
+    init|reissue-server|add-addresses|issue-tablet|revoke-tablet|use-tablet|list|renew-crl|rotate-ca)
       [[ -z "$COMMAND" ]] || die "Use one command at a time."
       COMMAND="$1"
       shift
@@ -530,7 +663,31 @@ case "$COMMAND" in
     ip="$(require_ip)"
     ensure_server "$ip" "$SERVER_DNS" 1
     renew_crl
+    reload_gateway
     echo "The address card now uses ${ip}. Tablet cards were kept."
+    ;;
+  add-addresses)
+    need_cmd openssl "OpenSSL is missing. Install it, then run this again."
+    [[ -f "$CERT_DIR/ca.key" ]] || die "The room card is missing. Run init first."
+    [[ ${#EXTRA_IPS[@]} -gt 0 || ${#EXTRA_DNS[@]} -gt 0 ]] || die "Add --ip or --dns. Run --help."
+    for ip in "${EXTRA_IPS[@]}"; do
+      valid_ip "$ip" || die "Bad address: ${ip}"
+      add_server_name ip "$ip"
+    done
+    for dns in "${EXTRA_DNS[@]}"; do
+      valid_dns "$dns" || die "Bad name: ${dns}"
+      add_server_name dns "$dns"
+    done
+    ip="$(require_ip)"
+    ensure_recorded_names "$ip" "$SERVER_DNS"
+    if server_is_current "$ip"; then
+      echo "The address card already covers every saved name."
+    else
+      ensure_server "$ip" "$SERVER_DNS" 1
+      renew_crl
+      reload_gateway
+    fi
+    echo "The room card and tablet cards were kept."
     ;;
   issue-tablet)
     [[ -n "$ROLE" && -n "$NAME" ]] || die "Add --role kid or --role manager, and --name."
@@ -561,7 +718,7 @@ case "$COMMAND" in
       "$CERT_DIR"/ca.srl "$CERT_DIR"/server.crt "$CERT_DIR"/server.key \
       "$CERT_DIR"/client.crt "$CERT_DIR"/client.key "$CERT_DIR"/client.p12 \
       "$CERT_DIR"/manager.crt "$CERT_DIR"/manager.key "$CERT_DIR"/manager.p12 \
-      "$CERT_DIR"/p12-password
+      "$CERT_DIR"/p12-password "$CERT_DIR"/server-names.txt
     echo "The old room card is gone."
     cmd_init 1
     ;;

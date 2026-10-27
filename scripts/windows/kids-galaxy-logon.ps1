@@ -4,13 +4,16 @@
 
 [CmdletBinding()]
 param(
-    [string]$Distro = 'Ubuntu-22.04',
-    [string]$User = 'omega'
+    [string]$Distro = '',
+    [string]$User = ''
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'kids-galaxy-common.ps1')
+$Distro = Get-KidsGalaxyDefaultDistro -Requested $Distro
+$User = Get-KidsGalaxyDefaultUser -Requested $User -DistroName $Distro
 
-Write-Output 'Starting Ubuntu and the galaxy program.'
+Write-Output "Starting $Distro and the galaxy program."
 & wsl.exe -d $Distro -u $User -- bash -lc 'cd "$HOME/kids-galaxy-projector" && bash scripts/wsl_bringup.sh'
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE

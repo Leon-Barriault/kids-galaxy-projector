@@ -7,13 +7,14 @@
 
 [CmdletBinding()]
 param(
-    [string]$Distro = 'Ubuntu-22.04',
-    [string]$User = 'omega',
+    [string]$Distro = '',
+    [string]$User = '',
     [int[]]$Ports = @(8443),
     [switch]$Remove
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'kids-galaxy-common.ps1')
 
 function Get-KidsGalaxyWslIp {
     param(
@@ -22,12 +23,12 @@ function Get-KidsGalaxyWslIp {
     )
     $raw = & wsl.exe -d $DistroName -u $UserName -- hostname -I
     if ($LASTEXITCODE -ne 0) {
-        throw "Ubuntu did not answer. Open Ubuntu once, then run this again."
+        throw "Linux did not answer. Open the distro once, then run this again."
     }
     $text = ($raw | Out-String)
     $match = [regex]::Match($text, '\d+\.\d+\.\d+\.\d+')
     if (-not $match.Success) {
-        throw 'Ubuntu has no address yet. Open Ubuntu, then run this again.'
+        throw 'Linux has no address yet. Open the distro, then run this again.'
     }
     return $match.Value
 }
@@ -40,6 +41,9 @@ if ($Remove) {
     Write-Output 'The tablet door forward is removed.'
     exit 0
 }
+
+$Distro = Get-KidsGalaxyDefaultDistro -Requested $Distro
+$User = Get-KidsGalaxyDefaultUser -Requested $User -DistroName $Distro
 
 Set-Service -Name iphlpsvc -StartupType Automatic
 Start-Service -Name iphlpsvc
@@ -54,6 +58,6 @@ foreach ($port in $Ports) {
     Write-Output "Port $port now forwards to $wslIp."
 }
 
-Write-Output 'Tablets must use the Windows address on the paper card, not this Ubuntu address.'
+Write-Output 'Tablets must use the Windows address on the paper card, not the private Linux address.'
 Write-Output 'Run this script again after wsl --shutdown if the Ubuntu address changes.'
 Write-Output 'The sign-in task runs this refresh for you.'

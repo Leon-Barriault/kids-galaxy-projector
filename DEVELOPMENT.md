@@ -217,12 +217,14 @@ The scripts behind them:
 
 | Script | Role |
 | --- | --- |
-| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it does not use Docker Desktop |
+| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it warns if Docker Desktop is installed |
 | `scripts/wsl_bringup.sh` | Start Docker and the room after a Windows sign-in |
-| `scripts/windows/kids-galaxy-firewall.ps1` | Private-profile firewall rules, plus the Hyper-V rule in mirrored mode |
-| `scripts/windows/kids-galaxy-portproxy.ps1` | NAT-mode forward of port 8443, refreshed when the Ubuntu address changes |
-| `scripts/windows/kids-galaxy-autostart.ps1` | Sign-in task that runs `wsl -d Ubuntu-22.04 -u omega` |
-| `scripts/production_certs.sh` | Idempotent CA, server renewal, per-tablet cards, CRL revoke |
+| `scripts/print_windows_commands.sh` | Print the admin PowerShell lines with this distro name and user filled in |
+| `scripts/windows/kids-galaxy-firewall.ps1` | Private-profile firewall rules. Keeps an existing KidsGalaxy rule for the same port |
+| `scripts/windows/kids-galaxy-portproxy.ps1` | NAT-mode forward of port 8443. The distro name is detected |
+| `scripts/windows/kids-galaxy-autostart.ps1` | Sign-in task. Distro and user default to the Windows default distro |
+| `scripts/windows/kids-galaxy-hotspot.ps1` | Windows hotspot plan. `-WhatIf` does not start it. No uplink means stop |
+| `scripts/production_certs.sh` | Idempotent CA, server renewal, extra server names, per-tablet cards, CRL revoke |
 | `scripts/setup_room.sh` | Calls `production_certs.sh init`, then the secure compose stack |
 | `scripts/check_room.sh` | Health, tablet door, certificate dates, disk, backup presence |
 | `scripts/backup_room.sh` / `restore_room.sh` | Planets, state, certificates, and the release keystore |

@@ -38,9 +38,15 @@ expect_choice() {
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
-WSL_DISTRO_NAME="Ubuntu-22.04"
+WSL_DISTRO_NAME="TestDistro"
 expect_wsl "WSL_DISTRO_NAME should count as Windows"
+if [[ "$(wsl_distro_name)" != "TestDistro" ]]; then
+  fail "the distro name should come from WSL_DISTRO_NAME"
+fi
 unset WSL_DISTRO_NAME
+if wsl_distro_name >/dev/null 2>&1; then
+  fail "a missing distro name should stay missing"
+fi
 
 printf 'Linux version 5.15.153.1-microsoft-standard-WSL2\n' >"$tmp"
 WSL_PROC_VERSION="$tmp"
@@ -66,5 +72,57 @@ fi
 if wsl_nat_looking "172.15.0.4"; then
   fail "172.15 is outside the private Ubuntu range"
 fi
+
+unc="$(wsl_unc_repo Ubuntu /home/omega)"
+if [[ "$unc" != '\\wsl$\Ubuntu\home\omega\kids-galaxy-projector' ]]; then
+  fail "windows path was [$unc]"
+fi
+
+WSL_DISTRO_NAME="Ubuntu"
+WSL_LINUX_USER="omega"
+WSL_LINUX_HOME="/home/omega"
+lines="$(windows_admin_lines)"
+if [[ "$lines" != *'\\wsl$\Ubuntu\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-firewall.ps1'* ]]; then
+  fail "firewall command was not filled in"
+fi
+if [[ "$lines" != *'-Distro Ubuntu -User omega'* ]]; then
+  fail "sign-in command did not use the detected distro and user"
+fi
+unset WSL_DISTRO_NAME WSL_LINUX_USER WSL_LINUX_HOME
+
+if grep -q 'DrawPlanet1' "$ROOT/scripts/setup_hotspot.sh" \
+  "$ROOT/docs/user/en/install.md" "$ROOT/docs/user/fr/install.md"; then
+  fail "a published hotspot password is still in the scripts or the install guide"
+fi
+banned_distro="$(printf 'Ubuntu-%s' '22.04')"
+if grep -R -n "$banned_distro" "$ROOT/scripts" "$ROOT/docs/user" "$ROOT/DEVELOPMENT.md" >/dev/null; then
+  fail "the distro name is still hard-coded"
+fi
+if ! grep -q 'Get-NetConnectionProfile' "$ROOT/scripts/windows/kids-galaxy-firewall.ps1"; then
+  fail "the firewall script should check the network profile"
+fi
+if grep -q 'DefaultInboundAction Block' "$ROOT/scripts/windows/kids-galaxy-firewall.ps1"; then
+  fail "removing rules must leave the Hyper-V inbound setting alone"
+fi
+if ! grep -q 'GetInternetConnectionProfile' "$ROOT/scripts/windows/kids-galaxy-hotspot.ps1"; then
+  fail "the hotspot script should notice a missing uplink"
+fi
+if grep -q 'DrawPlanet1' "$ROOT/scripts/windows/kids-galaxy-hotspot.ps1"; then
+  fail "the Windows hotspot script must not ship a password"
+fi
+
+DOCKER_DESKTOP_STATE="running"
+if [[ "$(docker_desktop_state)" != "running" ]]; then
+  fail "Docker Desktop running state was not kept"
+fi
+DOCKER_DESKTOP_STATE="stopped"
+if [[ "$(docker_desktop_state)" != "stopped" ]]; then
+  fail "Docker Desktop stopped state was not kept"
+fi
+DOCKER_DESKTOP_STATE="absent"
+if [[ "$(docker_desktop_state)" != "absent" ]]; then
+  fail "Docker Desktop absent state was not kept"
+fi
+unset DOCKER_DESKTOP_STATE
 
 echo "WSL detection checks passed."

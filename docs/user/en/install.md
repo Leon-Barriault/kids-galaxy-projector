@@ -270,7 +270,8 @@ sudo bash scripts/setup_hotspot.sh
 ```
 
    You should see the Wi-Fi name `KidsGalaxy`.
-   The password is `DrawPlanet1`.
+   The script prints a new password.
+   Write that password on paper.
    The address is usually `10.42.0.1`.
    Join that Wi-Fi on both tablets later.
 

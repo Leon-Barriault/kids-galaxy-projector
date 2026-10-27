@@ -60,11 +60,19 @@ The computer may be rebuilt, and a tablet may be lost.
 8. Safety copies include uploads, state, `pi-server/certs`, and the keystore when it exists.
    They are mode `0600` and are meant for a USB stick in a locked drawer.
 
+9. A room that moves between daycares keeps one tablet address, `192.168.0.52`.
+   A travel router reserves that address for the Windows Wi-Fi card.
+   Mirrored WSL shares that card and that address.
+   `add-addresses` can add spare names to the server certificate without replacing the CA or the tablet cards.
+   The compiled `kidsGalaxyServerHost` does not change when the server certificate gains names.
+   The Windows mobile hotspot stays a spare because its address is `192.168.137.1`.
+   `setup_hotspot.sh` does not run under WSL, because WSL does not own the Wi-Fi radio.
+
 ## Open risks for the owner
 
 These are not fixed by this procedure. They need a decision or a room test.
 
-- The hotspot password in `scripts/setup_hotspot.sh` is a shared default published in the install guide. A public event should not use it.
+- The Linux hotspot script now makes a password and stores it in a root-only file. The install guide no longer prints a shared password. A Windows room should use the travel router.
 - `nginx:stable-alpine` is a moving tag. A pinned digest would be more stable and harder to refresh offline.
 - Export routes for print and STL stay open on purpose. Destructive routes stay role-gated.
 - USB debugging on the kid tablet is a physical-access path. The case must leave the port usable, and the cable must stay with the adult.
@@ -73,6 +81,6 @@ These are not fixed by this procedure. They need a decision or a room test.
 - The p12 password and the keystore password appear in local files. Backup files contain them. They must not be emailed.
 - Boot-on-charge cannot be scripted. A dead tablet may sit on the charger until someone presses power.
 - Certificate lifetime is 825 days until the owner picks another number.
-- The computer name `kids-galaxy` and the example address `192.168.1.50` are placeholders. The room router must reserve the real address.
+- Older guide examples still say `192.168.1.50`. The moving room uses `192.168.0.52` so the tablets stay on one build. The travel router must reserve that address. The real router setup still needs a check on the hardware.
 - Per-tablet cards require a rebuild of the kid app, because the PKCS12 is an asset. A warm Gradle build is what makes a replacement short.
 - Manager tablets are not locked. That is intentional.

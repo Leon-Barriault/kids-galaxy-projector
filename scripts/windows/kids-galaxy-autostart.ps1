@@ -6,13 +6,14 @@
 
 [CmdletBinding()]
 param(
-    [string]$Distro = 'Ubuntu-22.04',
-    [string]$User = 'omega',
+    [string]$Distro = '',
+    [string]$User = '',
     [switch]$Remove
 )
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'Kids Galaxy room'
+. (Join-Path $PSScriptRoot 'kids-galaxy-common.ps1')
 
 if ($Remove) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -20,9 +21,13 @@ if ($Remove) {
     exit 0
 }
 
+$Distro = Get-KidsGalaxyDefaultDistro -Requested $Distro
+$User = Get-KidsGalaxyDefaultUser -Requested $User -DistroName $Distro
+
 $dest = Join-Path $env:USERPROFILE 'KidsGalaxy'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 foreach ($name in @(
+        'kids-galaxy-common.ps1',
         'kids-galaxy-logon.ps1',
         'kids-galaxy-portproxy.ps1',
         'kids-galaxy-lan-ip.ps1'

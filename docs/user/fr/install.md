@@ -270,7 +270,8 @@ sudo bash scripts/setup_hotspot.sh
 ```
 
    Vous devriez voir le nom Wi-Fi `KidsGalaxy`.
-   Le mot de passe est `DrawPlanet1`.
+   Le script affiche un nouveau mot de passe.
+   Écrivez ce mot de passe sur papier.
    L’adresse est habituellement `10.42.0.1`.
    Joignez ce Wi-Fi sur les deux tablettes plus tard.
 

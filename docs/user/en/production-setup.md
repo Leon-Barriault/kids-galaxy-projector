@@ -178,11 +178,22 @@ systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
 wsl -l -v
 ```
 
-   **What you should see.** The PC name and a line `Ubuntu-22.04`.
-   Windows 11 version 22H2 or newer can use mirrored mode.
+   **What you should see.** The PC name and a distro name.
+   On this PC the distro name is `Ubuntu`.
+   Windows 11, including version 26H2, can use mirrored mode.
    Windows 10 uses NAT mode.
+   Open Ubuntu in this project folder and paste the helper line.
+   It prints the Windows commands with the real paths filled in.
+
+```bash
+bash scripts/print_windows_commands.sh
+```
+
+   The helper prints a folder that starts with `\\wsl$\` plus the distro name.
+   On this PC that folder contains `Ubuntu` and `omega`.
 
    **If not.** Ask a helper before you go on. The PC name should be `DESKTOP-VJV7DLM`.
+   In PowerShell, `wsl -l -q` shows the distro name.
 
 <!-- step: wsl-mirrored -->
 
@@ -200,6 +211,7 @@ networkingMode=mirrored
    In Ubuntu, paste `hostname -I`.
 
    **What you should see.** An address that starts with `192.168`.
+   On this PC, Ubuntu shows `192.168.0.52`.
    It should match the paper card.
 
    **If not.** The file is in the wrong folder, or `wsl --shutdown` was not run.
@@ -210,11 +222,8 @@ networkingMode=mirrored
 3. On Windows 10, or if mirrored mode does not stick, keep NAT mode.
    Open Ubuntu once so it has an address.
    Open PowerShell as administrator.
-   Paste this line.
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-portproxy.ps1
-```
+   Paste the port-forward line that the helper printed.
+   That line includes your distro name and your Linux user.
 
    **What you should see.** A line that says port `8443` forwards to an address that starts with `172`.
    Tablets still use the Windows address on the paper card.
@@ -225,19 +234,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\ome
 
 <!-- step: wsl-firewall -->
 
-4. In the same admin PowerShell window, paste this line.
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-firewall.ps1
-```
+4. In the same admin PowerShell window, paste the firewall line the helper printed.
 
    **What you should see.** Rules for `8443`, `8000`, and `5353`.
    On Windows 11 mirrored mode, a line also mentions the Hyper-V firewall.
+   A rule you already named KidsGalaxy is kept.
+   The script does not add a second copy for the same port.
    The rules apply to a private network only.
+   A line also says whether any connected adapter is Public.
 
    **If not.** The window is not an admin window.
    Close it and open PowerShell with Run as administrator.
-   To take the rules away later, add `-Remove` at the end of the line.
+   If the script says the network is Public, it prints one line to set Private.
+   Run that line only for the room Wi-Fi or the travel router.
+   Leave a cafe network as Public.
+   To take the script rules away later, add `-Remove` at the end of the line.
+   Rules you made by hand stay in place.
 
 <!-- step: wsl-mdns -->
 
@@ -266,6 +278,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\ome
 
    **What you should see.** The words `The galaxy computer programs are installed.`
    Then a line that says Docker is allowed for your user.
+   On this PC, systemd is already on.
+   If Docker Desktop is installed, the script says to quit it.
+   Turn off Start Docker Desktop when you sign in.
+   Leave Docker Desktop stopped so it does not fight Ubuntu.
 
    **If not.** If systemd is missing, add these lines to `/etc/wsl.conf`.
 
@@ -280,9 +296,11 @@ systemd=true
 
 <!-- step: wsl-hotspot -->
 
-7. Do not run the hotspot script.
-   Ubuntu inside Windows does not own the room Wi-Fi card.
-   The PC and the tablets join the home router.
+7. Do not run the Linux hotspot script on this PC.
+   Ubuntu inside Windows does not own the Wi-Fi card.
+   That hotspot does not carry over to Windows.
+   At home, the PC and the tablets join the home router.
+   On the road, use the travel router in the next section.
    The network name on the paper card is that Wi-Fi.
 
    **What you should see.** The PC and a tablet show the same Wi-Fi name.
@@ -292,11 +310,7 @@ systemd=true
 <!-- step: wsl-start -->
 
 8. Windows does not open Ubuntu by itself after a restart.
-   In an admin PowerShell window, paste this line.
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File \\wsl$\Ubuntu-22.04\home\omega\kids-galaxy-projector\scripts\windows\kids-galaxy-autostart.ps1
-```
+   In an admin PowerShell window, paste the sign-in line the helper printed.
 
    **What you should see.** The words `The start task is in place.`
    The next time you sign in to Windows, the galaxy program starts.
@@ -329,6 +343,172 @@ powercfg /change monitor-timeout-ac 0
 
    **If not.** Open Chrome yourself at `http://127.0.0.1:8000/` and press F11.
    If the picture is on the laptop screen, press the Windows key, Shift, and the Right arrow.
+
+<!-- section: travel -->
+
+## A network you can carry
+
+The galaxy moves between daycares.
+A daycare may have no Wi-Fi and no internet.
+Use the same address at every site.
+That address is `192.168.0.52`.
+The tablet apps are built for that address once.
+You do not rebuild them when you change rooms.
+Use the travel router to keep that address.
+The Windows hotspot cannot use it.
+Keep the Windows hotspot as a spare only.
+
+<!-- step: travel-router -->
+
+1. Buy a small travel router.
+   A GLiNet Opal or a GLiNet Beryl works.
+   The Opal model is `GL-SFT1200`.
+   The Beryl model is `GL-MT3000`.
+   Either one runs from USB-C or a power bank.
+   An Opal is often 35 to 50 US dollars.
+   A Beryl is often 80 to 110 US dollars.
+   Prices change. This is not a store quote.
+
+   **What you should see.** The box lists USB-C power and Wi-Fi.
+
+   **If not.** Any small router that can save one PC address can do this job.
+
+<!-- step: travel-lan -->
+
+2. Plug the router into power.
+   Join its first Wi-Fi from the PC.
+   Open the admin page.
+   On a new GLiNet router that page is often `http://192.168.8.1`.
+   Set the LAN address to `192.168.0.1`.
+   Set the LAN mask to `255.255.255.0`.
+   Turn off any check that needs the internet.
+   Turn off a welcome page and a kill switch.
+   Leave the internet port empty.
+
+   **What you should see.** The admin page shows LAN `192.168.0.1`.
+   The router does not ask for the internet.
+
+   **If not.** Stay on the first admin page and look for LAN or DHCP.
+
+<!-- step: travel-wifi -->
+
+3. Set the Wi-Fi name to `KidsGalaxy`.
+   Choose WPA2 or WPA3.
+   Make a long password and write it on the paper card.
+   Do not copy a password from this guide.
+
+   **What you should see.** The paper card has the Wi-Fi name and the password.
+
+   **If not.** Open the wireless page again and save.
+
+<!-- step: travel-reserve -->
+
+4. On the PC, open PowerShell and paste `getmac /v`.
+   Find the Wi-Fi adapter.
+   Write its physical address on the paper card.
+   In the router, save `192.168.0.52` for that address.
+   Ubuntu inside Windows shares the Windows address and the Windows Wi-Fi card.
+   You save the Windows card.
+   There is no separate Ubuntu card.
+   Join the PC to `KidsGalaxy`.
+   In Ubuntu, paste `hostname -I`.
+
+   **What you should see.** Ubuntu shows `192.168.0.52`.
+
+   **If not.** Forget other Wi-Fi on the PC so it stays on the travel router.
+   Run `wsl --shutdown`, open Ubuntu, and check again.
+
+<!-- step: travel-hotspot -->
+
+5. The Windows mobile hotspot is a spare.
+   Its address is always `192.168.137.1`.
+   Windows often will not start it when there is no internet to share.
+   A fake network card can trick it.
+   Do not build that for a daycare.
+   The hotspot also turns off when the last tablet leaves.
+   Sharing Wi-Fi while the PC is also on Wi-Fi is unreliable.
+   Ubuntu may not see that adapter.
+   That part still needs a check on this PC.
+   The adapter often shows as a public network.
+   If it does, set that adapter to Private, as in the firewall step.
+   Paste the hotspot plan line that the helper printed.
+   That line ends with `-WhatIf` and does not start the hotspot.
+
+   **What you should see.** The plan says the hotspot needs a connection to share.
+   A real start with no internet should stop.
+   It then tells you to use the travel router.
+
+   **If not.** Use the travel router.
+   Do not spend the visit on the hotspot.
+
+<!-- step: travel-cert -->
+
+6. The tablet apps store one address at build time.
+   Extra names on the server card do not change that address.
+   Build the apps once for `192.168.0.52`.
+   Then add spare names to the server card.
+   A spare address can still match the card.
+   The room card and the tablet cards stay the same.
+   In Ubuntu, paste this line.
+
+```bash
+bash scripts/production_certs.sh add-addresses --ip 192.168.0.52 --ip 192.168.137.1 --dns kids-galaxy.local
+```
+
+   **What you should see.** A line that the room card and the tablet cards were kept.
+   The address card covers `192.168.0.52`, `192.168.137.1`, and `kids-galaxy.local`.
+
+   **If not.** Run `bash scripts/setup_room.sh` once so the room card exists.
+   Then run the address line again.
+
+<!-- step: travel-password -->
+
+7. A Linux computer that owns a Wi-Fi card can run the hotspot script.
+   The script makes a password and prints it.
+   Write that password on the paper card.
+   The script does not use a password from this guide.
+   Ubuntu inside Windows cannot run that hotspot.
+   It does not own the Wi-Fi card.
+   Use the travel router password on this PC.
+
+   **What you should see.** The paper card has a password you chose or the script printed.
+
+   **If not.** Run the hotspot script again on that Linux computer.
+   It prints the saved password.
+
+<!-- step: travel-arrive -->
+
+8. At a new daycare, do these checks in order.
+   Plug in the PC and the projector.
+   Plug in the travel router, or power it from the power bank.
+   Wait until its Wi-Fi light is steady.
+   Join the PC to `KidsGalaxy`.
+   Open Ubuntu.
+   Paste `hostname -I` and confirm `192.168.0.52`.
+   Paste `bash scripts/check_room.sh`.
+   Join one tablet to `KidsGalaxy`.
+   Open the kid app and send a drawing.
+   Open the wall with `bash scripts/open_projector.sh`.
+   Put the picture on the projector.
+
+   **What you should see.** The wall shows the new planet.
+
+   **If not.** Check power, the Wi-Fi name, and the address before you change the apps.
+
+<!-- step: travel-pack -->
+
+9. Before you leave, do these checks.
+   Close Chrome on the wall PC.
+   Shut down Windows.
+   Unplug the projector cable.
+   Unplug the router and the power bank.
+   Put the paper card, the tablets, the chargers, and the router in the case.
+   The tablets keep their apps.
+   You do not rebuild them for the next site.
+
+   **What you should see.** The case has the router, the paper card, and both tablets.
+
+   **If not.** Leave a note on the case for the missing piece before the next visit.
 
 <!-- section: specs -->
 
