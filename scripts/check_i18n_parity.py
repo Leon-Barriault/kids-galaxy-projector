@@ -146,6 +146,8 @@ REQUIRED_GUIDE_MARKERS = {
     "production-setup.md": (
         "section:hardware",
         "section:network",
+        "section:wsl",
+        "section:travel",
         "section:specs",
         "section:computer",
         "section:docker",

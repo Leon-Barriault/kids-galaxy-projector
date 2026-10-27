@@ -10,7 +10,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/lib/wsl.sh
+source "$ROOT/scripts/lib/wsl.sh"
 cd "$ROOT"
+
+room_status=""
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This command is for the Linux galaxy computer."
@@ -56,6 +60,38 @@ if [[ -n "${SERVER_IP:-}" ]]; then
   ADDRESS="$SERVER_IP"
 else
   ADDRESS="$(lan_ip)"
+  if is_wsl; then
+    win_ip="$(windows_lan_ip || true)"
+    mode="$(wsl_config_mode)"
+    choice="$(choose_tablet_address "$ADDRESS" "$win_ip" "$mode")"
+    ADDRESS="$(printf '%s\n' "$choice" | sed -n '1p')"
+    room_status="$(printf '%s\n' "$choice" | sed -n '2p')"
+    case "$room_status" in
+      mirrored-pending)
+        echo "The Windows file asks for mirrored networking."
+        echo "Ubuntu still has a private address."
+        echo "In Windows PowerShell, run: wsl --shutdown"
+        echo "Open Ubuntu again. Then run this setup again."
+        exit 1
+        ;;
+      need-windows-ip)
+        echo "Ubuntu is inside Windows, and the house address was not found."
+        echo "In Windows PowerShell, run: ipconfig"
+        echo "Then run: SERVER_IP=that.address bash scripts/setup_room.sh"
+        exit 1
+        ;;
+      nat)
+        echo "Windows is sharing Ubuntu with a private network."
+        echo "Tablets will use the Windows address ${ADDRESS}."
+        echo "After this setup, run the forward script in an admin PowerShell window."
+        ;;
+      mirrored)
+        echo "Windows mirrored networking is on."
+        echo "Tablets will use ${ADDRESS}."
+        echo "Run the firewall script in an admin PowerShell window if you have not yet."
+        ;;
+    esac
+  fi
 fi
 
 if [[ -z "$ADDRESS" ]]; then
@@ -118,6 +154,13 @@ echo "  http://127.0.0.1:8000/"
 echo "Tablets use this address after the apps are installed:"
 echo "  https://${ADDRESS}:8443"
 echo "Write ${ADDRESS} on the quick-start card."
+if [[ "$room_status" == "nat" ]]; then
+  echo "This Windows PC still uses NAT mode."
+  echo "Run scripts/windows/kids-galaxy-portproxy.ps1 so tablets can reach port 8443."
+fi
+if [[ -n "$room_status" ]]; then
+  echo "On Windows, the wall page is still http://127.0.0.1:8000/"
+fi
 echo "The install password is in pi-server/state/room-card.txt on this computer."
 echo "Do not email that file. Children never type the password."
 echo "Next, show the picture: bash scripts/open_projector.sh"

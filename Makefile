@@ -53,8 +53,10 @@ lint-shell:
 		scripts/backup_room.sh scripts/restore_room.sh scripts/update_room.sh \
 		scripts/rollback_room.sh scripts/production_certs.sh \
 		scripts/check_production_certs.sh scripts/create_tablet_keystore.sh \
-		scripts/provision_kid_tablet.sh scripts/replace_kid_tablet.sh \
-		scripts/lib/room.sh pi-server/certs/generate_certs.sh
+		scripts/provision_kid_tablet.sh 		scripts/replace_kid_tablet.sh scripts/wsl_bringup.sh \
+		scripts/check_wsl_detect.sh scripts/print_windows_commands.sh \
+		scripts/lib/room.sh scripts/lib/wsl.sh \
+		pi-server/certs/generate_certs.sh
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }
