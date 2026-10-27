@@ -1,10 +1,7 @@
 package com.kidsgalaxy
 
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,13 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.SharedPreferencesGalaxyTargetStore
 import com.kidsgalaxy.connection.SharedPreferencesUiLanguageStore
 import com.kidsgalaxy.connection.withUiLanguage
+import com.kidsgalaxy.kiosk.KioskEnforcer
 import com.kidsgalaxy.ui.GalaxyPickerDialog
 import com.kidsgalaxy.ui.PlanetDrawerScreen
 import com.kidsgalaxy.ui.theme.KidsGalaxyTheme
@@ -35,7 +30,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        enterKioskIfDeviceOwner()
+        KioskEnforcer.apply(this)
 
         setContent {
             KidsGalaxyTheme {
@@ -80,38 +75,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        enterKioskIfDeviceOwner()
-    }
-
-    /**
-     * Lock Task is only entered when this package is the device owner.
-     * A normal debug install is left alone so development is not pinned.
-     */
-    private fun enterKioskIfDeviceOwner() {
-        val policy = getSystemService(DevicePolicyManager::class.java) ?: return
-        if (!policy.isDeviceOwnerApp(packageName)) return
-        val admin = ComponentName(this, DeviceAdminReceiver::class.java)
-        try {
-            policy.setLockTaskPackages(admin, arrayOf(packageName))
-            policy.setKeyguardDisabled(admin, true)
-            if (policy.isLockTaskPermitted(packageName)) {
-                startLockTask()
-                hideSystemBars()
-            }
-        } catch (error: SecurityException) {
-            Log.w(TAG, "Device-owner kiosk setup was rejected", error)
-        }
-    }
-
-    private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    }
-
-    private companion object {
-        const val TAG = "KidsGalaxyKiosk"
+        KioskEnforcer.apply(this)
     }
 }

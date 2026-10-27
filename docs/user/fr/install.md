@@ -477,3 +477,17 @@ Environ 10 minutes.
 
 La page suivante est le guide de tous les jours.
 Utilisez-la après une installation qui a déjà fonctionné.
+
+<!-- section: next -->
+
+## Quand la salle doit durer
+
+<!-- step: next-production -->
+
+1. Lisez la page de mise en production après la première planète.
+   Elle couvre les copies de secours, les mises à jour et la tablette enfant.
+
+<!-- step: next-kid -->
+
+2. Lisez la page de la tablette enfant avant que les enfants l’utilisent.
+   Elle couvre l’étui, le mode verrouillé et la charge.
