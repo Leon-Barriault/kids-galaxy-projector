@@ -89,7 +89,7 @@ Ces faits viennent de la construction de l’application.
 
    **Ce que vous devez voir.** Le nom du Wi-Fi correspond à la carte papier.
 
-   **Sinon.** Joignez le Wi-Fi de la salle avant le mode verrouillé.
+   **Sinon.** Joignez `KidsGalaxy` avant le mode verrouillé.
 
 <!-- step: specs-fire -->
 
@@ -185,7 +185,7 @@ Aucun compte ne doit s’y trouver.
 
 1. Effacez la tablette enfant.
    Sautez chaque demande de compte.
-   Joignez le Wi-Fi de la salle quand la tablette le demande.
+   Joignez `KidsGalaxy` quand la tablette le demande.
    Activez le débogage USB, comme dans le guide d’installation.
 
    **Ce que vous devez voir.** Un écran d’accueil sans compte de courriel.
@@ -233,7 +233,8 @@ bash scripts/prepare_kid_tablet.sh
 >
 > 1. Débranchez les autres tablettes.
 > 2. Effacez la tablette enfant et ne vous connectez pas.
-> 3. Joignez le Wi-Fi de la salle, puis relancez la commande.
+> 3. Joignez `KidsGalaxy`, puis relancez la commande.
+> 4. Si la ligne dit qu’aucune tablette n’est prête, faites les étapes de partage USB du guide d’installation.
 > 4. Sur une tablette Fire, arrêtez-vous si le mode verrouillé ne s’active pas.
 
 <!-- section: block -->
@@ -427,7 +428,7 @@ La commande affiche les vraies secondes.
 
 2. Effacez la nouvelle tablette.
    Sautez chaque compte.
-   Joignez le Wi-Fi de la salle.
+   Joignez `KidsGalaxy`.
    Activez le débogage USB.
    Branchez-la à l’ordinateur de la galaxie.
    Touchez Autoriser.

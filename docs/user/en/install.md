@@ -1,60 +1,69 @@
 # Install the Kids Galaxy room
 
-This page is for parents, teachers, and daycare staff.
+This page is for daycare educators.
+Parents and teachers can use it too.
 It is not the programmer guide.
 Programmer notes stay in `DEVELOPMENT.md`.
 
 The first setup takes about two hours.
-A normal morning takes about ten minutes after that.
+A morning at a daycare takes about ten minutes after that.
 Do one step at a time.
-Do not skip a step that says you should see something.
+Check the screen after each step.
+
+This room uses one Windows 11 PC.
+The PC version is 26H2.
+Ubuntu 22.04 runs inside it.
+The Linux user is `omega`.
+Docker starts with Ubuntu.
+A travel router goes to every daycare.
+Young children use the kid tablet.
 
 <!-- section: who -->
 
 ## Who this page is for
 
-You can do this if you can plug in a cable and copy one line.
-A helper is useful for the tablet steps.
+You can do this if you can plug in a cable and paste one line.
+A helper is useful the first time you share a tablet.
 Children should not do the first setup.
 
 <!-- section: words -->
 
 ## Words we use
 
-**Galaxy computer.** The laptop or desktop that makes the picture.
-A Raspberry Pi can be this computer.
-A laptop gives a smoother picture.
+**Galaxy computer.** The Windows PC that makes the wall picture.
+Open the app named Ubuntu when a step says to paste a line.
+
+**Ubuntu.** The app on this PC where you paste lines.
+The name on the line is `omega`.
+Windows calls this setup WSL. You can ignore those letters.
 
 **Projector.** The box that shines the picture on the wall.
 
+**Travel router.** The small box you bring to every daycare.
+Its Wi-Fi name is `KidsGalaxy`.
+The PC address on that Wi-Fi is `192.168.0.52`.
+
 **Kid tablet.** The tablet children draw on.
-The drawing app stays on the screen.
 
 **Manager tablet.** The tablet a grown-up uses.
-It can delete planets, print, and change the wall language.
+It can remove planets, print, and clear names before you leave.
 
-**Lock mode.** The kid tablet cannot open other apps.
+**Docker Desktop.** A Windows app that must stay closed.
+Docker inside Ubuntu is the one this room uses.
 
-**Certificate.** A small ID card for one tablet.
-A child never types it.
+**USB share.** The program `usbipd`.
+It lets Ubuntu see a tablet plugged into the PC.
+Ubuntu cannot see that cable by itself.
 
-**Wi-Fi.** The wireless link in the room.
-The computer and the tablets must join the same one.
-
-**Terminal.** The window where you paste one command.
-Open it from the app list. It may be called Terminal.
+**Paper card.** The sheet with the Wi-Fi name, the password, and the PC address.
 
 **HDMI.** The flat metal plug on the picture cable.
 
-**Raspberry Pi.** A small computer about the size of a deck of cards.
-Use it only if it is the computer in your kit.
-
 <!-- section: buy -->
 
-## What to buy
+## What to have ready
 
-Buy every item below before setup day.
-About 30 minutes to gather them.
+Gather every item before setup day.
 
 <!-- step: buy-kid-tablet -->
 
@@ -62,59 +71,91 @@ About 30 minutes to gather them.
    It must be Android 8 or newer.
    A 10 inch screen is easier for small hands.
    It must allow a full erase.
-   Example: a current Lenovo Tab or Samsung Galaxy Tab.
+
+   **What you should see.** The box names Android 8 or newer.
+
+   **If not.** Pick another tablet before setup day.
 
 <!-- step: buy-manager-tablet -->
 
 2. One Android tablet for a grown-up.
-   It has the same rules as the kid tablet.
-   A smaller screen is fine.
+   It follows the same rules as the kid tablet.
    Do not plan to lock this one.
+
+   **What you should see.** The tablet turns on.
+
+   **If not.** Charge it with its own charger.
 
 <!-- step: buy-computer -->
 
-3. One Linux laptop or desktop.
-   It needs an HDMI port, or a USB-C port plus an HDMI adapter.
-   It needs 8 GB of memory or more.
-   It must run Chrome.
-   This is the best galaxy computer.
+3. Use the Windows 11 PC for this room.
+   It needs HDMI, or USB-C plus an HDMI adapter.
+   It must open Chrome.
+   You do not buy a second computer.
 
-<!-- step: buy-pi -->
+   **What you should see.** Windows shows a desktop.
 
-4. A Raspberry Pi only if your kit list names one.
-   Also buy the power block from the Pi box.
-   A phone charger is often too weak.
-   The Pi needs a screen cable if it is the only computer.
-   Prefer a laptop when you have a choice.
+   **If not.** Ask a helper before setup day.
+
+<!-- step: buy-router -->
+
+4. One travel router.
+   This room uses the one set to `KidsGalaxy`.
+   It must reserve `192.168.0.52` for this PC.
+   The first router setup is on the production page.
+
+   **What you should see.** The router can run from USB-C or a power bank.
+
+   **If not.** Use the production page before the first visit.
 
 <!-- step: buy-projector -->
 
 5. One projector with an HDMI port.
    Brighter is better if the room lights stay on.
-   1080p is enough.
+
+   **What you should see.** The projector has an HDMI port.
+
+   **If not.** Buy a projector that has one.
 
 <!-- step: buy-hdmi -->
 
-6. One HDMI cable.
-   It must reach from the computer to the projector.
-   Buy a USB-C to HDMI adapter if the computer has no HDMI port.
+6. One HDMI cable long enough to reach the projector.
+   Buy a USB-C to HDMI adapter if the PC has no HDMI port.
+
+   **What you should see.** The plug fits the projector.
+
+   **If not.** Take it back and get the right plug.
 
 <!-- step: buy-power -->
 
-7. Power cables for the computer, the projector, and both tablets.
-   Two tablet chargers.
+7. Power cables for the PC, the projector, and both tablets.
+   Bring two tablet chargers.
+
+   **What you should see.** Each device has its own power cord.
+
+   **If not.** Do not share a tiny phone charger with the kid tablet.
 
 <!-- step: buy-wifi -->
 
-8. One private Wi-Fi network.
-   The internet is not needed after setup.
-   The computer and both tablets must join this same network.
+8. The travel router is the only network.
+   Do not use the daycare Wi-Fi.
+   Leave the Windows hotspot off.
+   That hotspot always uses `192.168.137.1`.
+   It often will not start with no internet to share.
+   It also turns off when the last tablet leaves.
+
+   **What you should see.** The paper card says `KidsGalaxy` and `192.168.0.52`.
+
+   **If not.** Fill in the card before you leave home.
 
 <!-- step: buy-usb -->
 
 9. One USB cable that can carry data.
    A charge-only cable will not set up a tablet.
-   You use it once, from the computer to each tablet.
+
+   **What you should see.** The package says data, or it is the cable from the tablet box.
+
+   **If not.** Buy a data cable before setup day.
 
 <!-- section: unpack -->
 
@@ -125,20 +166,19 @@ About 15 minutes.
 <!-- step: unpack-check -->
 
 1. Put each item on a table.
-   Check off the buy list above.
-   Stop if a cable or a power block is missing.
+   Check off the list above.
+
+   **What you should see.** Every item is on the table.
+
+   **If not.** Stop until the missing cable or power block is found.
 
 <!-- step: unpack-charge -->
 
 2. Plug both tablets into their chargers.
-   Leave them charging during the computer setup.
-   You should see a battery picture on each tablet.
 
-> **If this does not work**
->
-> Swap the USB cable.
-> Some cables only charge when they are pushed in firmly.
-> Try the other charger.
+   **What you should see.** A battery picture on each tablet.
+
+   **If not.** Swap the cable and seat it firmly.
 
 <!-- section: place -->
 
@@ -148,46 +188,66 @@ About 20 minutes.
 
 <!-- step: place-wall -->
 
-1. Pick a blank wall.
-   The children should sit where they can see it.
+1. Pick a blank wall the children can see.
    Keep bright windows out of the picture if you can.
+
+   **What you should see.** A clear space on the wall.
+
+   **If not.** Shift the projector until the beam hits a blank area.
 
 <!-- step: place-projector -->
 
-2. Put the projector on a steady shelf or table.
+2. Put the projector on a steady table.
    Point it at the wall.
    Leave space so nobody walks through the beam.
 
+   **What you should see.** The projector sits still.
+
+   **If not.** Move it off a soft chair or a wobbly cart.
+
 <!-- step: place-computer -->
 
-3. Put the galaxy computer next to the projector.
-   Plug the HDMI cable into the computer and the projector.
-   Select the HDMI input on the projector.
+3. Put the PC next to the projector.
+   Plug HDMI into the PC and the projector.
 
-<!-- step: place-pi -->
+   **What you should see.** Both plugs are fully in.
 
-4. If the galaxy computer is a Raspberry Pi, do this too.
-   Use the power block that came with the Pi.
-   Plug the small power cord into the Pi.
-   Plug HDMI from the Pi into the projector.
-   You should see a desktop, not a black screen.
+   **If not.** Push each plug until it stops.
+
+<!-- step: place-router -->
+
+4. Plug in the travel router.
+   Use wall power or the power bank.
+   Do not plug it into the daycare network.
+
+   **What you should see.** A steady Wi-Fi light on the router.
+
+   **If not.** Check the power plug or the power bank.
 
 <!-- step: place-power -->
 
-5. Plug the computer and the projector into wall power.
-   Turn the projector on.
-   Turn the computer on.
-   You should see the computer screen on the wall.
+5. Plug the PC and the projector into wall power.
+   Turn both on.
+   Press the source button until the projector says HDMI.
+
+   **What you should see.** The Windows desktop is on the wall.
+
+   **If not.** Try the other HDMI port or a second cable.
 
 <!-- step: place-wifi -->
 
-6. Join the room Wi-Fi on the computer.
-   You will join the same Wi-Fi on the tablets later.
-   You should see a Wi-Fi icon that is not flashing.
+6. On the PC, open the Wi-Fi list.
+   Join `KidsGalaxy`.
+   Use the password on the paper card.
+   Do not join the daycare Wi-Fi.
+
+   **What you should see.** The Wi-Fi name is `KidsGalaxy`.
+
+   **If not.** Forget the other networks, then join `KidsGalaxy` again.
 
 <!-- photo: room-layout -->
 
-> **Photo needed:** the projector facing a blank wall, with the computer beside it.
+> **Photo needed:** the projector facing a blank wall, with the PC beside it.
 
 <!-- photo: hdmi-plug -->
 
@@ -199,101 +259,140 @@ About 20 minutes.
 >
 > 1. Check both power lights.
 > 2. Push the HDMI plug in until it clicks.
-> 3. Press the source button on the projector until it says HDMI.
-> 4. If the Pi has no desktop, the memory card is not ready. Ask a helper.
+> 3. Press the source button until it says HDMI.
+> 4. If the Wi-Fi name is not `KidsGalaxy`, stop and join that network.
 
 <!-- section: computer -->
 
 ## Start the galaxy computer
 
 About 30 minutes the first time.
-You type commands in Terminal.
-Open Terminal from the app list.
-Paste one line, then press Enter.
-
-<!-- step: computer-terminal -->
-
-1. Open Terminal on the galaxy computer.
-   You should see a blinking cursor.
-
-<!-- photo: terminal -->
-
-> **Photo needed:** the Terminal window with the blinking cursor.
+Paste one line at a time.
+Press Enter after each line.
 
 <!-- step: computer-docker -->
 
-2. If Docker is not installed yet, paste this line and press Enter.
+1. Quit Docker Desktop before any setup line.
+   If you see a whale icon, right-click it.
+   Choose Quit Docker Desktop.
+   Open Windows Startup apps.
+   Turn off Docker Desktop so it does not start at sign-in.
+
+   **What you should see.** The whale icon is gone.
+
+   **If not.** Setup will stop while Docker Desktop is still running.
+
+<!-- step: computer-ubuntu -->
+
+2. Click Start, type `Ubuntu`, and open that app.
+
+   **What you should see.** A window with the name `omega`.
+
+   **If not.** Close the window and open Ubuntu again. Do not use a window that says `root`.
+
+<!-- photo: terminal -->
+
+> **Photo needed:** the Ubuntu window with the name omega.
+
+<!-- step: computer-folder -->
+
+3. Paste this line.
 
 ```bash
-sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 openssl
+cd /home/omega/kids-galaxy-projector
 ```
 
-   Type the computer login password if it asks.
-   You will not see the letters. Press Enter.
    Then paste this line.
 
 ```bash
-sudo usermod -aG docker "$USER"
+pwd
 ```
 
-   Log out and log back in.
-   You should see your desktop again.
+   **What you should see.** `/home/omega/kids-galaxy-projector`
 
-<!-- step: computer-setup -->
-
-3. Go to the project folder in Terminal.
-   Paste this line if the folder is in your home folder.
-
-```bash
-cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
-```
-
-   Wait. The first run can take several minutes.
-   You should see the words `The galaxy computer is running.`
-   You should also see an address like `https://192.168.0.52:8443`.
-   Write that address on paper.
-
-<!-- step: computer-pi -->
-
-4. Use the same command if the computer is a Raspberry Pi.
-   The Pi must already show a desktop.
-   Do not use a phone charger.
-   You should see the same running message.
-
-<!-- step: computer-router -->
-
-5. When the room has no venue Wi-Fi, plug in the travel router.
-   Use the wall power or a power bank.
-
-   **What you should see.** A Wi-Fi light on the router.
-
-   **If not.** Check the power plug or the power bank.
-
-<!-- step: computer-join -->
-
-6. On the computer, join the Wi-Fi named `KidsGalaxy`.
-   Use the password on the paper card.
-
-   **What you should see.** The computer shows the Wi-Fi name `KidsGalaxy`.
-
-   **If not.** Ask the grown-up for the paper card.
+   **If not.** You are in the wrong folder. Paste the first line again.
 
 <!-- step: computer-address -->
 
-7. In Terminal, paste `hostname -I`.
+4. Paste this line.
 
-   **What you should see.** The line shows `192.168.0.52`.
+```bash
+hostname -I
+```
 
-   **If not.** On the router, save `192.168.0.52` for this computer.
-   Then run `bash scripts/setup_room.sh` again.
+   **What you should see.** `192.168.0.52`
+
+   **If not.** The PC is on the wrong network.
+   Join `KidsGalaxy` on Windows.
+   Run `wsl --shutdown` in PowerShell, open Ubuntu, and check again.
+   Do not continue until you see `192.168.0.52`.
+
+<!-- step: computer-host -->
+
+5. Paste this line.
+
+```bash
+bash scripts/setup_host.sh
+```
+
+   Type the Ubuntu password for `omega` if it asks.
+   You will not see the letters.
+
+   **What you should see.** `The galaxy computer programs are installed.`
+
+   **If not.** If Docker Desktop is still running, the line stops.
+   You should see `Docker Desktop is running on Windows.`
+   Quit Docker Desktop, then paste the same line again.
+
+<!-- step: computer-reopen -->
+
+6. Close the Ubuntu window.
+   Open Ubuntu again from Start.
+
+   **What you should see.** The name `omega` is back.
+
+   **If not.** Restart the PC, sign in, and open Ubuntu again.
+
+<!-- step: computer-return -->
+
+7. Paste this line again.
+
+```bash
+cd /home/omega/kids-galaxy-projector
+```
+
+   **What you should see.** No error.
+
+   **If not.** Paste `pwd` and check the folder before you go on.
+
+<!-- step: computer-setup -->
+
+8. Paste this line.
+
+```bash
+bash scripts/setup_room.sh
+```
+
+   Wait. The first run can take several minutes.
+
+   **What you should see.** `The galaxy computer is running.`
+   You should also see `https://192.168.0.52:8443`.
+   Write that address on the paper card.
+
+   **If not.** If the PC is not at `192.168.0.52`, setup stops.
+   The tablets keep `192.168.0.52`.
+   Join `KidsGalaxy`, then run the same line again.
+   Do not change the address unless a helper means to move the room.
+   That helper uses `CHANGE_ADDRESS=1` and a new `SERVER_IP`.
+   Then the tablet apps must be built again.
 
 <!-- step: computer-spare -->
 
-8. Leave the Windows hotspot off.
-   It uses `192.168.137.1`.
-   The tablets use `192.168.0.52` on the travel router.
+9. Leave the Windows hotspot off.
+   Do not paste the Linux hotspot script.
+   Ubuntu refuses that script because it does not own the Wi-Fi card.
 
-   **What you should see.** The computer stays on `KidsGalaxy`.
+   **What you should see.** The PC stays on `KidsGalaxy`.
 
    **If not.** Turn the Windows hotspot off and join `KidsGalaxy` again.
 
@@ -301,36 +400,40 @@ cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
 
 > **If this does not work**
 >
-> 1. Read the last lines in Terminal. They say what is missing.
-> 2. If it says Docker is missing, repeat the Docker step and log in again.
-> 3. If it says no network address, join Wi-Fi and run the setup line again.
-> 4. If the computer is not at `192.168.0.52`, join the travel router.
->    Setup stops so the tablets keep their address.
->    A helper changes it with `CHANGE_ADDRESS=1` and a new `SERVER_IP`.
->    Then build the tablet apps again.
+> 1. Read the last lines in Ubuntu. They name the missing piece.
+> 2. If Docker Desktop is running, quit it and run the host line again.
+> 3. If the address is not `192.168.0.52`, join the travel router.
+> 4. Setup keeps the tablet address. It does not follow a daycare network.
 
 <!-- section: picture -->
 
 ## Show the picture
 
 About 5 minutes.
+Stay in the project folder.
 
 <!-- step: picture-open -->
 
-1. In Terminal, paste this line.
+1. Paste this line.
 
 ```bash
 bash scripts/open_projector.sh
 ```
 
-   You should see a dark sky and the words `Kids Galaxy Projector`.
-   If Chrome does not open, open Chrome yourself.
-   Go to `http://127.0.0.1:8000/`.
+   Chrome opens on Windows.
+
+   **What you should see.** A dark sky and the words `Kids Galaxy Projector`.
+   A desktop shortcut named `Kids Galaxy wall` is also created.
+
+   **If not.** On Windows, open Chrome and go to `http://127.0.0.1:8000/`.
 
 <!-- step: picture-full -->
 
-2. Press F11 so the picture fills the screen.
-   You should see the waiting words on the wall.
+2. Press F11 if the picture does not fill the wall.
+
+   **What you should see.** The waiting words are on the wall.
+
+   **If not.** Press the Windows key and P. Choose Second screen only.
 
 <!-- photo: projector-words -->
 
@@ -343,59 +446,205 @@ This photo shows the words only, so you can check the language.
 
 > **If this does not work**
 >
-> 1. On this computer, open `http://127.0.0.1:8000/health`.
+> 1. On Windows, open `http://127.0.0.1:8000/health`.
 >    You should see the word ok.
-> 2. If you do not, run `bash scripts/setup_room.sh` again.
+> 2. If you do not, go back to the project folder and run `bash scripts/setup_room.sh`.
 > 3. Check the HDMI cable and the projector source button.
+
+<!-- section: usb -->
+
+## Let Ubuntu see the tablet
+
+Do this before you install an app.
+A tablet plugged into the PC is not visible in Ubuntu until you share it.
+You only install the share program once.
+You attach the tablet each time you plug it in.
+
+<!-- step: usb-admin -->
+
+1. Right-click Start and open Terminal (Admin) or PowerShell (Admin).
+
+   **What you should see.** The title says Administrator.
+
+   **If not.** Close it and open the admin window again.
+
+<!-- step: usb-install -->
+
+2. Paste this line once.
+
+```powershell
+winget install --exact --id dorssel.usbipd-win --accept-package-agreements --accept-source-agreements
+```
+
+   **What you should see.** The install finishes.
+
+   **If not.** Choose Yes if Windows asks. Then paste the line again.
+
+<!-- step: usb-ubuntu -->
+
+3. Open Ubuntu and leave that window open.
+
+   **What you should see.** The name `omega`.
+
+   **If not.** The share step needs Ubuntu to be awake.
+
+<!-- step: usb-plug -->
+
+4. Plug the data cable into the tablet and the PC.
+   Use the same USB port each time.
+
+   **What you should see.** The tablet shows a charge picture or a USB notice.
+
+   **If not.** Try another port and a data cable.
+
+<!-- step: usb-allow -->
+
+5. On the tablet, tap Allow.
+
+   **What you should see.** A check that USB debugging is allowed.
+
+   **If not.** Unlock the tablet and tap Allow again.
+
+<!-- step: usb-list -->
+
+6. In the admin PowerShell window, paste this line.
+
+```powershell
+usbipd list
+```
+
+   **What you should see.** A line for the tablet, with a short code such as `2-1`.
+
+   **If not.** Unplug the tablet, plug it in again, and paste the line again.
+
+<!-- step: usb-bind -->
+
+7. Write that code on the paper card.
+   Paste the next line with your code in place of `2-1`.
+
+```powershell
+usbipd bind --busid 2-1
+```
+
+   **What you should see.** The command finishes.
+   This line does not print a list.
+
+   **If not.** The window is not an admin window.
+
+<!-- step: usb-bind-list -->
+
+8. Paste this line again.
+
+```powershell
+usbipd list
+```
+
+   **What you should see.** The tablet line says Shared.
+
+   **If not.** Check the code on the paper card and run the bind line again.
+
+<!-- step: usb-attach -->
+
+9. Paste the next line with the same code.
+
+```powershell
+usbipd attach --wsl --busid 2-1 --distribution Ubuntu
+```
+
+   **What you should see.** The command finishes.
+   This line does not print a list.
+
+   **If not.** Open Ubuntu, then paste the attach line again.
+
+<!-- step: usb-attach-list -->
+
+10. Paste this line again.
+
+```powershell
+usbipd list
+```
+
+   **What you should see.** The tablet line says Attached.
+
+   **If not.** Paste the attach line again, then paste `usbipd list` again.
+
+<!-- step: usb-see -->
+
+11. In Ubuntu, paste this line.
+
+```bash
+adb devices
+```
+
+   **What you should see.** A line that ends with `device`.
+
+   **If not.** Tap Allow on the tablet, attach again, and paste `adb devices` again.
+
+<!-- fix: usb -->
+
+> **If this does not work**
+>
+> 1. Only one tablet may be plugged in.
+> 2. If Ubuntu says no tablet is ready, repeat the attach step.
+> 3. Use the same USB port so the code on the paper card still works.
 
 <!-- section: tablets -->
 
 ## Set up the tablets
 
 About 40 minutes the first time.
-Skip this part if both apps are already installed for this room.
+Skip this part if both apps are already installed.
+Every Ubuntu line starts in the project folder.
 
 <!-- step: tablets-skip -->
 
 1. Look at each tablet.
-   The kid tablet should have the drawing app.
-   The grown-up tablet should have Kids Galaxy Manager.
+   The kid tablet should show the drawing app.
+   The manager tablet should show Kids Galaxy Manager.
    If both are there, go to the lock section.
+
+   **What you should see.** The two apps are already installed.
+
+   **If not.** Continue with the next step.
 
 <!-- step: tablets-build -->
 
-2. On the galaxy computer, paste this line.
+2. Paste this line.
 
 ```bash
-bash scripts/build_tablets.sh
+cd /home/omega/kids-galaxy-projector && bash scripts/build_tablets.sh
 ```
 
    The first build can take about 30 minutes.
-   You should see `BUILD SUCCESSFUL`.
-   If it says the Android tools are missing, a helper must install Android Studio.
+
+   **What you should see.** `BUILD SUCCESSFUL`
+
+   **If not.** If Android tools are missing, a helper must install Android Studio.
 
 <!-- step: tablets-kid -->
 
-3. Erase the kid tablet before you install the app.
-   Do not add a Google account when the tablet asks.
-   Turn on USB debugging.
-   Open Settings, then About tablet, then tap Build number seven times.
-   Go back. Open Developer options. Turn on USB debugging.
-   Plug the kid tablet into the computer.
-   On the tablet, tap Allow.
+3. Erase the kid tablet.
+   Skip every account.
+   Join `KidsGalaxy` when the tablet asks.
+   Open Settings, then About tablet, and tap Build number seven times.
+   Go back, open Developer options, and turn on USB debugging.
+   Share that tablet with Ubuntu, as in the USB section.
    Paste this line.
 
 ```bash
 bash scripts/prepare_kid_tablet.sh
 ```
 
-   You should see the drawing app fill the screen.
+   **What you should see.** The drawing app fills the screen.
+
+   **If not.** If the line says no tablet is ready, repeat the attach step.
+   If lock mode fails, erase the tablet and do not sign in.
 
 <!-- step: tablets-manager -->
 
 4. Unplug the kid tablet.
-   Plug in the manager tablet.
-   Tap Allow.
+   Plug in the manager tablet and tap Allow.
+   Share it with Ubuntu the same way.
    Do not erase this tablet unless you want to.
    Paste this line.
 
@@ -403,17 +652,18 @@ bash scripts/prepare_kid_tablet.sh
 bash scripts/prepare_manager_tablet.sh
 ```
 
-   You should see Kids Galaxy Manager in the app list.
-   This tablet should not be locked.
+   **What you should see.** Kids Galaxy Manager is in the app list.
+   This tablet is not locked.
+
+   **If not.** Use a data cable and tap Allow. Only one tablet may be plugged in.
 
 <!-- fix: tablets -->
 
 > **If this does not work**
 >
-> 1. If no tablet is ready, tap Allow on the tablet and use a data cable.
+> 1. Share the tablet, then look for a line that ends with `device`.
 > 2. If lock mode fails, erase the kid tablet and do not sign in.
-> 3. If the app closes at once, the ID card does not match this computer.
->    Run `bash scripts/setup_room.sh`, then `bash scripts/build_tablets.sh` again.
+> 3. If the app closes at once, run `bash scripts/setup_room.sh`, then build the apps again.
 
 <!-- section: lock -->
 
@@ -421,31 +671,43 @@ bash scripts/prepare_manager_tablet.sh
 
 About 15 minutes.
 Do this only on the kid tablet.
-The script in the tablet section already turns lock mode on.
+The prepare line already turns lock mode on.
 Use this section if you need to do it again.
 
 <!-- step: lock-erase -->
 
 1. Erase the kid tablet.
-   Skip every account prompt.
-   You should see a home screen with no email account.
+   Skip every account.
+   Join `KidsGalaxy`.
 
-<!-- step: lock-usb -->
+   **What you should see.** A home screen with no email account.
 
-2. Turn on USB debugging, as in the tablet section.
-   Plug in the USB cable.
+   **If not.** Erase the tablet again.
+
+<!-- step: lock-share -->
+
+2. Turn on USB debugging.
+   Plug in the kid tablet alone.
    Tap Allow.
+   Attach it to Ubuntu with the USB share steps.
+
+   **What you should see.** `adb devices` ends with `device`.
+
+   **If not.** Repeat the attach step before you go on.
 
 <!-- step: lock-command -->
 
-3. Paste this line.
+3. In the project folder, paste this line.
 
 ```bash
 bash scripts/prepare_kid_tablet.sh
 ```
 
-   Press the Home button.
-   You should stay in the drawing app.
+   Press Home.
+
+   **What you should see.** You stay in the drawing app.
+
+   **If not.** Erase the tablet, skip the account, and run the line again.
 
 <!-- photo: lock-screen -->
 
@@ -455,7 +717,7 @@ bash scripts/prepare_kid_tablet.sh
 
 > **If this does not work**
 >
-> The usual cause is a Google account on the tablet.
+> The usual cause is an account on the tablet.
 > Erase the tablet again.
 > Do not sign in.
 > Run the same command again.
@@ -465,28 +727,33 @@ bash scripts/prepare_kid_tablet.sh
 ## Send the first planet
 
 About 10 minutes.
+The kid tablet must be on `KidsGalaxy`.
 
 <!-- step: first-draw -->
 
-1. On the kid tablet, tap a shape.
-   Draw a few lines.
-   You should see your marks on the tablet.
+1. On the kid tablet, tap a shape and draw a few lines.
+
+   **What you should see.** Your marks on the tablet.
+
+   **If not.** Wake the tablet and open the drawing app.
 
 <!-- step: first-launch -->
 
 2. Tap Launch.
    Look at the wall.
-   You should see the new planet in the sky.
-   The first real planet can take a few seconds.
+
+   **What you should see.** The new planet in the sky.
+   The first planet can take a few seconds.
+
+   **If not.** Check that the tablet Wi-Fi name is `KidsGalaxy`.
 
 <!-- fix: first-planet -->
 
 > **If this does not work**
 >
-> 1. Check that the tablet is on the same Wi-Fi as the computer.
-> 2. Open the drawing app and tap the galaxy name.
-> 3. If you typed an address, use the `https://` address from the setup step.
-> 4. Read the troubleshooting page if the wall stays empty.
+> 1. The tablet and the PC must both show `KidsGalaxy`.
+> 2. Do not use the daycare Wi-Fi.
+> 3. Read the troubleshooting page if the wall stays empty.
 
 <!-- section: time -->
 
@@ -494,10 +761,10 @@ About 10 minutes.
 
 | Part | First time | Later |
 | --- | --- | --- |
-| Unpack and place | 35 minutes | 5 minutes |
-| Galaxy computer | 30 minutes | 2 minutes |
+| Unpack and place | 35 minutes | 10 minutes |
+| Galaxy computer | 30 minutes | 5 minutes |
 | Picture | 5 minutes | 1 minute |
-| Tablets and lock | 55 minutes | Skip |
+| Tablet share and apps | 55 minutes | Skip |
 | First planet | 10 minutes | 2 minutes |
 
 The next page is the daily guide.
@@ -510,9 +777,17 @@ Use it after this setup works once.
 <!-- step: next-production -->
 
 1. Read the production page after the first planet works.
-   It covers safety copies, updates, and the kid tablet.
+   It covers the router reservation, safety copies, and updates.
+
+   **What you should see.** You can find the travel router section on that page.
+
+   **If not.** Stay on this page until the first planet appears.
 
 <!-- step: next-kid -->
 
 2. Read the kid tablet page before children use the tablet.
    It covers the case, lock mode, and charging.
+
+   **What you should see.** You can follow that page on its own.
+
+   **If not.** Do the case and lock steps there before a child uses the tablet.

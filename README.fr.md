@@ -9,7 +9,7 @@ Système pour les enfants : ils dessinent une planète sur une tablette Android
 - [La tablette enfant](docs/user/fr/kid-tablet.md)
 - [Chaque jour](docs/user/fr/daily.md)
 - [Quand quelque chose ne va pas](docs/user/fr/troubleshooting.md)
-- [Fiche d’une page](docs/user/fr/quick-start.md) ([PDF](docs/user/fr/quick-start.pdf))
+- [Fiche du jour](docs/user/fr/quick-start.md) ([PDF](docs/user/fr/quick-start.pdf))
 
 **Version anglaise** : [README.md](README.md)
 
