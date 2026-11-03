@@ -459,7 +459,8 @@ About 10 minutes.
 > **If this does not work**
 >
 > 1. Check that the tablet is on the same Wi-Fi as the computer.
-> 2. Open the drawing app and tap the galaxy name.
+> 2. Open the drawing app and hold the galaxy name.
+>    Answer the number question.
 > 3. If you typed an address, use the `https://` address from the setup step.
 > 4. Read the troubleshooting page if the wall stays empty.
 

@@ -459,7 +459,8 @@ Environ 10 minutes.
 > **Si cela ne fonctionne pas**
 >
 > 1. Vérifiez que la tablette est sur le même Wi-Fi que l’ordinateur.
-> 2. Ouvrez l’application de dessin et touchez le nom de la galaxie.
+> 2. Ouvrez l’application de dessin et maintenez le nom de la galaxie.
+>    Répondez à la question de nombres.
 > 3. Si vous tapez une adresse, utilisez l’adresse `https ://` de l’installation.
 > 4. Lisez la page de dépannage si le mur reste vide.
 

@@ -49,7 +49,8 @@ lint-shell:
 	shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh scripts/dev-up.sh \
 		scripts/setup_room.sh scripts/stop_room.sh scripts/open_projector.sh \
 		scripts/prepare_kid_tablet.sh scripts/prepare_manager_tablet.sh \
-		scripts/build_tablets.sh pi-server/certs/generate_certs.sh
+		scripts/build_tablets.sh scripts/backup_room.sh scripts/clear_planet_names.sh \
+		scripts/lib/room.sh pi-server/certs/generate_certs.sh
 
 lint-kotlin:
 	@command -v ktlint >/dev/null 2>&1 || { echo "Install ktlint: https://github.com/pinterest/ktlint"; exit 1; }

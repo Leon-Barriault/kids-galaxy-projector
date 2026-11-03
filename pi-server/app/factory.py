@@ -14,6 +14,7 @@ from app.application.behavior_use_cases import (
     UpdateGalaxyBehaviorUseCase,
 )
 from app.application.use_cases import (
+    ClearPlanetNamesUseCase,
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
@@ -85,6 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     delete_planet = DeletePlanetUseCase(
         repository=repository, publisher=publisher
     )
+    clear_planet_names = ClearPlanetNamesUseCase(repository)
     clear_planets = ClearPlanetsUseCase(
         repository=repository, publisher=publisher
     )
@@ -154,6 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
             clear_planets=clear_planets,
+            clear_planet_names=clear_planet_names,
             get_behavior=get_behavior,
             update_behavior=update_behavior,
             repository=repository,

@@ -80,7 +80,8 @@ bash scripts/open_projector.sh
 
 <!-- step: no-connect-address -->
 
-2. In the drawing app, tap the galaxy name.
+2. In the drawing app, press and hold the galaxy name.
+   Answer the number question.
    If you type an address, use the `https://` address from setup.
    It looks like `https://192.168.1.20:8443`.
    You should see a check mark when the tablet can reach it.
@@ -149,9 +150,10 @@ adb shell am task lock stop
 
 <!-- step: wrong-language-tablet -->
 
-1. On the tablet, tap EN / FR.
+1. On the manager tablet, tap EN / FR.
    The app should reopen in the other language.
    Your choice stays on that tablet.
+   On the kid tablet, hold EN / FR and answer the number question.
 
 <!-- step: wrong-language-wall -->
 

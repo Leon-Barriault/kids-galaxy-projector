@@ -21,6 +21,9 @@
     <string name="projector_french">Français</string>
     <string name="refresh">Refresh</string>
     <string name="clearing">Clearing…</string>
+    <string name="before_you_leave">Before you leave</string>
+    <string name="status_names_cleared">Planet names cleared</string>
+    <string name="error_names_clear_failed">Could not clear planet names (%1$d)</string>
     <string name="clear_all_count">Clear all (%1$d)</string>
     <string name="no_planets">No planets yet — kids can start drawing!</string>
     <string name="remove_every_planet">Remove every planet?</string>

@@ -205,6 +205,10 @@ The application-level mTLS boundary is independent of the Wi-Fi or LAN technolog
 The system may run on an existing private LAN, dedicated Wi-Fi, or another local
 network topology without changing the server-side architecture.
 
+The manager tablet has a button labeled Before you leave.
+It blanks saved planet names and keeps the drawings.
+`scripts/clear_planet_names.sh` does the same thing on the computer.
+`scripts/backup_room.sh` copies the drawings and leaves those names out.
 ## Android kiosk / single-app mode
 
 The kid app is intended to be the **only** application on its tablet

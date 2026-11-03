@@ -159,10 +159,12 @@ They are separate choices.
 
 <!-- step: language-tablet -->
 
-1. On either tablet, tap EN / FR.
+1. On the manager tablet, tap EN / FR.
    The app closes and opens in the other language.
    You should see French words, or English words, right away.
    The choice stays until you tap the button again.
+   On the kid tablet, hold EN / FR and answer the number question.
+   Read the kid tablet page for that hold.
 
 <!-- step: language-wall -->
 
@@ -276,15 +278,26 @@ Rings and little friends are not in the file.
 
 ## Shut down safely
 
+Planets stay saved.
+Names do not stay with you.
+
+<!-- step: shutdown-names -->
+
+1. On the manager tablet, tap Before you leave.
+   This clears the planet names.
+   Those names are left out of the USB safety copy.
+   You should see the planet names gone.
+   If not, stay on the manager tablet and tap Before you leave again.
+
 <!-- step: shutdown-stop -->
 
-1. You can shut down the computer from the power menu.
+2. You can shut down the computer from the power menu.
    The planets stay on the disk.
    The program starts again the next time the computer turns on.
 
 <!-- step: shutdown-script -->
 
-2. If you must stop the program first, paste this line.
+3. If you must stop the program first, paste this line.
 
 ```bash
 bash scripts/stop_room.sh

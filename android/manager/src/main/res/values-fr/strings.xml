@@ -21,6 +21,9 @@
     <string name="projector_french">Français</string>
     <string name="refresh">Actualiser</string>
     <string name="clearing">Suppression…</string>
+    <string name="before_you_leave">Avant de partir</string>
+    <string name="status_names_cleared">Noms des planètes effacés</string>
+    <string name="error_names_clear_failed">Impossible d’effacer les noms des planètes (%1$d)</string>
     <string name="clear_all_count">Tout effacer (%1$d)</string>
     <string name="no_planets">Aucune planète pour le moment — les enfants peuvent commencer à dessiner\u00A0!</string>
     <string name="remove_every_planet">Supprimer toutes les planètes\u00A0?</string>

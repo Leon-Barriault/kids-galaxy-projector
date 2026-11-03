@@ -80,7 +80,8 @@ bash scripts/open_projector.sh
 
 <!-- step: no-connect-address -->
 
-2. Dans l’application de dessin, touchez le nom de la galaxie.
+2. Dans l’application de dessin, maintenez le nom de la galaxie.
+   Répondez à la question de nombres.
    Si vous tapez une adresse, utilisez l’adresse `https ://` de l’installation.
    Elle ressemble à `https ://192.168.1.20:8443`.
    Vous devriez voir un crochet quand la tablette peut la joindre.
@@ -149,9 +150,10 @@ adb shell am task lock stop
 
 <!-- step: wrong-language-tablet -->
 
-1. Sur la tablette, touchez EN / FR.
+1. Sur la tablette de gestion, touchez EN / FR.
    L’application devrait se rouvrir dans l’autre langue.
    Votre choix reste sur cette tablette.
+   Sur la tablette enfant, maintenez EN / FR et répondez à la question de nombres.
 
 <!-- step: wrong-language-wall -->
 

@@ -134,7 +134,13 @@ HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 INLINE_CODE = re.compile(r"`[^`]+`")
 SENTENCE_SPLIT = re.compile(r"[^.!?]+[.!?]")
-USER_GUIDES = ("install.md", "daily.md", "troubleshooting.md", "quick-start.md")
+USER_GUIDES = (
+    "install.md",
+    "daily.md",
+    "troubleshooting.md",
+    "quick-start.md",
+    "kid-tablet.md",
+)
 MAX_SENTENCE_WORDS = 22
 MAX_AVERAGE_WORDS = 16
 MAX_ENGLISH_GRADE = 8.5

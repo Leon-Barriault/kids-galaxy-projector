@@ -122,7 +122,8 @@ Run these before considering a change complete:
 cd pi-server && ruff check . --config ruff.toml
 hadolint --config .hadolint.yaml pi-server/Dockerfile
 shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
-    scripts/dev-up.sh pi-server/certs/generate_certs.sh
+    scripts/dev-up.sh scripts/backup_room.sh scripts/clear_planet_names.sh \
+    scripts/lib/room.sh pi-server/certs/generate_certs.sh
 cd android && ktlint --relative --editorconfig=.editorconfig \
     "app/src/**/*.kt" "manager/src/**/*.kt" "connection/src/**/*.kt"
 make arch

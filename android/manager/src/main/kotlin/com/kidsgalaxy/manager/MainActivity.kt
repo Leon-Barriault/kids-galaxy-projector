@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onDelete = managerViewModel::deletePlanet,
                         onClearAll = managerViewModel::clearAll,
+                        onClearNames = managerViewModel::clearPlanetNames,
                         onClearError = managerViewModel::clearError,
                         onRegionChange = managerViewModel::setRegion,
                         onAsteroidBeltChange = managerViewModel::setAsteroidBeltEnabled,

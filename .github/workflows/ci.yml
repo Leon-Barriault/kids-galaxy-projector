@@ -56,6 +56,8 @@ jobs:
             scripts/dev-up.sh scripts/setup_room.sh scripts/stop_room.sh \
             scripts/open_projector.sh scripts/prepare_kid_tablet.sh \
             scripts/prepare_manager_tablet.sh scripts/build_tablets.sh \
+            scripts/backup_room.sh scripts/clear_planet_names.sh \
+            scripts/lib/room.sh \
             pi-server/certs/generate_certs.sh
 
       - name: Set up Java (for ktlint)

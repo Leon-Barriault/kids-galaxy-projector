@@ -82,6 +82,10 @@ class PlanetRepository(ABC):
         """Newest `limit` planets, newest first."""
 
     @abstractmethod
+    def clear_names(self) -> int:
+        """Blank stored planet names and keep the drawings. Safe to call twice."""
+
+    @abstractmethod
     def clear(self) -> list[Planet]:
         """Remove every stored planet and return what was removed."""
 

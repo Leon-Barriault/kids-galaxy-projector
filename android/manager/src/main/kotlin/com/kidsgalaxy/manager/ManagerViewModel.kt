@@ -27,6 +27,8 @@ sealed interface ManagerStatus {
         val count: Int,
     ) : ManagerStatus
 
+    data object NamesCleared : ManagerStatus
+
     data class ProjectorLanguageChanged(
         val language: String,
     ) : ManagerStatus
@@ -42,6 +44,10 @@ sealed interface ManagerError {
     ) : ManagerError
 
     data class ClearFailed(
+        val code: Int,
+    ) : ManagerError
+
+    data class NamesClearFailed(
         val code: Int,
     ) : ManagerError
 
@@ -61,6 +67,7 @@ data class ManagerUiState(
     val isLoading: Boolean = false,
     val deletingIds: Set<String> = emptySet(),
     val isClearing: Boolean = false,
+    val isClearingNames: Boolean = false,
     val behaviorSettings: BehaviorSettingsDto = BehaviorSettingsDto(),
     val isBehaviorLoading: Boolean = true,
     val isUpdatingBehavior: Boolean = false,
@@ -325,6 +332,46 @@ class ManagerViewModel(
                 _uiState.update {
                     it.copy(
                         isClearing = false,
+                        error = ManagerError.Network,
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearPlanetNames() {
+        if (_uiState.value.isClearingNames) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isClearingNames = true, error = null) }
+            try {
+                val response = api.clearPlanetNames()
+                if (response.isSuccessful) {
+                    val listed = api.listPlanets(limit = 30)
+                    val planets =
+                        if (listed.isSuccessful) {
+                            listed.body()?.planets.orEmpty()
+                        } else {
+                            _uiState.value.planets.map { planet -> planet.copy(name = "") }
+                        }
+                    _uiState.update {
+                        it.copy(
+                            planets = planets,
+                            isClearingNames = false,
+                            status = ManagerStatus.NamesCleared,
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isClearingNames = false,
+                            error = ManagerError.NamesClearFailed(response.code()),
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isClearingNames = false,
                         error = ManagerError.Network,
                     )
                 }

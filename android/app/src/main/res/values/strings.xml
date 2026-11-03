@@ -115,4 +115,20 @@
     <string name="discovery_search_failed">Could not search for galaxies (error %1$d)</string>
     <string name="discovery_search_unavailable">Could not search for galaxies</string>
     <string name="discovery_stop_failed">Could not stop galaxy search (error %1$d)</string>
+
+    <!-- Adult gate. A short tap does not open these controls. -->
+    <string name="adult_hold_language">Hold to change the language. For grown-ups.</string>
+    <string name="adult_hold_galaxy">Hold to change the galaxy. For grown-ups. Current galaxy %1$s.</string>
+    <string name="adult_gate_title">Grown-up check</string>
+    <string name="adult_gate_prompt">What is %1$d + %2$d?</string>
+    <string name="adult_gate_answer_empty">Answer</string>
+    <string name="adult_gate_answer_entered">Answer %1$s</string>
+    <string name="adult_gate_delete">Delete the last digit</string>
+    <string name="adult_gate_wrong">That answer is not right.</string>
+    <string name="adult_gate_locked">Too many tries. Wait a moment.</string>
+    <string name="adult_gate_cancel">Cancel</string>
+    <string name="adult_menu_title">Grown-up settings</string>
+    <string name="adult_menu_language">Change the language</string>
+    <string name="adult_menu_galaxy">Change the galaxy</string>
+    <string name="adult_menu_close">Close</string>
 </resources>
