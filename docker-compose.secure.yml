@@ -10,6 +10,10 @@ services:
       - 127.0.0.1
       - --port
       - "8000"
+      # Same backstop as the image CMD. This override replaces that CMD, so
+      # without the flag a graceful stop waits forever on the projector stream.
+      - --timeout-graceful-shutdown
+      - "3"
     environment:
       UPLOAD_DIR: /app/uploads
       STATE_DIR: /app/state

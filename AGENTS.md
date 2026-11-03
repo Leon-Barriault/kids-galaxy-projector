@@ -201,7 +201,13 @@ that with the destructive manager routes, which are authority-bearing.
 - Orbits are deterministic from planet id so reload/deletion does not reshuffle
   the sky.
 - Keep the polling fallback alongside SSE; buffering proxies can otherwise leave
-  a projector frozen.
+  a projector frozen. Polls must not pile up while the server is down, or they
+  fill the browser's connection pool and the wall stops asking.
+- End the projector event stream on SIGTERM/SIGINT. Uvicorn will not close an
+  in-flight streaming response, and a graceful stop then holds the wall's
+  socket until the process is killed.
+- The wall treats a missing heartbeat as a dead socket, retries with backoff,
+  and does not stop trying.
 - A restored planet must not fire a new-arrival celebration.
 - Never replace `galaxy.js` wholesale to make a small change. A historical
   rewrite silently dropped OrbitControls, the star field, fog, orbit rings, and
@@ -237,6 +243,9 @@ that with the destructive manager routes, which are authority-bearing.
 - `StrokePath.strokeWidth`, not `.width`.
 - Gallery JSON is an object with `planets`, not a bare array.
 - SSE uses named event `planet`; listen with `addEventListener('planet', ...)`.
+- A graceful stop that leaves the SSE socket open looks healthy to the wall
+  until the process is killed. The browser then stops asking. Close the stream
+  from the app on SIGTERM, and time out a silent socket on the wall.
 - `manifestPlaceholders` affect `AndroidManifest.xml`, not resource XML. Use
   source-set resource overrides for build-type-specific network policy.
 - Do not infer security state from old comments. Verify build config, mTLS

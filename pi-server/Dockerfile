@@ -28,4 +28,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Backstop if a stream is still open when the process is asked to stop.
+# The default wait is forever, so Docker's 10s stop timeout SIGKILLs the
+# process and can leave the projector holding a silent socket.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "3"]
