@@ -4,95 +4,97 @@
   <meta charset="utf-8" />
   <title>Kids Galaxy quick start</title>
   <style>
-    @page { size: letter; margin: 0.45in; }
+    @page { size: letter; margin: 0.38in; }
     body {
       font-family: Georgia, "Times New Roman", serif;
-      font-size: 11pt;
-      line-height: 1.25;
+      font-size: 9pt;
+      line-height: 1.15;
       color: #111;
     }
-    h1 { font-size: 16pt; margin: 0 0 6px; }
-    h2 { font-size: 12pt; margin: 8px 0 2px; }
-    p, ul { margin: 0 0 4px; }
+    h1 { font-size: 13pt; margin: 0 0 3px; }
+    h2 { font-size: 10.5pt; margin: 5px 0 1px; }
+    p, ul { margin: 0 0 2px; }
     li { margin: 0; }
   </style>
 </head>
 <body>
-<h1>Kids Galaxy quick start</h1>
-<p>Keep this page next to the projector.</p>
-<p>The full steps are in the install guide and the daily guide.</p>
-<h2>Before the children arrive</h2>
-<p>About 5 minutes.</p>
+<h1>Kids Galaxy day card</h1>
+<p>Keep this page at the daycare. The daily guide has the full steps.</p>
+<h2>Arrive</h2>
 <ul>
-<li>The computer is on and shows the desktop.</li>
+<li>Plug in the travel router. You should see a steady Wi-Fi light.</li>
 </ul>
 <ul>
-<li>The projector is on and shows that computer.</li>
+<li>On the PC, join `KidsGalaxy`. Do not join the daycare Wi-Fi. You should see that name.</li>
 </ul>
 <ul>
-<li>Both tablets are on the same Wi-Fi as the computer.</li>
+<li>Turn on the PC and sign in to Windows. You should see the desktop.</li>
+</ul>
+<h2>Set up</h2>
+<ul>
+<li>Quit Docker Desktop if you see the whale icon. You should see the icon gone.</li>
 </ul>
 <ul>
-<li>The wall shows the dark sky.</li>
-</ul>
-<h2>Turn the room on</h2>
-<ul>
-<li>Turn on the computer. Wait for the desktop.</li>
+<li>Open the Ubuntu app. You should see the name `omega`.</li>
 </ul>
 <ul>
-<li>Turn on the projector. Choose HDMI.</li>
+<li>Paste `cd /home/omega/kids-galaxy-projector`. You should see no error.</li>
 </ul>
 <ul>
-<li>On the computer, open `http://127.0.0.1:8000/`.</li>
+<li>Turn on the projector and choose HDMI. You should see the PC on the wall.</li>
 </ul>
 <ul>
-<li>Press F11 so the picture fills the screen.</li>
+<li>Paste `bash scripts/open_projector.sh`. You should see the dark sky.</li>
+</ul>
+<h2>Test</h2>
+<ul>
+<li>Wake the kid tablet. You should see the drawing app on `KidsGalaxy`.</li>
 </ul>
 <ul>
-<li>Wake the tablets.</li>
-</ul>
-<h2>A child draws</h2>
-<ul>
-<li>On the kid tablet, tap a shape and draw.</li>
+<li>Draw a small mark and tap Launch. You should see the mark on the tablet.</li>
 </ul>
 <ul>
-<li>Tap Launch.</li>
+<li>Look at the wall. You should see the new planet.</li>
+</ul>
+<h2>Pack up</h2>
+<ul>
+<li>On the manager tablet, tap Before you leave. You should see the planet names cleared.</li>
 </ul>
 <ul>
-<li>Look at the wall. The new planet should appear.</li>
-</ul>
-<h2>A grown-up</h2>
-<ul>
-<li>Open Kids Galaxy Manager. It is not the drawing app.</li>
+<li>Shut down Windows from the power menu. You should see the PC turn off.</li>
 </ul>
 <ul>
-<li>Tap EN / FR to change that tablet.</li>
+<li>Turn off the projector and unplug the router. Pack the router, the paper card, both tablets, and the chargers. You should see those items in the case.</li>
+</ul>
+<h2>If you are stuck</h2>
+<ul>
+<li>If the router light is off, check the power plug. You should see the Wi-Fi light.</li>
 </ul>
 <ul>
-<li>Tap Projector language to change the wall words.</li>
+<li>If setup stops because Docker Desktop is running, quit it and run the line again. You should see the installed message.</li>
 </ul>
 <ul>
-<li>Tap Print for paper. Tap STL for a 3D file.</li>
-</ul>
-<h2>Turn the room off</h2>
-<ul>
-<li>Shut down the computer from the power menu.</li>
+<li>If setup stops because the PC is not at `192.168.0.52`, join `KidsGalaxy`. Do not change the tablet address. You should see `192.168.0.52`.</li>
 </ul>
 <ul>
-<li>Turn off the projector.</li>
+<li>If the tablet cannot find the room, join `KidsGalaxy` on the tablet too. You should see the same Wi-Fi name as the PC.</li>
+</ul>
+<h2>First time on a new tablet or after an update</h2>
+<p>These checks are not done yet. Nobody has run them on the real PC or tablet. Leave each box empty until you see the result yourself.</p>
+<ul>
+<li>[ ] The child lock holds. A child cannot leave the drawing app. You should see Home stay in the app.</li>
 </ul>
 <ul>
-<li>Let the tablets sleep.</li>
-</ul>
-<h2>If the wall is dark</h2>
-<ul>
-<li>Check both power lights.</li>
+<li>[ ] Restart the tablet. You should see the drawing app open by itself.</li>
 </ul>
 <ul>
-<li>Check the HDMI cable and the HDMI source.</li>
+<li>[ ] The tablet connects to the secure address on port `8443`. You should see no certificate warning. The address is `https://192.168.0.52:8443`.</li>
 </ul>
 <ul>
-<li>On the computer, open `http://127.0.0.1:8000/`.</li>
+<li>[ ] In Windows PowerShell, run the setup script, the update script, and the stop script. You should see no red errors. Those scripts are `setup_room.sh`, `update_room.sh`, and `stop_room.sh`.</li>
+</ul>
+<ul>
+<li>[ ] After an update, or a stop and a start, send one planet. You should see it on the wall within about 15 seconds. If not, reload the wall page. An automatic reconnect is not here yet. That fix is coming separately.</li>
 </ul>
 </body>
 </html>

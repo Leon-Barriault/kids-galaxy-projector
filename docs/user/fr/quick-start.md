@@ -1,125 +1,129 @@
-# Démarrage rapide Kids Galaxy
+# Fiche du jour Kids Galaxy
 
-Gardez cette page à côté du projecteur.
-Les étapes complètes sont dans le guide d’installation et le guide de tous les jours.
+Gardez cette page à la garderie. Le guide de tous les jours a les étapes complètes.
 
-<!-- section: before -->
+<!-- section: arrive -->
 
-## Avant l’arrivée des enfants
+## Arrivée
 
-Environ 5 minutes.
+<!-- step: arrive-router -->
 
-<!-- step: before-computer -->
+1. Branchez le routeur de voyage. Vous devriez voir un voyant Wi-Fi stable.
 
-1. L’ordinateur est allumé et montre le bureau.
+<!-- step: arrive-wifi -->
 
-<!-- step: before-projector -->
+2. Sur le PC, joignez `KidsGalaxy`. Ne joignez pas le Wi-Fi de la garderie. Vous devriez voir ce nom.
 
-2. Le projecteur est allumé et montre cet ordinateur.
+<!-- step: arrive-pc -->
 
-<!-- step: before-wifi -->
+3. Allumez le PC et ouvrez la session Windows. Vous devriez voir le bureau.
 
-3. Les deux tablettes sont sur le même Wi-Fi que l’ordinateur.
+<!-- section: setup -->
 
-<!-- step: before-sky -->
+## Installation
 
-4. Le mur montre le ciel sombre.
+<!-- step: setup-docker -->
 
-<!-- section: on -->
+1. Quittez Docker Desktop si vous voyez l’icône de baleine. Vous devriez voir l’icône disparue.
 
-## Allumer la salle
+<!-- step: setup-ubuntu -->
 
-<!-- step: on-computer -->
+2. Ouvrez l’application Ubuntu. Vous devriez voir le nom `omega`.
 
-1. Allumez l’ordinateur. Attendez le bureau.
+<!-- step: setup-folder -->
 
-<!-- step: on-projector -->
+3. Collez `cd /home/omega/kids-galaxy-projector`. Vous ne devriez voir aucune erreur.
 
-2. Allumez le projecteur. Choisissez HDMI.
+<!-- step: setup-projector -->
 
-<!-- step: on-chrome -->
+4. Allumez le projecteur et choisissez HDMI. Vous devriez voir le PC sur le mur.
 
-3. Sur l’ordinateur, ouvrez `http://127.0.0.1:8000/`.
+<!-- step: setup-wall -->
 
-<!-- step: on-full -->
+5. Collez `bash scripts/open_projector.sh`. Vous devriez voir le ciel sombre.
 
-4. Appuyez sur F11 pour remplir l’écran.
+<!-- section: test -->
 
-<!-- step: on-tablets -->
+## Essai
 
-5. Réveillez les tablettes.
+<!-- step: test-tablet -->
 
-<!-- section: child -->
+1. Réveillez la tablette enfant. Vous devriez voir l’application de dessin sur `KidsGalaxy`.
 
-## Un enfant dessine
+<!-- step: test-launch -->
 
-<!-- step: child-shape -->
+2. Tracez une petite marque et touchez Lancer. Vous devriez voir la marque sur la tablette.
 
-1. Sur la tablette enfant, touchez une forme et dessinez.
+<!-- step: test-wall -->
 
-<!-- step: child-launch -->
+3. Regardez le mur. Vous devriez voir la nouvelle planète.
 
-2. Touchez Lancer.
+<!-- section: pack -->
 
-<!-- step: child-wall -->
+## Rangement
 
-3. Regardez le mur. La nouvelle planète devrait apparaître.
+<!-- step: pack-names -->
 
-<!-- section: adult -->
+1. Sur la tablette de gestion, touchez Avant de partir. Vous devriez voir les noms des planètes effacés.
 
-## Un adulte
+<!-- step: pack-pc -->
 
-<!-- step: adult-app -->
+2. Éteignez Windows depuis le menu d’alimentation. Vous devriez voir le PC s’éteindre.
 
-1. Ouvrez Gestionnaire Kids Galaxy. Ce n’est pas l’application de dessin.
+<!-- step: pack-gear -->
 
-<!-- step: adult-language -->
+3. Éteignez le projecteur et débranchez le routeur. Rangez le routeur, la carte papier, les deux tablettes et les chargeurs. Vous devriez voir ces articles dans l’étui.
 
-2. Touchez EN / FR pour changer cette tablette.
+<!-- section: stuck -->
 
-<!-- step: adult-wall -->
+## Si vous êtes bloqué
 
-3. Touchez Langue du projecteur pour changer les mots du mur.
+<!-- step: stuck-router -->
 
-<!-- step: adult-print -->
+1. Si le voyant du routeur est éteint, vérifiez la prise. Vous devriez voir le voyant Wi-Fi.
 
-4. Touchez Imprimer pour le papier. Touchez STL pour un fichier 3D.
+<!-- step: stuck-docker -->
 
-<!-- section: off -->
+2. Si l’installation s’arrête parce que Docker Desktop tourne, quittez-le et relancez la ligne. Vous devriez voir le message d’installation.
 
-## Éteindre la salle
+<!-- step: stuck-address -->
 
-<!-- step: off-computer -->
+3. Si l’installation s’arrête parce que le PC n’est pas à `192.168.0.52`, joignez `KidsGalaxy`. Ne changez pas l’adresse des tablettes. Vous devriez voir `192.168.0.52`.
 
-1. Éteignez l’ordinateur depuis le menu d’alimentation.
+<!-- step: stuck-find -->
 
-<!-- step: off-projector -->
+4. Si la tablette ne trouve pas la salle, joignez aussi `KidsGalaxy` sur la tablette. Vous devriez voir le même nom Wi-Fi que le PC.
 
-2. Éteignez le projecteur.
-
-<!-- step: off-tablets -->
-
-3. Laissez les tablettes dormir.
-
-<!-- section: dark -->
-
-## Si le mur est sombre
-
-<!-- step: dark-power -->
-
-1. Vérifiez les deux voyants d’alimentation.
-
-<!-- step: dark-cable -->
-
-2. Vérifiez le câble HDMI et la source HDMI.
-
-<!-- step: dark-page -->
-
-3. Sur l’ordinateur, ouvrez `http://127.0.0.1:8000/`.
-
-<!-- fix: dark -->
+<!-- fix: stuck -->
 
 > **Si cela ne fonctionne pas**
 >
-> Collez `bash scripts/setup_room.sh` dans Terminal.
-> Puis ouvrez la page de nouveau.
+> Dans Ubuntu, allez dans le dossier du projet.
+> Collez `bash scripts/setup_room.sh`.
+> Puis ouvrez le mur de nouveau.
+
+<!-- section: first-checks -->
+
+## Première fois sur une nouvelle tablette ou après une mise à jour
+
+Ces vérifications ne sont pas faites. Personne ne les a encore faites sur le vrai PC ou la vraie tablette. Laissez chaque case vide jusqu’à ce que vous voyiez le résultat vous-même.
+
+<!-- step: check-lock -->
+
+- [ ] Le verrou enfant tient. Un enfant ne peut pas quitter l’application de dessin. Vous devriez voir Accueil rester dans l’application.
+
+<!-- step: check-boot -->
+
+- [ ] Redémarrez la tablette. Vous devriez voir l’application de dessin s’ouvrir toute seule.
+
+<!-- step: check-secure -->
+
+- [ ] La tablette rejoint l’adresse sécurisée sur le port `8443`. Vous ne devriez voir aucun avertissement de certificat. L’adresse est `https://192.168.0.52:8443`.
+
+<!-- step: check-scripts -->
+
+- [ ] Dans Windows PowerShell, lancez le script d’installation, le script de mise à jour et le script d’arrêt. Vous ne devriez voir aucune erreur en rouge. Ces scripts sont `setup_room.sh`, `update_room.sh` et `stop_room.sh`.
+
+<!-- step: check-planet -->
+
+- [ ] Après une mise à jour, ou un arrêt puis un démarrage, envoyez une planète. Vous devriez la voir sur le mur en environ 15 secondes. Sinon, rechargez la page du mur. Une reconnexion automatique n’est pas encore là. Ce correctif arrive à part.
