@@ -182,6 +182,22 @@ docker_desktop_state() {
   printf 'absent'
 }
 
+# Stop host setup while Docker Desktop is running.
+# A stopped or missing Desktop can continue.
+refuse_running_docker_desktop() {
+  local state
+  state="$(docker_desktop_state)"
+  if [[ "$state" != "running" ]]; then
+    return 0
+  fi
+  echo "Docker Desktop is running on Windows."
+  echo "Quit Docker Desktop."
+  echo "Turn off Start Docker Desktop when you sign in."
+  echo "Two Dockers fight over the same ports."
+  echo "Then run this host line again."
+  return 1
+}
+
 windows_admin_lines() {
   local distro user home unc base
   distro="$(wsl_distro_name)" || return 1

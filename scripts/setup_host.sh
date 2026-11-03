@@ -40,6 +40,10 @@ if [[ "$EUID" -ne 0 ]]; then
   exec sudo --preserve-env=KIDS_WSL_DISTRO,KIDS_WSL_USER bash "$ROOT/scripts/setup_host.sh"
 fi
 
+if is_wsl; then
+  refuse_running_docker_desktop || exit 1
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y docker.io docker-compose-v2 openssl curl ca-certificates git adb
@@ -62,11 +66,6 @@ echo "The galaxy computer programs are installed."
 if is_wsl; then
   desktop_state="$(docker_desktop_state)"
   case "$desktop_state" in
-    running)
-      echo "Docker Desktop is running on Windows."
-      echo "Quit Docker Desktop. Two Dockers fight over the same ports."
-      echo "Turn off Start Docker Desktop when you sign in."
-      ;;
     stopped)
       echo "Docker Desktop is installed on Windows, and it is stopped."
       echo "Leave it stopped. Turn off Start Docker Desktop when you sign in."

@@ -217,7 +217,7 @@ The scripts behind them:
 
 | Script | Role |
 | --- | --- |
-| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it warns if Docker Desktop is installed |
+| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it stops if Docker Desktop is running |
 | `scripts/wsl_bringup.sh` | Start Docker and the room after a Windows sign-in |
 | `scripts/print_windows_commands.sh` | Print the admin PowerShell lines with this distro name and user filled in |
 | `scripts/windows/kids-galaxy-firewall.ps1` | Private-profile firewall rules. Keeps an existing KidsGalaxy rule for the same port |

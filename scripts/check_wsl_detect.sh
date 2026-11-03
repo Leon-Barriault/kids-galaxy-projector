@@ -8,6 +8,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=SCRIPTDIR/lib/wsl.sh
 source "$ROOT/scripts/lib/wsl.sh"
+# shellcheck source=SCRIPTDIR/lib/room_address.sh
+source "$ROOT/scripts/lib/room_address.sh"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -115,14 +117,43 @@ DOCKER_DESKTOP_STATE="running"
 if [[ "$(docker_desktop_state)" != "running" ]]; then
   fail "Docker Desktop running state was not kept"
 fi
+if refuse_running_docker_desktop >/dev/null; then
+  fail "host setup must stop while Docker Desktop is running"
+fi
 DOCKER_DESKTOP_STATE="stopped"
 if [[ "$(docker_desktop_state)" != "stopped" ]]; then
   fail "Docker Desktop stopped state was not kept"
+fi
+if ! refuse_running_docker_desktop >/dev/null; then
+  fail "a stopped Docker Desktop should let host setup continue"
 fi
 DOCKER_DESKTOP_STATE="absent"
 if [[ "$(docker_desktop_state)" != "absent" ]]; then
   fail "Docker Desktop absent state was not kept"
 fi
+if ! refuse_running_docker_desktop >/dev/null; then
+  fail "a missing Docker Desktop should let host setup continue"
+fi
 unset DOCKER_DESKTOP_STATE
+if ! grep -q 'refuse_running_docker_desktop || exit 1' "$ROOT/scripts/setup_host.sh"; then
+  fail "setup_host must exit while Docker Desktop is running"
+fi
+
+expect_room() {
+  local got want
+  got="$(decide_room_address "$1" "$2" "$3")"
+  want="$4"$'\n'"$5"
+  if [[ "$got" != "$want" ]]; then
+    fail "room address for saved [$1] current [$2] explicit [$3] returned [$got]"
+  fi
+}
+
+expect_room "" "192.168.0.52" "" "192.168.0.52" "keep"
+expect_room "" "10.1.1.8" "" "192.168.0.52" "blocked"
+expect_room "192.168.0.52" "10.1.1.8" "" "192.168.0.52" "blocked"
+expect_room "192.168.0.52" "192.168.0.52" "" "192.168.0.52" "keep"
+expect_room "192.168.0.52" "10.1.1.8" "10.9.9.9" "10.9.9.9" "change"
+expect_room "192.168.0.52" "" "" "192.168.0.52" "need-current"
+expect_room "10.4.4.4" "10.4.4.4" "" "10.4.4.4" "keep"
 
 echo "WSL detection checks passed."

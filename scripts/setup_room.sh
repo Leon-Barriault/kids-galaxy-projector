@@ -3,15 +3,19 @@
 # Open Terminal in this project folder, then paste:
 #   bash scripts/setup_room.sh
 #
-# Renew the address card when the computer address changes:
-#   NEW_CERTIFICATES=1 bash scripts/setup_room.sh
-# Tablet ID cards stay valid. Build the apps again so they learn the new address.
+# The tablets keep one saved address. The default is 192.168.0.52.
+# Setup stops when this computer is somewhere else.
+# To move the room on purpose, then build the apps again:
+#   CHANGE_ADDRESS=1 SERVER_IP=192.168.0.52 bash scripts/setup_room.sh
+# NEW_CERTIFICATES=1 renews the card for that same saved address.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=SCRIPTDIR/lib/wsl.sh
 source "$ROOT/scripts/lib/wsl.sh"
+# shellcheck source=SCRIPTDIR/lib/room_address.sh
+source "$ROOT/scripts/lib/room_address.sh"
 cd "$ROOT"
 
 room_status=""
@@ -56,15 +60,26 @@ lan_ip() {
   printf '%s' "$ip"
 }
 
-if [[ -n "${SERVER_IP:-}" ]]; then
-  ADDRESS="$SERVER_IP"
+EXPLICIT=""
+CURRENT=""
+if [[ "${CHANGE_ADDRESS:-}" == "1" ]]; then
+  if [[ -z "${SERVER_IP:-}" ]]; then
+    echo "Type the new address in the command."
+    echo "Example: CHANGE_ADDRESS=1 SERVER_IP=${DEFAULT_TABLET_ADDRESS} bash scripts/setup_room.sh"
+    exit 1
+  fi
+  EXPLICIT="$SERVER_IP"
+fi
+
+if [[ -z "$EXPLICIT" && -n "${SERVER_IP:-}" ]]; then
+  CURRENT="$SERVER_IP"
 else
-  ADDRESS="$(lan_ip)"
-  if is_wsl; then
+  CURRENT="$(lan_ip)"
+  if [[ -z "$EXPLICIT" ]] && is_wsl; then
     win_ip="$(windows_lan_ip || true)"
     mode="$(wsl_config_mode)"
-    choice="$(choose_tablet_address "$ADDRESS" "$win_ip" "$mode")"
-    ADDRESS="$(printf '%s\n' "$choice" | sed -n '1p')"
+    choice="$(choose_tablet_address "$CURRENT" "$win_ip" "$mode")"
+    CURRENT="$(printf '%s\n' "$choice" | sed -n '1p')"
     room_status="$(printf '%s\n' "$choice" | sed -n '2p')"
     case "$room_status" in
       mirrored-pending)
@@ -78,27 +93,63 @@ else
         echo "Ubuntu is inside Windows, and the house address was not found."
         echo "In Windows PowerShell, run: ipconfig"
         echo "Then run: SERVER_IP=that.address bash scripts/setup_room.sh"
+        echo "The tablets stay on ${DEFAULT_TABLET_ADDRESS} unless you ask to change it."
         exit 1
-        ;;
-      nat)
-        echo "Windows is sharing Ubuntu with a private network."
-        echo "Tablets will use the Windows address ${ADDRESS}."
-        echo "After this setup, run the forward script in an admin PowerShell window."
-        ;;
-      mirrored)
-        echo "Windows mirrored networking is on."
-        echo "Tablets will use ${ADDRESS}."
-        echo "Run the firewall script in an admin PowerShell window if you have not yet."
         ;;
     esac
   fi
 fi
 
-if [[ -z "$ADDRESS" ]]; then
-  echo "This computer has no network address yet."
-  echo "Join the room Wi-Fi, or plug in the network cable. Then run this again."
-  exit 1
+SAVED=""
+if [[ -f pi-server/state/room-card.txt ]]; then
+  SAVED="$(awk -F= '/^ADDRESS=/{ print $2; exit }' pi-server/state/room-card.txt)"
 fi
+decision="$(decide_room_address "$SAVED" "$CURRENT" "$EXPLICIT")"
+ADDRESS="$(printf '%s\n' "$decision" | sed -n '1p')"
+address_status="$(printf '%s\n' "$decision" | sed -n '2p')"
+
+case "$address_status" in
+  need-current)
+    echo "This computer has no network address yet."
+    echo "Join the room Wi-Fi, or plug in the network cable. Then run this again."
+    exit 1
+    ;;
+  blocked)
+    echo "The tablets use ${ADDRESS}."
+    echo "This computer is at ${CURRENT}."
+    echo "Join the KidsGalaxy router so this computer is at ${ADDRESS}."
+    echo "Then run this setup again."
+    echo "To move the room on purpose, run:"
+    echo "  CHANGE_ADDRESS=1 SERVER_IP=the.new.address bash scripts/setup_room.sh"
+    echo "Then build the tablet apps again."
+    exit 1
+    ;;
+  change)
+    if [[ -n "$SAVED" && "$SAVED" != "$ADDRESS" ]]; then
+      echo "The room address will change from ${SAVED} to ${ADDRESS}."
+      echo "Build the tablet apps again after this setup."
+    fi
+    ;;
+  keep)
+    ;;
+  *)
+    echo "The room address could not be chosen."
+    exit 1
+    ;;
+esac
+
+case "$room_status" in
+  nat)
+    echo "Windows is sharing Ubuntu with a private network."
+    echo "Tablets will use ${ADDRESS}."
+    echo "After this setup, run the forward script in an admin PowerShell window."
+    ;;
+  mirrored)
+    echo "Windows mirrored networking is on."
+    echo "Tablets will use ${ADDRESS}."
+    echo "Run the firewall script in an admin PowerShell window if you have not yet."
+    ;;
+esac
 
 export SERVER_IP="$ADDRESS"
 export SERVER_DNS="${SERVER_DNS:-kids-galaxy.local}"
