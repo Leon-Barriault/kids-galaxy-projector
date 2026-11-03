@@ -526,25 +526,51 @@ usbipd list
 usbipd bind --busid 2-1
 ```
 
-   **Ce que vous devez voir.** La liste montre la tablette comme Shared.
+   **Ce que vous devez voir.** La commande se termine.
+   Cette ligne n’affiche pas de liste.
 
    **Sinon.** La fenêtre n’est pas une fenêtre administrateur.
 
+<!-- step: usb-bind-list -->
+
+8. Collez cette ligne de nouveau.
+
+```powershell
+usbipd list
+```
+
+   **Ce que vous devez voir.** La ligne de la tablette dit Shared.
+
+   **Sinon.** Vérifiez le code sur la carte papier et relancez la ligne de liaison.
+
 <!-- step: usb-attach -->
 
-8. Collez la ligne suivante avec le même code.
+9. Collez la ligne suivante avec le même code.
 
 ```powershell
 usbipd attach --wsl --busid 2-1 --distribution Ubuntu
 ```
 
-   **Ce que vous devez voir.** La liste montre la tablette comme Attached.
+   **Ce que vous devez voir.** La commande se termine.
+   Cette ligne n’affiche pas de liste.
 
    **Sinon.** Ouvrez Ubuntu, puis collez la ligne d’attache de nouveau.
 
+<!-- step: usb-attach-list -->
+
+10. Collez cette ligne de nouveau.
+
+```powershell
+usbipd list
+```
+
+   **Ce que vous devez voir.** La ligne de la tablette dit Attached.
+
+   **Sinon.** Collez la ligne d’attache de nouveau, puis collez `usbipd list`.
+
 <!-- step: usb-see -->
 
-9. Dans Ubuntu, collez cette ligne.
+11. Dans Ubuntu, collez cette ligne.
 
 ```bash
 adb devices
