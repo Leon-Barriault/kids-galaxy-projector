@@ -250,7 +250,7 @@ cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
 
    Attendez. Le premier passage peut prendre plusieurs minutes.
    Vous devriez voir les mots `The galaxy computer is running.`
-   Vous devriez aussi voir une adresse comme `https ://192.168.1.20:8443`.
+   Vous devriez aussi voir une adresse comme `https://192.168.0.52:8443`.
    Écrivez cette adresse sur papier.
 
 <!-- step: computer-pi -->
@@ -260,20 +260,42 @@ cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
    N’utilisez pas un chargeur de téléphone.
    Vous devriez voir le même message de démarrage.
 
-<!-- step: computer-hotspot -->
+<!-- step: computer-router -->
 
-5. Faites cette étape seulement si la salle n’a pas de Wi-Fi.
-   Collez cette ligne.
+5. Quand la salle n’a pas de Wi-Fi du lieu, branchez le routeur de voyage.
+   Utilisez le courant du mur ou une batterie externe.
 
-```bash
-sudo bash scripts/setup_hotspot.sh
-```
+   **Ce que vous devez voir.** Un voyant Wi-Fi sur le routeur.
 
-   Vous devriez voir le nom Wi-Fi `KidsGalaxy`.
-   Le script affiche un nouveau mot de passe.
-   Écrivez ce mot de passe sur papier.
-   L’adresse est habituellement `10.42.0.1`.
-   Joignez ce Wi-Fi sur les deux tablettes plus tard.
+   **Sinon.** Vérifiez la prise ou la batterie externe.
+
+<!-- step: computer-join -->
+
+6. Sur l’ordinateur, joignez le Wi-Fi nommé `KidsGalaxy`.
+   Utilisez le mot de passe de la carte papier.
+
+   **Ce que vous devez voir.** L’ordinateur montre le nom Wi-Fi `KidsGalaxy`.
+
+   **Sinon.** Demandez la carte papier à la personne adulte.
+
+<!-- step: computer-address -->
+
+7. Dans Terminal, collez `hostname -I`.
+
+   **Ce que vous devez voir.** La ligne montre `192.168.0.52`.
+
+   **Sinon.** Sur le routeur, enregistrez `192.168.0.52` pour cet ordinateur.
+   Puis relancez `bash scripts/setup_room.sh`.
+
+<!-- step: computer-spare -->
+
+8. Laissez le point d’accès Windows éteint.
+   Il utilise `192.168.137.1`.
+   Les tablettes utilisent `192.168.0.52` sur le routeur de voyage.
+
+   **Ce que vous devez voir.** L’ordinateur reste sur `KidsGalaxy`.
+
+   **Sinon.** Éteignez le point d’accès Windows et joignez `KidsGalaxy` de nouveau.
 
 <!-- fix: computer -->
 
@@ -282,8 +304,10 @@ sudo bash scripts/setup_hotspot.sh
 > 1. Lisez les dernières lignes dans Terminal. Elles disent ce qui manque.
 > 2. Si Docker manque, répétez l’étape Docker et reconnectez-vous.
 > 3. S’il n’y a pas d’adresse réseau, joignez le Wi-Fi et relancez l’installation.
-> 4. Si l’adresse change plus tard, collez `NEW_CERTIFICATES=1 bash scripts/setup_room.sh`.
->    Puis reconstruisez les applications. Les anciennes ne correspondront plus.
+> 4. Si l’ordinateur n’est pas à `192.168.0.52`, joignez le routeur de voyage.
+>    L’installation s’arrête pour que les tablettes gardent leur adresse.
+>    Une personne-ressource change l’adresse avec `CHANGE_ADDRESS=1` et un nouveau `SERVER_IP`.
+>    Puis reconstruisez les applications des tablettes.
 
 <!-- section: picture -->
 
@@ -301,7 +325,7 @@ bash scripts/open_projector.sh
 
    Vous devriez voir un ciel sombre et les mots `Projecteur Kids Galaxy`.
    Si Chrome ne s’ouvre pas, ouvrez Chrome vous-même.
-   Allez à `http ://127.0.0.1:8000/`.
+   Allez à `http://127.0.0.1:8000/`.
 
 <!-- step: picture-full -->
 
@@ -319,7 +343,7 @@ Cette photo montre seulement les mots, pour vérifier la langue.
 
 > **Si cela ne fonctionne pas**
 >
-> 1. Sur cet ordinateur, ouvrez `http ://127.0.0.1:8000/health`.
+> 1. Sur cet ordinateur, ouvrez `http://127.0.0.1:8000/health`.
 >    Vous devriez voir le mot ok.
 > 2. Sinon, lancez de nouveau `bash scripts/setup_room.sh`.
 > 3. Vérifiez le câble HDMI et le bouton source du projecteur.
@@ -461,7 +485,7 @@ Environ 10 minutes.
 >
 > 1. Vérifiez que la tablette est sur le même Wi-Fi que l’ordinateur.
 > 2. Ouvrez l’application de dessin et touchez le nom de la galaxie.
-> 3. Si vous tapez une adresse, utilisez l’adresse `https ://` de l’installation.
+> 3. Si vous tapez une adresse, utilisez l’adresse `https://` de l’installation.
 > 4. Lisez la page de dépannage si le mur reste vide.
 
 <!-- section: time -->

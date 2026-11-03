@@ -114,7 +114,7 @@ Le point d’accès du guide d’installation est seulement un secours.
 <!-- step: network-address -->
 
 2. Choisissez une adresse fixe pour l’ordinateur de la galaxie.
-   Exemple. `192.168.1.50`.
+   Exemple. `192.168.0.52`.
    Réservez cette adresse dans le routeur.
    Écrivez-la sur la carte papier.
    Le nom d’ordinateur à écrire est `kids-galaxy`.
@@ -129,7 +129,7 @@ Le point d’accès du guide d’installation est seulement un secours.
    Les tablettes utilisent `8443`.
    La page du mur utilise `8000` seulement sur l’ordinateur de la galaxie.
    La découverte de la salle utilise `5353`.
-   L’adresse des tablettes ressemble à `https://192.168.1.50:8443`.
+   L’adresse des tablettes ressemble à `https://192.168.0.52:8443`.
    Utilisez votre vraie adresse, pas l’exemple.
 
    **Ce que vous devez voir.** La carte papier a l’adresse et les trois numéros de port.

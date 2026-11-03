@@ -81,6 +81,6 @@ These are not fixed by this procedure. They need a decision or a room test.
 - The p12 password and the keystore password appear in local files. Backup files contain them. They must not be emailed.
 - Boot-on-charge cannot be scripted. A dead tablet may sit on the charger until someone presses power.
 - Certificate lifetime is 825 days until the owner picks another number.
-- Older guide examples still say `192.168.1.50`. The moving room uses `192.168.0.52` so the tablets stay on one build. The travel router must reserve that address. The real router setup still needs a check on the hardware.
+- The guides use `192.168.0.52` so the tablets stay on one build. The travel router must reserve that address. The real router setup still needs a check on the hardware. Setup stops when the computer is at another address unless `CHANGE_ADDRESS=1` is set.
 - Per-tablet cards require a rebuild of the kid app, because the PKCS12 is an asset. A warm Gradle build is what makes a replacement short.
 - Manager tablets are not locked. That is intentional.

@@ -250,7 +250,7 @@ cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
 
    Wait. The first run can take several minutes.
    You should see the words `The galaxy computer is running.`
-   You should also see an address like `https://192.168.1.20:8443`.
+   You should also see an address like `https://192.168.0.52:8443`.
    Write that address on paper.
 
 <!-- step: computer-pi -->
@@ -260,20 +260,42 @@ cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
    Do not use a phone charger.
    You should see the same running message.
 
-<!-- step: computer-hotspot -->
+<!-- step: computer-router -->
 
-5. Do this step only if the room has no Wi-Fi.
-   Paste this line.
+5. When the room has no venue Wi-Fi, plug in the travel router.
+   Use the wall power or a power bank.
 
-```bash
-sudo bash scripts/setup_hotspot.sh
-```
+   **What you should see.** A Wi-Fi light on the router.
 
-   You should see the Wi-Fi name `KidsGalaxy`.
-   The script prints a new password.
-   Write that password on paper.
-   The address is usually `10.42.0.1`.
-   Join that Wi-Fi on both tablets later.
+   **If not.** Check the power plug or the power bank.
+
+<!-- step: computer-join -->
+
+6. On the computer, join the Wi-Fi named `KidsGalaxy`.
+   Use the password on the paper card.
+
+   **What you should see.** The computer shows the Wi-Fi name `KidsGalaxy`.
+
+   **If not.** Ask the grown-up for the paper card.
+
+<!-- step: computer-address -->
+
+7. In Terminal, paste `hostname -I`.
+
+   **What you should see.** The line shows `192.168.0.52`.
+
+   **If not.** On the router, save `192.168.0.52` for this computer.
+   Then run `bash scripts/setup_room.sh` again.
+
+<!-- step: computer-spare -->
+
+8. Leave the Windows hotspot off.
+   It uses `192.168.137.1`.
+   The tablets use `192.168.0.52` on the travel router.
+
+   **What you should see.** The computer stays on `KidsGalaxy`.
+
+   **If not.** Turn the Windows hotspot off and join `KidsGalaxy` again.
 
 <!-- fix: computer -->
 
@@ -282,8 +304,10 @@ sudo bash scripts/setup_hotspot.sh
 > 1. Read the last lines in Terminal. They say what is missing.
 > 2. If it says Docker is missing, repeat the Docker step and log in again.
 > 3. If it says no network address, join Wi-Fi and run the setup line again.
-> 4. If the address changed later, paste `NEW_CERTIFICATES=1 bash scripts/setup_room.sh`.
->    Then build the tablet apps again. Old apps will not match.
+> 4. If the computer is not at `192.168.0.52`, join the travel router.
+>    Setup stops so the tablets keep their address.
+>    A helper changes it with `CHANGE_ADDRESS=1` and a new `SERVER_IP`.
+>    Then build the tablet apps again.
 
 <!-- section: picture -->
 

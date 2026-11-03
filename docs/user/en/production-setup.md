@@ -114,7 +114,7 @@ The hotspot in the install guide is only a backup.
 <!-- step: network-address -->
 
 2. Pick a fixed address for the galaxy computer.
-   Example: `192.168.1.50`.
+   Example: `192.168.0.52`.
    Reserve that address in the router.
    Write it on the paper card.
    The computer name to write is `kids-galaxy`.
@@ -129,7 +129,7 @@ The hotspot in the install guide is only a backup.
    Tablets use `8443`.
    The wall page uses `8000` on the galaxy computer only.
    Finding the room uses `5353`.
-   The tablet address looks like `https://192.168.1.50:8443`.
+   The tablet address looks like `https://192.168.0.52:8443`.
    Use your real address, not the example.
 
    **What you should see.** The paper card has the address and the three port numbers.
