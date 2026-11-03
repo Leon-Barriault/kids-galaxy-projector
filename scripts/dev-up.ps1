@@ -15,6 +15,9 @@
 
     Every step is idempotent. Running it twice is a no-op that re-checks health.
 
+    Developer machines may use Docker Desktop. The room PC does not.
+    The room PC uses Docker Engine inside Ubuntu, with Docker Desktop stopped.
+
 .PARAMETER SkipEmulator
     Leave devices alone. Use this when debugging on a physical tablet over USB.
     Also settable as the environment variable KG_SKIP_EMULATOR=1.

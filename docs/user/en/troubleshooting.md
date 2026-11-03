@@ -82,7 +82,7 @@ bash scripts/open_projector.sh
 
 2. In the drawing app, tap the galaxy name.
    If you type an address, use the `https://` address from setup.
-   It looks like `https://192.168.1.20:8443`.
+   It looks like `https://192.168.0.52:8443`.
    You should see a check mark when the tablet can reach it.
 
 <!-- step: no-connect-restart -->

@@ -181,7 +181,7 @@ Ce sont deux choix séparés.
 >
 > Touchez EN / FR encore une fois.
 > Si le mur n’a pas changé, rechargez Chrome.
-> L’adresse de la page est `http ://127.0.0.1:8000/` sur l’ordinateur de la galaxie.
+> L’adresse de la page est `http://127.0.0.1:8000/` sur l’ordinateur de la galaxie.
 
 <!-- section: project -->
 

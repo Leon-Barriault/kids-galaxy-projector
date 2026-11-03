@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NBSP = "\u00a0"
 PUNCTUATION = ":?!"
+# Python \s includes NBSP (U+00A0) and narrow NBSP (U+202F).
+# A web address must be http:// or https:// with no space before ://.
+URL_SCHEME_GAP = re.compile(r"https?[\s]+://", re.IGNORECASE)
 ANDROID_STRING = re.compile(
     r'<string\s+name="([^"]+)"[^>]*>(.*?)</string>',
     re.DOTALL,
@@ -48,6 +51,8 @@ def french_punctuation_issues(text: str) -> list[str]:
             continue
         previous = text[index - 1]
         if char == ":" and previous.isdigit():
+            continue
+        if char == ":" and text.startswith("://", index):
             continue
         if previous == NBSP:
             continue
@@ -146,6 +151,8 @@ REQUIRED_GUIDE_MARKERS = {
     "production-setup.md": (
         "section:hardware",
         "section:network",
+        "section:wsl",
+        "section:travel",
         "section:specs",
         "section:computer",
         "section:docker",
@@ -256,6 +263,26 @@ def reading_problems(label: str, text: str, *, english: bool) -> list[str]:
     return problems
 
 
+def url_scheme_gap_problems() -> list[str]:
+    """Fail when a web address has any space before ://."""
+    for sample in ("http\u00a0://x", "https\u202f://x", "http ://x"):
+        if URL_SCHEME_GAP.search(sample) is None:
+            raise SystemExit(f"url check missed {sample!r}")
+    if URL_SCHEME_GAP.search("https://192.168.0.52:8443"):
+        raise SystemExit("url check flagged a normal address")
+    problems: list[str] = []
+    root = ROOT / "docs" / "user"
+    for path in sorted(root.rglob("*")):
+        if path.suffix.lower() not in {".md", ".html", ".pdf"}:
+            continue
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        for match in URL_SCHEME_GAP.finditer(text):
+            problems.append(
+                f"{path.relative_to(ROOT)}: space in web address {match.group(0)!r}"
+            )
+    return problems
+
+
 def user_guide_problems() -> list[str]:
     problems: list[str] = []
     english_root = ROOT / "docs" / "user" / "en"
@@ -317,6 +344,7 @@ def collect_problems() -> list[str]:
     locales = js_locale_entries(projector)
     problems.extend(compare_named("projector", locales["en"], locales["fr"], decode=decode_js))
     problems.extend(user_guide_problems())
+    problems.extend(url_scheme_gap_problems())
     return problems
 
 

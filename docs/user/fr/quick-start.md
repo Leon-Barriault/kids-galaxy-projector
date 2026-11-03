@@ -39,7 +39,7 @@ Environ 5 minutes.
 
 <!-- step: on-chrome -->
 
-3. Sur l’ordinateur, ouvrez `http ://127.0.0.1:8000/`.
+3. Sur l’ordinateur, ouvrez `http://127.0.0.1:8000/`.
 
 <!-- step: on-full -->
 
@@ -115,7 +115,7 @@ Environ 5 minutes.
 
 <!-- step: dark-page -->
 
-3. Sur l’ordinateur, ouvrez `http ://127.0.0.1:8000/`.
+3. Sur l’ordinateur, ouvrez `http://127.0.0.1:8000/`.
 
 <!-- fix: dark -->
 

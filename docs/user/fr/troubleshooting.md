@@ -42,7 +42,7 @@ Arrêtez-vous quand la salle fonctionne.
 <!-- step: no-picture-page -->
 
 3. Sur l’ordinateur, ouvrez Chrome.
-   Allez à `http ://127.0.0.1:8000/`.
+   Allez à `http://127.0.0.1:8000/`.
    Vous devriez voir le ciel sombre et les mots d’attente.
 
 <!-- step: no-picture-setup -->
@@ -81,8 +81,8 @@ bash scripts/open_projector.sh
 <!-- step: no-connect-address -->
 
 2. Dans l’application de dessin, touchez le nom de la galaxie.
-   Si vous tapez une adresse, utilisez l’adresse `https ://` de l’installation.
-   Elle ressemble à `https ://192.168.1.20:8443`.
+   Si vous tapez une adresse, utilisez l’adresse `https://` de l’installation.
+   Elle ressemble à `https://192.168.0.52:8443`.
    Vous devriez voir un crochet quand la tablette peut la joindre.
 
 <!-- step: no-connect-restart -->

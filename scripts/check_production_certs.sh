@@ -51,4 +51,33 @@ openssl x509 -in "$CERTS_DIR/server.crt" -noout -ext subjectAltName | grep -q 'I
 openssl x509 -in "$CERTS_DIR/tablets/kid-1/client.crt" -noout -subject | grep -q 'OU = kid'
 openssl x509 -in "$CERTS_DIR/tablets/manager-1/client.crt" -noout -subject | grep -q 'OU = manager'
 
+server_key="$(sha256sum "$CERTS_DIR/server.key" | awk '{ print $1 }')"
+active_key="$(sha256sum "$CERTS_DIR/tablets/kid-1/client.key" | awk '{ print $1 }')"
+bash "$ROOT/scripts/production_certs.sh" add-addresses \
+  --ip 192.168.137.1 --ip 192.168.0.52 --dns kids-galaxy.local
+ca_added="$(sha256sum "$CERTS_DIR/ca.key" | awk '{ print $1 }')"
+server_key_added="$(sha256sum "$CERTS_DIR/server.key" | awk '{ print $1 }')"
+active_key_added="$(sha256sum "$CERTS_DIR/tablets/kid-1/client.key" | awk '{ print $1 }')"
+[[ "$ca_added" == "$ca_after" ]]
+[[ "$server_key_added" == "$server_key" ]]
+[[ "$active_key_added" == "$active_key" ]]
+san="$(openssl x509 -in "$CERTS_DIR/server.crt" -noout -ext subjectAltName)"
+for needle in \
+  'IP Address:10.9.8.7' \
+  'IP Address:10.9.8.8' \
+  'IP Address:192.168.137.1' \
+  'IP Address:192.168.0.52' \
+  'DNS:kids-galaxy.local' \
+  'DNS:kids-galaxy.test'
+do
+  if ! grep -q "$needle" <<<"$san"; then
+    echo "The address card is missing ${needle}." >&2
+    printf '%s\n' "$san" >&2
+    exit 1
+  fi
+done
+bash "$ROOT/scripts/production_certs.sh" add-addresses --ip 192.168.0.52
+server_key_again="$(sha256sum "$CERTS_DIR/server.key" | awk '{ print $1 }')"
+[[ "$server_key_again" == "$server_key" ]]
+
 echo "Room ID cards keep the room card, cancel one tablet, and renew the address."
