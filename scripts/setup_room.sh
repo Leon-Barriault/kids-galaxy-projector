@@ -3,8 +3,9 @@
 # Open Terminal in this project folder, then paste:
 #   bash scripts/setup_room.sh
 #
-# Make new tablet ID cards only when the computer address changes:
+# Renew the address card when the computer address changes:
 #   NEW_CERTIFICATES=1 bash scripts/setup_room.sh
+# Tablet ID cards stay valid. Build the apps again so they learn the new address.
 
 set -euo pipefail
 
@@ -63,21 +64,21 @@ if [[ -z "$ADDRESS" ]]; then
   exit 1
 fi
 
-PASSWORD="${CLIENT_P12_PASSWORD:-KidsGalaxy}"
 export SERVER_IP="$ADDRESS"
-export CLIENT_P12_PASSWORD="$PASSWORD"
-export MANAGER_P12_PASSWORD="${MANAGER_P12_PASSWORD:-$PASSWORD}"
+export SERVER_DNS="${SERVER_DNS:-kids-galaxy.local}"
 
 mkdir -p pi-server/state android/app/src/main/assets android/manager/src/main/assets
 
-if [[ ! -f pi-server/certs/server.crt || "${NEW_CERTIFICATES:-}" == "1" ]]; then
-  echo "Making tablet ID cards for ${ADDRESS}."
-  bash pi-server/certs/generate_certs.sh
+if [[ "${NEW_CERTIFICATES:-}" == "1" ]]; then
+  echo "Renewing the address card for ${ADDRESS}."
+  bash scripts/production_certs.sh init --force-server
 else
-  echo "Tablet ID cards are already here. They were left in place."
-  echo "Make new ones only if the address changed:"
-  echo "  NEW_CERTIFICATES=1 bash scripts/setup_room.sh"
+  bash scripts/production_certs.sh init
 fi
+
+PASSWORD="$(tr -d '[:space:]' < pi-server/certs/p12-password)"
+export CLIENT_P12_PASSWORD="$PASSWORD"
+export MANAGER_P12_PASSWORD="${MANAGER_P12_PASSWORD:-$PASSWORD}"
 
 cp pi-server/certs/client.p12 pi-server/certs/ca.crt android/app/src/main/assets/
 cp pi-server/certs/manager.p12 pi-server/certs/ca.crt android/manager/src/main/assets/

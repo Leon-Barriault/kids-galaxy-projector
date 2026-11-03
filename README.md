@@ -7,6 +7,8 @@ A complete, kid-friendly system where children draw a planet on an Android table
 **Parents, teachers, and daycare staff start here.** These pages use short steps and plain words. Programmer notes stay in this file and in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 - [Install the room](docs/user/en/install.md)
+- [Production setup](docs/user/en/production-setup.md)
+- [The kid tablet](docs/user/en/kid-tablet.md)
 - [Each day](docs/user/en/daily.md)
 - [When something goes wrong](docs/user/en/troubleshooting.md)
 - [One-page card](docs/user/en/quick-start.md) ([PDF](docs/user/en/quick-start.pdf))

@@ -23,6 +23,9 @@ RUN useradd -m -u 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
+ARG ROOM_VERSION=dev
+LABEL org.kidsgalaxy.version="${ROOM_VERSION}"
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \

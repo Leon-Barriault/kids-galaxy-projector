@@ -1,7 +1,10 @@
 services:
   pi-server:
+    image: kids-galaxy-pi-server:${ROOM_IMAGE_TAG:-room}
     build:
       context: ./pi-server
+      args:
+        ROOM_VERSION: ${ROOM_VERSION:-dev}
     network_mode: host
     command:
       - uvicorn

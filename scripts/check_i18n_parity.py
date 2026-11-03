@@ -134,7 +134,47 @@ HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 INLINE_CODE = re.compile(r"`[^`]+`")
 SENTENCE_SPLIT = re.compile(r"[^.!?]+[.!?]")
-USER_GUIDES = ("install.md", "daily.md", "troubleshooting.md", "quick-start.md")
+USER_GUIDES = (
+    "install.md",
+    "daily.md",
+    "troubleshooting.md",
+    "quick-start.md",
+    "production-setup.md",
+    "kid-tablet.md",
+)
+REQUIRED_GUIDE_MARKERS = {
+    "production-setup.md": (
+        "section:hardware",
+        "section:network",
+        "section:specs",
+        "section:computer",
+        "section:docker",
+        "section:certificates",
+        "section:renew",
+        "section:lost",
+        "section:tablets",
+        "section:first-run",
+        "section:backup",
+        "section:restore",
+        "section:update",
+        "section:rollback",
+        "section:watch",
+        "section:golive",
+        "section:kid",
+    ),
+    "kid-tablet.md": (
+        "section:specs",
+        "section:case",
+        "section:protector",
+        "section:kiosk",
+        "section:block",
+        "section:boot",
+        "section:charge",
+        "section:dropped",
+        "section:replace",
+        "section:limits",
+    ),
+}
 MAX_SENTENCE_WORDS = 22
 MAX_AVERAGE_WORDS = 16
 MAX_ENGLISH_GRADE = 8.5
@@ -242,6 +282,11 @@ def user_guide_problems() -> list[str]:
                 problems.append(f"user guide {name}: extra in French: {', '.join(extra)}")
         if not english_markers:
             problems.append(f"user guide {name}: no section markers")
+        required = REQUIRED_GUIDE_MARKERS.get(name, ())
+        english_ids = [f"{kind}:{marker}" for kind, marker in english_markers]
+        for required_id in required:
+            if required_id not in english_ids:
+                problems.append(f"user guide {name}: missing required marker {required_id}")
         problems.extend(reading_problems(f"user guide en/{name}", english, english=True))
         problems.extend(reading_problems(f"user guide fr/{name}", french, english=False))
         for issue in french_punctuation_issues(prose_for_reading(french)):

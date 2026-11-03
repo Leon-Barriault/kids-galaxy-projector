@@ -26,10 +26,18 @@ pi-server/certs/*.key
 pi-server/certs/*.p12
 pi-server/certs/*.srl
 pi-server/certs/*.csr
+pi-server/certs/*.crl
+pi-server/certs/p12-password
+pi-server/certs/ca-db/
+pi-server/certs/tablets/
 android/app/src/main/assets/*.p12
 android/app/src/main/assets/*.crt
 android/manager/src/main/assets/*.p12
 android/manager/src/main/assets/*.crt
+android/release.keystore
+android/keystore.properties
+android/*.jks
+*.keystore
 
 # Python
 __pycache__/

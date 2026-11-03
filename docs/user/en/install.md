@@ -477,3 +477,17 @@ About 10 minutes.
 
 The next page is the daily guide.
 Use it after this setup works once.
+
+<!-- section: next -->
+
+## When the room must last
+
+<!-- step: next-production -->
+
+1. Read the production page after the first planet works.
+   It covers safety copies, updates, and the kid tablet.
+
+<!-- step: next-kid -->
+
+2. Read the kid tablet page before children use the tablet.
+   It covers the case, lock mode, and charging.
