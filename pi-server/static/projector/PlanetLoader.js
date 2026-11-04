@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+import {
+  normalizePlanetRendering,
+  PLANET_RENDERING_CLASSIC,
+} from './FrontViewProjection.js';
 import { LiveUpdates } from './LiveUpdates.js';
 import { PlanetEntity } from './PlanetEntity.js';
 
@@ -31,6 +35,31 @@ export class PlanetLoader {
     this.pollTimer = null;
     this.pollInFlight = false;
     this.liveUpdates = null;
+    // How kid drawings are wrapped onto planets; chosen on the manager tablet.
+    this.planetRendering = PLANET_RENDERING_CLASSIC;
+  }
+
+  /**
+   * Switch every planet on the wall to a different rendering.
+   *
+   * The surface stages build a planet once, as its texture arrives, and several
+   * of them mutate the entity as they go - so a planet is rebuilt from its
+   * stored drawing rather than re-wrapped in place. Orbits are derived from the
+   * planet id and arrival order is preserved, so the sky does not reshuffle,
+   * and nothing is celebrated: these are not new arrivals.
+   */
+  setPlanetRendering(value) {
+    const next = normalizePlanetRendering(value);
+    if (next === this.planetRendering) return false;
+    this.planetRendering = next;
+    this.rebuildAll();
+    return true;
+  }
+
+  rebuildAll() {
+    const entries = Array.from(this.kidPlanets.values()).sort((a, b) => a.order - b.order);
+    entries.forEach((entry) => this.remove(entry.id));
+    entries.forEach((entry) => this.add(entry.sourcePayload, false));
   }
 
   textureUrlOf(payload) {
@@ -123,6 +152,8 @@ export class PlanetLoader {
         ? payload.body_color.toLowerCase()
         : null;
     entity.drawingManifest = null;
+    entity.planetRendering = this.planetRendering;
+    entity.sourcePayload = payload;
     this.kidPlanets.set(payload.id, entity);
 
     // The drawing manifest is the authoritative rendering contract. Do not

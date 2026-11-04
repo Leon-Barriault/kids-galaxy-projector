@@ -143,6 +143,11 @@ const planetLoader = new PlanetLoader({
   behaviorController,
   snapshotPublisher,
 });
+// The manager tablet chooses how drawings are wrapped onto planets (classic or
+// front-view). A change rebuilds the wall's planets from their stored drawings.
+behaviorController.onPlanetRenderingChange((rendering) =>
+  planetLoader.setPlanetRendering(rendering),
+);
 
 const timer = new THREE.Timer();
 

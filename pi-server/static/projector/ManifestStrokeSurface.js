@@ -10,6 +10,14 @@ import {
   buildCreaseAoCanvas,
   edgeSeedDistance,
 } from './BeveledPatchRelief.js';
+import {
+  canvasPointToDisc,
+  discGeometryOf,
+  normalizePlanetRendering,
+  PLANET_RENDERING_FRONT_VIEW,
+  sampleDiscOntoSphere,
+  strokeWidthInDiscRadii,
+} from './FrontViewProjection.js';
 
 const TEXTURE_WIDTH = 512;
 const TEXTURE_HEIGHT = 256;
@@ -59,6 +67,16 @@ const COVERAGE_WEIGHT = 0.2;
 const POLE_WEIGHT = 0.1;
 const JITTER_WEIGHT = 0.1;
 const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
+// Front-view rasterising happens in the disc the child painted in before it is
+// looked up onto the sphere. The front hemisphere of the 512x256 body gets 256
+// texels across, so twice that in the disc leaves nearest-neighbour sampling
+// with nothing to alias.
+const DISC_RASTER_SIZE = 512;
+// The tablet clips strokes at the guide circle, and so does this - a few
+// percent wide. The rim is where the front and its mirror image meet, and a
+// clip exactly on it leaves a half-covered texel ring there that reads as a
+// faint seam wherever a stroke crosses the limb.
+const DISC_CLIP_OVERSCAN = 1.03;
 
 function rgbOf(value, fallback = '#ffffff') {
   const colour = typeof value === 'string' && RGB_HEX.test(value) ? value : fallback;
@@ -557,6 +575,26 @@ function buildManifestMaps(manifest) {
   // raises everything else rather than by a later correction.
   const gaps = fillInternalBandGaps(owner, colour, coverage, projections);
 
+  return finishManifestMaps({
+    owner,
+    colour,
+    coverage,
+    profiles,
+    gaps,
+    renderedStrokeCount,
+    poleOwners,
+  });
+}
+
+/**
+ * Relief, albedo, occlusion and roughness from finished ownership maps.
+ *
+ * Shared by both projections so the painted-toy finish cannot drift between
+ * them: whichever way the drawing was laid onto the sphere, the paint is
+ * raised, creased and coated by exactly the same code.
+ */
+function finishManifestMaps({ owner, colour, coverage, profiles, gaps, renderedStrokeCount, poleOwners }) {
+  const texels = TEXTURE_WIDTH * TEXTURE_HEIGHT;
   const { height, distance } = roundedRelief(owner, profiles, coverage);
   const colourCanvas = document.createElement('canvas');
   colourCanvas.width = TEXTURE_WIDTH;
@@ -608,6 +646,132 @@ function buildManifestMaps(manifest) {
   };
 }
 
+/**
+ * Rasterise the manifest strokes in the disc the child actually saw.
+ *
+ * Same ownership rule as the classic pass - the owning stroke flips at half
+ * coverage and partial texels blend - only in disc space and without any of
+ * the ribbon, pole or gap interpretation, because in this projection nothing
+ * needs interpreting: a mark stays where it was drawn.
+ */
+function rasteriseDisc(manifest, projections) {
+  const size = DISC_RASTER_SIZE;
+  const texels = size * size;
+  const body = rgbOf(manifest.background_color);
+  const owner = new Int32Array(texels).fill(-1);
+  const colour = new Uint8ClampedArray(texels * 3);
+  const coverage = new Float32Array(texels);
+  for (let index = 0; index < texels; index += 1) {
+    colour[index * 3] = body[0];
+    colour[index * 3 + 1] = body[1];
+    colour[index * 3 + 2] = body[2];
+  }
+
+  const mask = document.createElement('canvas');
+  mask.width = size;
+  mask.height = size;
+  const context = mask.getContext('2d', { alpha: true, willReadFrequently: true });
+  if (!context) return null;
+  const geometry = discGeometryOf(manifest.canvas);
+  const half = size / 2;
+  const toPixel = (point) => {
+    const [dx, dy] = canvasPointToDisc(point, geometry);
+    return [half + dx * half, half + dy * half];
+  };
+
+  let strokeCount = 0;
+  projections.forEach((projection) => {
+    const points = normalizedPoints(manifest.strokes[projection.strokeIndex]).map(toPixel);
+    if (points.length < 2) return;
+    const lineWidth = Math.max(2, strokeWidthInDiscRadii(projection.widthNormalized) * half);
+
+    // Only the stroke's own footprint is read back. A full-disc read per stroke
+    // is a quarter of a million texels each, almost all of them empty.
+    const pad = lineWidth / 2 + 2;
+    const xs = points.map(([x]) => x);
+    const ys = points.map(([, y]) => y);
+    const left = Math.max(0, Math.floor(Math.min(...xs) - pad));
+    const top = Math.max(0, Math.floor(Math.min(...ys) - pad));
+    const right = Math.min(size, Math.ceil(Math.max(...xs) + pad));
+    const bottom = Math.min(size, Math.ceil(Math.max(...ys) + pad));
+    if (right <= left || bottom <= top) return;
+
+    context.clearRect(0, 0, size, size);
+    context.save();
+    context.beginPath();
+    context.arc(half, half, half * DISC_CLIP_OVERSCAN, 0, Math.PI * 2);
+    context.clip();
+    context.strokeStyle = '#ffffff';
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.lineWidth = lineWidth;
+    context.beginPath();
+    points.forEach(([x, y], index) => {
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.restore();
+
+    const boxWidth = right - left;
+    const alpha = context.getImageData(left, top, boxWidth, bottom - top).data;
+    for (let row = top; row < bottom; row += 1) {
+      for (let column = left; column < right; column += 1) {
+        const covered = alpha[((row - top) * boxWidth + (column - left)) * 4 + 3] / 255;
+        if (covered <= 0.01) continue;
+        const index = row * size + column;
+        if (covered >= 0.5) {
+          owner[index] = projection.strokeIndex;
+          colour[index * 3] = projection.colour[0];
+          colour[index * 3 + 1] = projection.colour[1];
+          colour[index * 3 + 2] = projection.colour[2];
+        } else {
+          const keep = 1 - covered;
+          colour[index * 3] = colour[index * 3] * keep + projection.colour[0] * covered;
+          colour[index * 3 + 1] = colour[index * 3 + 1] * keep + projection.colour[1] * covered;
+          colour[index * 3 + 2] = colour[index * 3 + 2] * keep + projection.colour[2] * covered;
+        }
+        if (covered > coverage[index]) coverage[index] = covered;
+      }
+    }
+    strokeCount += 1;
+  });
+
+  return { size, owner, colour, coverage, strokeCount };
+}
+
+/**
+ * Front-view maps: the disc is the face of the planet, its mirror the back.
+ *
+ * No ribbons, no pole caps, no gap bridging. A stripe that crosses the disc
+ * still becomes a ring, because that is what the mirrored lookup does to it;
+ * a spot, a face or a continent stays a spot, a face or a continent.
+ */
+export function buildFrontViewMaps(manifest) {
+  const projections = manifest.strokes
+    .map((stroke, strokeIndex) => strokeProjection(stroke, strokeIndex))
+    .filter(Boolean)
+    // Stroke metadata (order, width, coverage) still drives relief height. The
+    // pole term does not apply here - nothing is claiming a cap.
+    .map((projection) => ({ ...projection, horizontalPoleCandidate: false }));
+  const disc = rasteriseDisc(manifest, projections);
+  if (!disc) return null;
+  const { owner, colour, coverage } = sampleDiscOntoSphere(disc, {
+    width: TEXTURE_WIDTH,
+    height: TEXTURE_HEIGHT,
+  });
+  const poleOwners = { north: -1, south: -1 };
+  return finishManifestMaps({
+    owner,
+    colour,
+    coverage,
+    profiles: strokeProfiles(projections, poleOwners),
+    gaps: { texels: 0, widestRun: 0 },
+    renderedStrokeCount: disc.strokeCount,
+    poleOwners,
+  });
+}
+
 function canvasTexture(canvas, { srgb = false } = {}) {
   if (!canvas) return null;
   const texture = new THREE.CanvasTexture(canvas);
@@ -621,7 +785,13 @@ function canvasTexture(canvas, { srgb = false } = {}) {
 
 function applyManifestSurface(entity) {
   if (typeof document === 'undefined' || !validManifest(entity?.drawingManifest)) return false;
-  const built = buildManifestMaps(entity.drawingManifest);
+  // Chosen on the manager tablet and stamped on the entity by PlanetLoader when
+  // it is created; a change rebuilds the planet rather than re-wrapping it.
+  const rendering = normalizePlanetRendering(entity.planetRendering);
+  const frontView = rendering === PLANET_RENDERING_FRONT_VIEW;
+  const built = frontView
+    ? buildFrontViewMaps(entity.drawingManifest)
+    : buildManifestMaps(entity.drawingManifest);
   if (!built) return false;
   const previous = entity.mesh.material;
   const material = new THREE.MeshPhysicalMaterial({
@@ -683,7 +853,11 @@ function applyManifestSurface(entity) {
   // Keep the stable contract name used by the shared projector smoke suite. The
   // implementation is now periodic/wavy rather than row-filled, but it is still
   // the same manifest-strokes-on-body rendering stage.
-  material.userData.kidsGalaxyDesignProjectionMode = 'manifest-strokes-layered-on-body';
+  material.userData.kidsGalaxyDesignProjectionMode = frontView
+    ? 'manifest-front-view-mirrored'
+    : 'manifest-strokes-layered-on-body';
+  // Read by PolarMagnetSweep3D, which leaves front-view planets untwisted.
+  material.userData.kidsGalaxyPlanetRendering = rendering;
 
   entity.mesh.material = material;
   entity.mesh.userData.kidsGalaxyDrawingManifest = true;
