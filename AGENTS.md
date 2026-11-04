@@ -157,8 +157,9 @@ make check-projector
 Projector CI also installs Chromium/Playwright and runs the core
 `check_projector.py` contract as a required gate, followed by the focused
 sculpted-artwork, artwork-coverage, ring-colour, and explicit-body-colour checks.
-The syntax job parses every active projector ES module and verifies the runtime
-stays offline/self-hosted.
+The syntax job parses every active projector ES module, verifies the runtime
+stays offline/self-hosted, and runs the rendering-maths checks
+(`make check-render-math`).
 
 ---
 

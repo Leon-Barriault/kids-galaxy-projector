@@ -21,6 +21,8 @@ jobs:
           done
       - name: Wall reconnects after a silent stream
         run: node scripts/js/check_live_updates.mjs
+      - name: Rendering maths (relief, environment, tone curve)
+        run: bash scripts/js/run-checks.sh
       - name: Keep projector offline
         run: |
           if grep -rnE "https?://" \
