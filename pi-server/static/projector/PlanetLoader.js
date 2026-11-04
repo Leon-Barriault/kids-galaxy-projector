@@ -6,6 +6,7 @@ import {
 } from './FrontViewProjection.js';
 import { LiveUpdates } from './LiveUpdates.js';
 import { PlanetEntity } from './PlanetEntity.js';
+import { BUILD_HEADER } from './ProjectorBuildWatcher.js';
 
 const DEFAULT_POLL_INTERVAL_MS = 2500;
 const RGB_HEX = /^#[0-9a-fA-F]{6}$/;
@@ -19,6 +20,7 @@ export class PlanetLoader {
     gallerySize,
     behaviorController = null,
     snapshotPublisher = null,
+    buildWatcher = null,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   }) {
     this.scene = scene;
@@ -27,6 +29,7 @@ export class PlanetLoader {
     this.gallerySize = gallerySize;
     this.behaviorController = behaviorController;
     this.snapshotPublisher = snapshotPublisher;
+    this.buildWatcher = buildWatcher;
     this.pollIntervalMs = pollIntervalMs;
     this.kidPlanets = new Map();
     this.textureLoader = new THREE.TextureLoader();
@@ -194,6 +197,9 @@ export class PlanetLoader {
       signal: abortAfter(4000),
     });
     if (!response.ok) return;
+    // Every reconnect re-reads the gallery, which is exactly when an update has
+    // just happened. A different build means this page is running old code.
+    if (this.buildWatcher?.observe(response.headers?.get?.(BUILD_HEADER))) return;
     const body = await response.json();
     const list = Array.isArray(body) ? body : body.planets || [];
 

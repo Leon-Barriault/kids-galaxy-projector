@@ -31,6 +31,11 @@ import { PlanetLoader } from './projector/PlanetLoader.js';
 import { installPlanetRenderPipeline } from './projector/PlanetRenderPipeline.js';
 import { installPolarMagnetSweep3D } from './projector/PolarMagnetSweep3D.js';
 import { ProjectorBehaviorController } from './projector/ProjectorBehaviorController.js';
+import {
+  pageBuildOf,
+  ProjectorBuildWatcher,
+  sessionStorageOrNull,
+} from './projector/ProjectorBuildWatcher.js';
 import { ProjectorSnapshotPublisher } from './projector/ProjectorSnapshotPublisher.js';
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
@@ -135,6 +140,13 @@ const behaviorController = new ProjectorBehaviorController({
   environment,
 });
 const snapshotPublisher = new ProjectorSnapshotPublisher({ galaxyScene });
+// Reloads the wall once when the server starts serving a newer projector, so an
+// update reaches the screen without anyone touching the kiosk.
+const buildWatcher = new ProjectorBuildWatcher({
+  pageBuild: pageBuildOf(document),
+  reload: () => window.location.reload(),
+  storage: sessionStorageOrNull(),
+});
 const planetLoader = new PlanetLoader({
   scene: galaxyScene,
   animator,
@@ -142,6 +154,7 @@ const planetLoader = new PlanetLoader({
   gallerySize: GALLERY_SIZE,
   behaviorController,
   snapshotPublisher,
+  buildWatcher,
 });
 // The manager tablet chooses how drawings are wrapped onto planets (classic or
 // front-view). A change rebuilds the wall's planets from their stored drawings.
@@ -179,6 +192,7 @@ window.kidsGalaxy = {
     celebration,
     behaviorController,
     snapshotPublisher,
+    buildWatcher,
   },
 };
 

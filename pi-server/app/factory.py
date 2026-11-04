@@ -5,9 +5,9 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import AuthorizationPolicy
+from app.api.projector_assets import BuildFingerprint, ProjectorStaticFiles
 from app.api.routes import build_router
 from app.api.sse import install_graceful_stream_shutdown
 from app.application.behavior_use_cases import (
@@ -137,10 +137,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Revalidated on every load and reachable under a per-build prefix, so the
+    # wall cannot keep running a projector the server no longer serves.
+    build_fingerprint = BuildFingerprint(settings.static_dir)
     if settings.static_dir.is_dir():
         app.mount(
             "/static",
-            StaticFiles(directory=settings.static_dir),
+            ProjectorStaticFiles(directory=settings.static_dir),
             name="static",
         )
     else:
@@ -164,6 +167,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings_galaxy=galaxy,
             authorizer=authorizer,
             settings=settings,
+            build_fingerprint=build_fingerprint,
         )
     )
 

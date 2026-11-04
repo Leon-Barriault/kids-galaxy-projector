@@ -228,6 +228,15 @@ These routes require the manager role in secure deployments, by owner decision.
   rewrite silently dropped OrbitControls, the star field, fog, orbit rings, and
   sparkle effects.
 - Projector runtime assets must never depend on public-network URLs.
+- The wall must never run stale projector code. Static files are served
+  `Cache-Control: no-cache`, the page loads them from `/static/r/<build>/`
+  (a fingerprint of the static files, stamped into a `kids-galaxy-build` meta
+  tag), and `/api/planets` returns `X-Kids-Galaxy-Build` so an open wall
+  reloads itself once after an update. Keep asset references in `index.html`
+  quoted and absolute (`"/static/..."`) so the page rewrite can version them.
+- Behavior can arrive from an SSE frame and a REST refresh at the same time.
+  `ProjectorBehaviorController` tickets each arrival when it is requested and
+  drops results older than what is on screen; do not bypass that.
 - Visual comparison scripts may provide different lighting/reference profiles,
   but they must share contracts through explicit parameters rather than
   monkey-patching imported module globals.

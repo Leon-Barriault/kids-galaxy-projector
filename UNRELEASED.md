@@ -7,6 +7,17 @@ is cut, then leave a fresh `Unreleased` heading behind.
 
 ## Unreleased
 
+### Fixed
+
+- The wall could keep showing the old planet rendering after **Planet look**
+  was switched to **Like the drawing**. Two causes, both fixed. The kiosk
+  browser reused cached projector code after an update, because static files
+  were served without cache headers; they are now revalidated on every load and
+  versioned per build, and an open wall reloads itself once when the server
+  starts serving a newer projector. Separately, a behavior refresh that was
+  already in flight when the switch arrived could land afterwards and put
+  classic back; stale refreshes are now dropped.
+
 ### Added
 
 - **Planet look** on the manager tablet's Galaxy tab. **Classic** keeps the
