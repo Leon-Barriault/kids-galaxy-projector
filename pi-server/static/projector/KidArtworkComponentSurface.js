@@ -9,7 +9,6 @@ const MAP_HEIGHT = 256;
 const MAX_ACCENT_COLORS = 3;
 const MAX_COMPONENTS = 7;
 const MIN_COMPONENT_CELLS = 18;
-const BODY_RADIUS = 1.05;
 const EDGE_RADIUS = 1.064;
 const TOP_RADIUS = 1.082;
 
