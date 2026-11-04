@@ -120,6 +120,7 @@ Run these before considering a change complete:
 
 ```bash
 cd pi-server && ruff check . --config ruff.toml
+cd pi-server && ruff format --check . --config ruff.toml
 hadolint --config .hadolint.yaml pi-server/Dockerfile
 shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
  scripts/dev-up.sh scripts/setup_room.sh scripts/stop_room.sh \

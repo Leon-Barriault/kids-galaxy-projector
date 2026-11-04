@@ -37,6 +37,10 @@ jobs:
         working-directory: pi-server
         run: ruff check . --config ruff.toml
 
+      - name: Check Python formatting (pi-server)
+        working-directory: pi-server
+        run: ruff format --check . --config ruff.toml
+
       - name: Install hadolint
         run: |
           curl -fsSL --retry 4 --retry-all-errors --retry-delay 2 \

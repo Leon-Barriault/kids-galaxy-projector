@@ -142,9 +142,7 @@ class SeasonalThemeResolver:
         if (day.month == 12 and day.day == 31) or (day.month == 1 and day.day == 1):
             return GalaxyTheme.NEW_YEAR
 
-        if (day.month == 12 and 20 <= day.day <= 30) or (
-            day.month == 1 and 2 <= day.day <= 6
-        ):
+        if (day.month == 12 and 20 <= day.day <= 30) or (day.month == 1 and 2 <= day.day <= 6):
             return GalaxyTheme.CHRISTMAS
 
         if day.month == 11 and day.day == 11:
@@ -157,9 +155,7 @@ class SeasonalThemeResolver:
         if thanksgiving - timedelta(days=2) <= day <= thanksgiving:
             return GalaxyTheme.THANKSGIVING
 
-        if (day.month == 6 and day.day == 30) or (
-            day.month == 7 and day.day <= 2
-        ):
+        if (day.month == 6 and day.day == 30) or (day.month == 7 and day.day <= 2):
             return GalaxyTheme.CANADA_DAY
 
         if region == CanadianRegion.QUEBEC and day.month == 6 and day.day in (23, 24):
@@ -219,11 +215,7 @@ class SeasonalThemeResolver:
             if settings.mode == BehaviorMode.AUTO
             else settings.manual_theme
         )
-        theme = (
-            candidate
-            if candidate in settings.enabled_themes
-            else GalaxyTheme.DEFAULT
-        )
+        theme = candidate if candidate in settings.enabled_themes else GalaxyTheme.DEFAULT
         return GalaxyBehavior(
             theme=theme,
             planet_speed=settings.planet_speed,

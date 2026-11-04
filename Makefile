@@ -41,6 +41,7 @@ lint: lint-python lint-docker lint-shell lint-kotlin
 
 lint-python:
 	cd pi-server && ruff check . --config ruff.toml
+	cd pi-server && ruff format --check . --config ruff.toml
 
 lint-docker:
 	hadolint --config .hadolint.yaml pi-server/Dockerfile

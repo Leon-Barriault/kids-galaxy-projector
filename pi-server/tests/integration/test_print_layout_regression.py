@@ -69,9 +69,7 @@ def test_print_keeps_child_drawing_inside_tablet_circle(client):
     # Most importantly, the child's authored red stroke is still present inside
     # that circle. PR #19 accidentally replaced all artwork with a blank guide.
     red_pixels = sum(
-        1
-        for red, green, blue in drawing.getdata()
-        if red > 190 and green < 110 and blue < 110
+        1 for red, green, blue in drawing.getdata() if red > 190 and green < 110 and blue < 110
     )
     assert red_pixels > 1_000
 

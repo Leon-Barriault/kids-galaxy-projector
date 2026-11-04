@@ -35,9 +35,7 @@ def sanitize_filename(name: str | None) -> str:
     if not name:
         return FILENAME_FALLBACK
 
-    safe = "".join(
-        c for c in name if c.isalnum() or c in _ALLOWED_FILENAME_EXTRAS
-    ).strip()
+    safe = "".join(c for c in name if c.isalnum() or c in _ALLOWED_FILENAME_EXTRAS).strip()
     return (safe[:MAX_FILENAME_NAME_LENGTH] or FILENAME_FALLBACK).strip() or FILENAME_FALLBACK
 
 

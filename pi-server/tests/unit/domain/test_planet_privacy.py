@@ -85,8 +85,7 @@ def test_clear_covers_more_than_the_thirty_planets_kept_on_the_pc(tmp_path: Path
     assert clear_stored_planet_names(uploads) == 31
     assert len(list(uploads.glob("*.png"))) == 31
     stored = " ".join(
-        path.name + path.read_text(encoding="utf-8", errors="ignore")
-        for path in uploads.iterdir()
+        path.name + path.read_text(encoding="utf-8", errors="ignore") for path in uploads.iterdir()
     )
     assert "Child" not in stored
 

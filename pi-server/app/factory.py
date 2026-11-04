@@ -49,17 +49,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repository = FileSystemPlanetRepository(settings.upload_dir)
     behavior_repository = JsonBehaviorRepository(settings.state_dir)
     publisher = InMemoryEventPublisher()
-    rate_limiter = InMemoryRateLimiter(
-        cooldown_seconds=settings.rate_limit_seconds
-    )
+    rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
     image_processor = PillowImageProcessor()
     # Projector snapshots are derived render-cache artifacts. Keep the cache
     # generation in the directory name so a framing/rendering fix cannot keep
     # serving an older clipped 700x700 capture after deployment. Existing planets
     # are republished when the projector page reloads and rebuilds its gallery.
-    export_renderer = WebglPlanetExportRenderer(
-        settings.state_dir / "projector-snapshots-v2"
-    )
+    export_renderer = WebglPlanetExportRenderer(settings.state_dir / "projector-snapshots-v2")
     authorizer = AuthorizationPolicy(settings)
     clock = SystemClock()
     seasonal_resolver = SeasonalThemeResolver()
@@ -84,13 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         repository,
         max_limit=settings.max_stored_planets,
     )
-    delete_planet = DeletePlanetUseCase(
-        repository=repository, publisher=publisher
-    )
+    delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
     clear_planet_names = ClearPlanetNamesUseCase(repository)
-    clear_planets = ClearPlanetsUseCase(
-        repository=repository, publisher=publisher
-    )
+    clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
     get_behavior = GetGalaxyBehaviorUseCase(
         behavior_repository,
         clock,

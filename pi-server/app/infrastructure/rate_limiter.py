@@ -74,7 +74,5 @@ class InMemoryRateLimiter(RateLimiter):
 
         # Still oversized (many genuinely active clients): keep the newest.
         if len(self._last_upload) > self._max_entries:
-            newest = sorted(
-                self._last_upload.items(), key=lambda kv: kv[1], reverse=True
-            )
+            newest = sorted(self._last_upload.items(), key=lambda kv: kv[1], reverse=True)
             self._last_upload = dict(newest[: self._max_entries])

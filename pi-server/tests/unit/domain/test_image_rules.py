@@ -39,9 +39,7 @@ class TestDetectImageKind:
 
 
 class TestEnsureContentTypeAllowed:
-    @pytest.mark.parametrize(
-        "content_type", ["image/png", "image/jpeg", "image/jpg"]
-    )
+    @pytest.mark.parametrize("content_type", ["image/png", "image/jpeg", "image/jpg"])
     def test_allows_supported_types(self, content_type):
         ensure_content_type_allowed(content_type)  # must not raise
 
