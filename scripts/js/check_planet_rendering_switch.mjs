@@ -37,6 +37,31 @@ const late = [];
 controller.onPlanetRenderingChange((rendering) => late.push(rendering));
 check('a listener wired late is told the current value', late.join() === 'front-view');
 
+console.log('\n1b. a refresh already in flight cannot undo a newer SSE frame');
+{
+  let release;
+  globalThis.fetch = () =>
+    new Promise((resolve) => {
+      release = () =>
+        resolve({ ok: true, json: async () => ({ effective: { theme: 'default', planet_rendering: 'classic' } }) });
+    });
+  const raced = new ProjectorBehaviorController({ scene, celebration });
+  const changes = [];
+  raced.onPlanetRenderingChange((rendering) => changes.push(rendering));
+  raced.apply({ theme: 'default', planet_rendering: 'classic' });
+  const inFlight = raced.refresh();
+  raced.handleEvent(JSON.stringify({ theme: 'default', planet_rendering: 'front-view' }));
+  release();
+  await inFlight;
+  check('the stale refresh is dropped', raced.planetRendering === 'front-view', changes.join(' -> '));
+  check('the wall rebuilt once, not back and forth', changes.join() === 'classic,front-view', changes.join(' -> '));
+  const later = raced.refresh();
+  release();
+  await later;
+  check('a refresh requested after the frame still applies', raced.planetRendering === 'classic');
+  globalThis.fetch = () => new Promise(() => {});
+}
+
 console.log('\n2. the loader rebuilds every planet in arrival order');
 let celebrations = 0;
 const loader = new PlanetLoader({

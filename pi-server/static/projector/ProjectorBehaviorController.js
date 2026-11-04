@@ -9,6 +9,14 @@ export class ProjectorBehaviorController {
     this.current = null;
     this.planetRendering = null;
     this.planetRenderingListener = null;
+    // Behavior reaches the wall two ways: SSE frames, pushed the moment the
+    // manager changes something, and REST refreshes on boot, reconnect and
+    // poll. A refresh that was already in flight when the manager switched can
+    // land after the SSE frame and put the old value back - and with a healthy
+    // stream nothing corrects it again. Every arrival takes a ticket when it is
+    // *requested*; a result older than the one on screen is dropped.
+    this.ticket = 0;
+    this.appliedTicket = 0;
   }
 
   /**
@@ -20,8 +28,10 @@ export class ProjectorBehaviorController {
     if (this.planetRendering) listener(this.planetRendering);
   }
 
-  apply(behavior) {
-    if (!behavior || typeof behavior !== 'object') return;
+  apply(behavior, ticket = (this.ticket += 1)) {
+    if (!behavior || typeof behavior !== 'object') return false;
+    if (ticket < this.appliedTicket) return false;
+    this.appliedTicket = ticket;
     this.current = behavior;
     this.scene.applyBehavior(behavior);
     this.celebration.setTheme(behavior.theme);
@@ -35,17 +45,20 @@ export class ProjectorBehaviorController {
       this.planetRendering = rendering;
       this.planetRenderingListener?.(rendering);
     }
+    return true;
   }
 
   handleEvent(raw) {
+    const ticket = (this.ticket += 1);
     try {
-      this.apply(JSON.parse(raw));
+      this.apply(JSON.parse(raw), ticket);
     } catch (_error) {
       // Ignore malformed live frames; the next refresh/SSE event can recover.
     }
   }
 
   async refresh() {
+    const ticket = (this.ticket += 1);
     const response = await fetch('/api/behavior', {
       cache: 'no-store',
       signal:
@@ -55,6 +68,6 @@ export class ProjectorBehaviorController {
     });
     if (!response.ok) return;
     const payload = await response.json();
-    this.apply(payload?.effective);
+    this.apply(payload?.effective, ticket);
   }
 }

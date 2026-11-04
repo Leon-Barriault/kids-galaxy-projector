@@ -29,6 +29,12 @@ from starlette.concurrency import run_in_threadpool
 from app.api.auth import AuthorizationPolicy, ClientRole
 from app.api.behavior_mapper import behavior_settings_to_payload, behavior_to_payload
 from app.api.behavior_models import BehaviorUpdateRequest
+from app.api.projector_assets import (
+    BUILD_HEADER,
+    NO_CACHE,
+    BuildFingerprint,
+    render_projector_page,
+)
 from app.api.sse import build_planet_event_response
 from app.application.behavior_use_cases import (
     GetGalaxyBehaviorUseCase,
@@ -131,6 +137,7 @@ def build_router(
     settings_galaxy: Galaxy,
     authorizer: AuthorizationPolicy,
     settings,
+    build_fingerprint: BuildFingerprint | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -161,7 +168,12 @@ def build_router(
         if not index_path.exists():
             message = escape(_localized(request, "galaxy_page_missing"))
             return HTMLResponse(f"<h1>{message}</h1>", status_code=404)
-        return FileResponse(index_path)
+        if build_fingerprint is None:
+            return FileResponse(index_path, headers={"Cache-Control": NO_CACHE})
+        page = render_projector_page(
+            index_path.read_text(encoding="utf-8"), build_fingerprint.current()
+        )
+        return HTMLResponse(page, headers={"Cache-Control": NO_CACHE})
 
     @router.get("/health")
     async def health():
@@ -189,7 +201,11 @@ def build_router(
         return _behavior_state_payload(update_behavior.execute(request.to_domain()))
 
     @router.get("/api/planets", dependencies=[Depends(projector_or_manager)])
-    async def planet_gallery(limit: int | None = Query(default=None, ge=1)):
+    async def planet_gallery(response: Response, limit: int | None = Query(default=None, ge=1)):
+        # The wall re-reads the gallery on every reconnect, which is exactly when
+        # an update has just happened. See ProjectorBuildWatcher.js.
+        if build_fingerprint is not None:
+            response.headers[BUILD_HEADER] = build_fingerprint.current()
         return list_recent_planets.execute(limit=limit)
 
     @router.put(
