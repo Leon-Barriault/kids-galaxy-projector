@@ -35,20 +35,40 @@ echo '{ "type": "module" }' > "${scratch}/package.json"
 
 cp "${projector}/BeveledPatchRelief.js" "${projector}/StudioEnvironment.js" \
    "${projector}/SoftToyPlanetSurface.js" "${projector}/ManifestStrokeSurface.js" \
+   "${projector}/FrontViewProjection.js" "${projector}/PlanetLoader.js" \
+   "${projector}/LiveUpdates.js" "${projector}/ProjectorBehaviorController.js" \
    "${projector}/PlanetEntity.js" "${scratch}/"
 cp "${repo_root}/scripts/js/"*.mjs "${scratch}/"
 
 # SoftToyPlanetSurface pulls in PlanetEntity purely to monkeypatch its prototype
 # at install time, and PlanetEntity drags most of the projector behind it. The
 # segmentation functions under test touch none of that, so the import is stubbed
-# rather than the whole scene graph copied in.
+# rather than the whole scene graph copied in. The stub keeps just enough of the
+# lifecycle (id, order, dispose) for the planet-rendering switch check to drive
+# PlanetLoader without a scene.
 cat > "${scratch}/PlanetEntity.js" <<'JS'
-export class PlanetEntity {}
+export class PlanetEntity {
+  constructor({ payload, order } = {}) {
+    this.id = payload?.id;
+    this.order = order;
+    this.disposed = false;
+    this.mesh = { userData: {} };
+  }
+
+  applyTexture() {}
+
+  update() {}
+
+  dispose() {
+    this.disposed = true;
+  }
+}
 JS
 
 status=0
 for check in check_relief_geometry.mjs check_studio_environment.mjs check_region_flatness.mjs \
-             check_internal_gap_fill.mjs derive_tone_exposure.mjs; do
+             check_internal_gap_fill.mjs check_front_view_projection.mjs \
+             check_planet_rendering_switch.mjs derive_tone_exposure.mjs; do
   echo "=============================================================="
   echo "  ${check}"
   echo "=============================================================="

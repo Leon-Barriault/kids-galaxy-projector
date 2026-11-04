@@ -47,6 +47,12 @@
     <string name="tab_galaxy">Galaxie</string>
     <string name="galaxy_controls_title">Contrôles de la galaxie</string>
     <string name="galaxy_controls_subtitle">Environnement en direct pour %1$s</string>
+    <string name="planet_look">Apparence des planètes</string>
+    <string name="planet_look_hint">Choisissez comment les dessins des enfants sont posés sur leurs planètes. Les planètes déjà dans la galaxie sont redessinées tout de suite.</string>
+    <string name="planet_look_classic">Classique</string>
+    <string name="planet_look_classic_hint">Les traits s’étirent autour de la planète et tourbillonnent d’un pôle à l’autre.</string>
+    <string name="planet_look_front_view">Comme le dessin</string>
+    <string name="planet_look_front_view_hint">L’avant de la planète montre le dessin tel qu’il a été peint. L’arrière en montre le reflet.</string>
     <string name="space_activity">Activité spatiale</string>
     <string name="space_activity_hint">Contrôle les objets permanents et intermittents qui traversent la galaxie projetée.</string>
     <string name="asteroid_belt">Ceinture d’astéroïdes</string>

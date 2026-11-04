@@ -107,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         onManualThemeChange = managerViewModel::setManualTheme,
                         onThemeEnabledChange = managerViewModel::setThemeEnabled,
                         onAmbientEffectsChange = managerViewModel::setAmbientEffects,
+                        onPlanetRenderingChange = managerViewModel::setPlanetRendering,
                     )
                 }
 

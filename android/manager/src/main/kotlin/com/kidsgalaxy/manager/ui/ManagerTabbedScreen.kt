@@ -44,6 +44,7 @@ fun ManagerTabbedScreen(
     onManualThemeChange: (String) -> Unit,
     onThemeEnabledChange: (String, Boolean) -> Unit,
     onAmbientEffectsChange: (Boolean) -> Unit,
+    onPlanetRenderingChange: (String) -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -98,6 +99,7 @@ fun ManagerTabbedScreen(
                 onManualThemeChange = onManualThemeChange,
                 onThemeEnabledChange = onThemeEnabledChange,
                 onAmbientEffectsChange = onAmbientEffectsChange,
+                onPlanetRenderingChange = onPlanetRenderingChange,
             )
         }
     }

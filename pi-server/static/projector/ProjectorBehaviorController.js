@@ -1,3 +1,5 @@
+import { normalizePlanetRendering } from './FrontViewProjection.js';
+
 /** Coordinates persisted galaxy behavior with the live projector scene. */
 export class ProjectorBehaviorController {
   constructor({ scene, celebration, environment = null }) {
@@ -5,6 +7,17 @@ export class ProjectorBehaviorController {
     this.celebration = celebration;
     this.environment = environment;
     this.current = null;
+    this.planetRendering = null;
+    this.planetRenderingListener = null;
+  }
+
+  /**
+   * Who rebuilds planets when the operator changes their rendering. Wired in the
+   * composition root because the planet loader is built after this controller.
+   */
+  onPlanetRenderingChange(listener) {
+    this.planetRenderingListener = listener;
+    if (this.planetRendering) listener(this.planetRendering);
   }
 
   apply(behavior) {
@@ -14,6 +27,14 @@ export class ProjectorBehaviorController {
     this.celebration.setTheme(behavior.theme);
     this.environment?.applyBehavior(behavior);
     this.celebration.setLanguage(behavior.projector_language);
+    // Behavior arrives on every poll and SSE frame; only an actual change of
+    // rendering is worth rebuilding the wall for. A server that predates the
+    // setting sends nothing, which reads as classic.
+    const rendering = normalizePlanetRendering(behavior.planet_rendering);
+    if (rendering !== this.planetRendering) {
+      this.planetRendering = rendering;
+      this.planetRenderingListener?.(rendering);
+    }
   }
 
   handleEvent(raw) {

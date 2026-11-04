@@ -52,6 +52,8 @@ data class BehaviorSettingsDto(
     @SerializedName("comet_frequency") val cometFrequency: String = "normal",
     @SerializedName("flyby_asteroids_enabled") val flybyAsteroidsEnabled: Boolean = false,
     @SerializedName("flyby_frequency") val flybyFrequency: String = "normal",
+    /** "classic" or "front-view". Older servers omit it, which reads as classic. */
+    @SerializedName("planet_rendering") val planetRendering: String = "classic",
     @SerializedName("enabled_themes")
     val enabledThemes: List<String> =
         listOf(

@@ -49,6 +49,7 @@ def test_default_behavior_is_auto_and_safe(tmp_path):
         "comet_frequency": "normal",
         "flyby_asteroids_enabled": False,
         "flyby_frequency": "normal",
+        "planet_rendering": "classic",
         "enabled_themes": [
             "default",
             "halloween",
@@ -68,6 +69,7 @@ def test_default_behavior_is_auto_and_safe(tmp_path):
     assert body["effective"]["asteroid_belt_enabled"] is False
     assert body["effective"]["comets_enabled"] is False
     assert body["effective"]["flyby_asteroids_enabled"] is False
+    assert body["effective"]["planet_rendering"] == "classic"
 
 
 def test_manager_can_configure_theme_region_motion_language_and_space_activity(tmp_path):
@@ -87,6 +89,7 @@ def test_manager_can_configure_theme_region_motion_language_and_space_activity(t
             "comet_frequency": "frequent",
             "flyby_asteroids_enabled": True,
             "flyby_frequency": "rare",
+            "planet_rendering": "front-view",
             "enabled_themes": ["default", "halloween", "easter"],
         },
     )
@@ -94,6 +97,7 @@ def test_manager_can_configure_theme_region_motion_language_and_space_activity(t
     assert response.status_code == 200
     body = response.json()
     assert body["settings"]["region"] == "ca-on"
+    assert body["settings"]["planet_rendering"] == "front-view"
     assert body["effective"] == {
         "theme": "halloween",
         "planet_speed": 1.5,
@@ -105,6 +109,7 @@ def test_manager_can_configure_theme_region_motion_language_and_space_activity(t
         "comet_frequency": "frequent",
         "flyby_asteroids_enabled": True,
         "flyby_frequency": "rare",
+        "planet_rendering": "front-view",
     }
 
 
@@ -245,3 +250,20 @@ def test_secure_mode_requires_manager_to_update_behavior(tmp_path):
 
     assert client.put("/api/behavior", json=payload, headers=kid_headers()).status_code == 403
     assert client.put("/api/behavior", json=payload, headers=manager_headers()).status_code == 200
+
+
+def test_older_manager_builds_that_omit_planet_rendering_get_classic(tmp_path):
+    client = TestClient(create_app(app_settings(tmp_path)))
+
+    body = client.put("/api/behavior", json={"mode": "auto"}).json()
+
+    assert body["settings"]["planet_rendering"] == "classic"
+    assert body["effective"]["planet_rendering"] == "classic"
+
+
+def test_unknown_planet_rendering_is_rejected_by_http_contract(tmp_path):
+    client = TestClient(create_app(app_settings(tmp_path)))
+
+    response = client.put("/api/behavior", json={"planet_rendering": "hologram"})
+
+    assert response.status_code == 422

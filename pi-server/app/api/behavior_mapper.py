@@ -15,6 +15,7 @@ def behavior_to_payload(behavior: GalaxyBehavior) -> dict:
         "comet_frequency": behavior.comet_frequency.value,
         "flyby_asteroids_enabled": behavior.flyby_asteroids_enabled,
         "flyby_frequency": behavior.flyby_frequency.value,
+        "planet_rendering": behavior.planet_rendering.value,
     }
 
 
@@ -31,5 +32,6 @@ def behavior_settings_to_payload(settings: GalaxyBehaviorSettings) -> dict:
         "comet_frequency": settings.comet_frequency.value,
         "flyby_asteroids_enabled": settings.flyby_asteroids_enabled,
         "flyby_frequency": settings.flyby_frequency.value,
+        "planet_rendering": settings.planet_rendering.value,
         "enabled_themes": [theme.value for theme in settings.enabled_themes],
     }

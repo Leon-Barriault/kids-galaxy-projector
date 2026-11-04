@@ -87,6 +87,10 @@ function applyPolarMagnetSweep(entity) {
   // after it has built the final embossed sphere so colour, relief and all child
   // authored details are deformed together by the same 3-D action.
   if (!material?.userData?.kidsGalaxyManifestStrokeSurface) return false;
+  // Front-view planets are meant to look like the drawing from the front. The
+  // twist rotates every latitude by a different amount, which is exactly what
+  // would stop them doing that, so it belongs to the classic look only.
+  if (material.userData.kidsGalaxyPlanetRendering === 'front-view') return false;
   if (!twistGeometryAroundPolarAxis(entity.mesh.geometry)) return false;
 
   material.userData.kidsGalaxyPolarMagnetSweep3D = true;

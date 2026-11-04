@@ -10,6 +10,7 @@ from app.domain.behavior import (
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
+    PlanetRendering,
     ProjectorLanguage,
 )
 from app.ports import BehaviorRepository
@@ -53,6 +54,9 @@ class JsonBehaviorRepository(BehaviorRepository):
                 flyby_frequency=EventFrequency(
                     raw.get("flyby_frequency", EventFrequency.NORMAL.value)
                 ),
+                planet_rendering=PlanetRendering(
+                    raw.get("planet_rendering", PlanetRendering.CLASSIC.value)
+                ),
                 enabled_themes=tuple(GalaxyTheme(value) for value in raw_themes),
             )
         except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError):
@@ -76,6 +80,7 @@ class JsonBehaviorRepository(BehaviorRepository):
             "comet_frequency": settings.comet_frequency.value,
             "flyby_asteroids_enabled": settings.flyby_asteroids_enabled,
             "flyby_frequency": settings.flyby_frequency.value,
+            "planet_rendering": settings.planet_rendering.value,
             "enabled_themes": [theme.value for theme in settings.enabled_themes],
         }
         temporary = self._path.with_suffix(".tmp")
