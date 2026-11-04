@@ -6,3 +6,15 @@ Move a version section into [CHANGELOG.md](CHANGELOG.md) when `release/x.y.z`
 is cut, then leave a fresh `Unreleased` heading behind.
 
 ## Unreleased
+
+### Added
+
+- **Planet look** on the manager tablet's Galaxy tab. **Classic** keeps the
+  current rendering: the canvas is read as a world map, wide marks wrap round
+  the planet and the polar twist swirls it. **Like the drawing** reads the disc
+  the child painted in as the face of the planet, so the drawing is what the
+  room sees from the front and its mirror image covers the back; a stripe across
+  the disc still closes into a ring. Switching rebuilds the planets already on
+  the wall without celebrating them again. Stored as `planet_rendering`
+  (`classic` | `front-view`) in the galaxy behavior; it defaults to classic, and
+  older manager builds that do not send it keep working.
