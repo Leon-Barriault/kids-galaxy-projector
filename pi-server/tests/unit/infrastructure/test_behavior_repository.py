@@ -3,6 +3,7 @@ from app.domain.behavior import (
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
+    PlanetRendering,
     ProjectorLanguage,
 )
 from app.infrastructure.behavior_repository import JsonBehaviorRepository
@@ -24,6 +25,7 @@ def test_saved_behavior_survives_repository_recreation(tmp_path):
         comet_frequency=EventFrequency.FREQUENT,
         flyby_asteroids_enabled=True,
         flyby_frequency=EventFrequency.RARE,
+        planet_rendering=PlanetRendering.FRONT_VIEW,
         enabled_themes=(
             GalaxyTheme.DEFAULT,
             GalaxyTheme.HALLOWEEN,
@@ -49,6 +51,7 @@ def test_legacy_state_defaults_new_environment_settings_safely(tmp_path):
     assert loaded.comet_frequency == EventFrequency.NORMAL
     assert loaded.flyby_asteroids_enabled is False
     assert loaded.flyby_frequency == EventFrequency.NORMAL
+    assert loaded.planet_rendering == PlanetRendering.CLASSIC
     assert set(loaded.enabled_themes) == set(GalaxyTheme)
 
 
@@ -86,6 +89,15 @@ def test_object_with_wrong_value_types_falls_back(tmp_path):
 def test_out_of_range_persisted_speed_falls_back_to_defaults(tmp_path):
     (tmp_path / "galaxy_behavior.json").write_text(
         '{"mode":"manual","manual_theme":"halloween","planet_speed":99}',
+        encoding="utf-8",
+    )
+
+    assert JsonBehaviorRepository(tmp_path).load() == GalaxyBehaviorSettings()
+
+
+def test_unknown_planet_rendering_in_state_falls_back_to_safe_defaults(tmp_path):
+    (tmp_path / "galaxy_behavior.json").write_text(
+        '{"mode":"auto","planet_rendering":"hologram"}',
         encoding="utf-8",
     )
 

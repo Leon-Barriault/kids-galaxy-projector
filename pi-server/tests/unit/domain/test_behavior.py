@@ -8,6 +8,7 @@ from app.domain.behavior import (
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
+    PlanetRendering,
     ProjectorLanguage,
     SeasonalThemeResolver,
 )
@@ -175,3 +176,19 @@ def test_auto_mode_keeps_operator_motion_language_region_and_environment_setting
 def test_planet_speed_outside_safe_range_is_rejected(speed):
     with pytest.raises(ValueError):
         GalaxyBehaviorSettings(planet_speed=speed)
+
+
+def test_planet_rendering_defaults_to_classic_so_existing_walls_look_unchanged():
+    assert GalaxyBehaviorSettings().planet_rendering == PlanetRendering.CLASSIC
+
+
+def test_planet_rendering_choice_reaches_the_effective_behavior(resolver):
+    settings = GalaxyBehaviorSettings(planet_rendering=PlanetRendering.FRONT_VIEW)
+
+    behavior = resolver.effective(settings, date(2026, 12, 25))
+
+    assert behavior.planet_rendering == PlanetRendering.FRONT_VIEW
+
+
+def test_planet_rendering_wire_values_are_stable():
+    assert [rendering.value for rendering in PlanetRendering] == ["classic", "front-view"]

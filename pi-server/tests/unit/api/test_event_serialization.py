@@ -10,6 +10,7 @@ from app.domain.behavior import (
     EventFrequency,
     GalaxyBehavior,
     GalaxyTheme,
+    PlanetRendering,
     ProjectorLanguage,
 )
 from app.domain.planet import Planet
@@ -98,6 +99,7 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
         comet_frequency=EventFrequency.FREQUENT,
         flyby_asteroids_enabled=True,
         flyby_frequency=EventFrequency.RARE,
+        planet_rendering=PlanetRendering.FRONT_VIEW,
     )
 
     assert serialize_event(GalaxyBehaviorChanged(behavior)) == (
@@ -113,5 +115,6 @@ def test_behavior_changed_has_its_own_typed_sse_channel():
             "comet_frequency": "frequent",
             "flyby_asteroids_enabled": True,
             "flyby_frequency": "rare",
+            "planet_rendering": "front-view",
         },
     )

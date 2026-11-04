@@ -60,6 +60,19 @@ class EventFrequency(StrEnum):
     FREQUENT = "frequent"
 
 
+class PlanetRendering(StrEnum):
+    """How the projector wraps a kid's flat drawing onto the 3-D planet.
+
+    CLASSIC reads the tablet canvas as a world map: wide marks become ribbons
+    round the planet and the polar twist is applied. FRONT_VIEW reads the disc
+    the child drew in as the face of the planet, so the drawing is what you see
+    from the front and its mirror image covers the far side.
+    """
+
+    CLASSIC = "classic"
+    FRONT_VIEW = "front-view"
+
+
 DEFAULT_ENABLED_THEMES = (
     GalaxyTheme.DEFAULT,
     GalaxyTheme.HALLOWEEN,
@@ -99,6 +112,7 @@ class GalaxyBehaviorSettings:
     comet_frequency: EventFrequency = EventFrequency.NORMAL
     flyby_asteroids_enabled: bool = False
     flyby_frequency: EventFrequency = EventFrequency.NORMAL
+    planet_rendering: PlanetRendering = PlanetRendering.CLASSIC
     enabled_themes: tuple[GalaxyTheme, ...] = DEFAULT_ENABLED_THEMES
 
     def __post_init__(self) -> None:
@@ -127,6 +141,7 @@ class GalaxyBehavior:
     comet_frequency: EventFrequency = EventFrequency.NORMAL
     flyby_asteroids_enabled: bool = False
     flyby_frequency: EventFrequency = EventFrequency.NORMAL
+    planet_rendering: PlanetRendering = PlanetRendering.CLASSIC
 
 
 class SeasonalThemeResolver:
@@ -227,4 +242,5 @@ class SeasonalThemeResolver:
             comet_frequency=settings.comet_frequency,
             flyby_asteroids_enabled=settings.flyby_asteroids_enabled,
             flyby_frequency=settings.flyby_frequency,
+            planet_rendering=settings.planet_rendering,
         )

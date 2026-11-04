@@ -9,6 +9,7 @@ from app.domain.behavior import (
     EventFrequency,
     GalaxyBehaviorSettings,
     GalaxyTheme,
+    PlanetRendering,
     ProjectorLanguage,
 )
 
@@ -25,6 +26,8 @@ class BehaviorUpdateRequest(BaseModel):
     comet_frequency: EventFrequency = EventFrequency.NORMAL
     flyby_asteroids_enabled: bool = False
     flyby_frequency: EventFrequency = EventFrequency.NORMAL
+    # Optional on the wire so manager builds that predate it keep working.
+    planet_rendering: PlanetRendering = PlanetRendering.CLASSIC
     enabled_themes: list[GalaxyTheme] = Field(default_factory=lambda: list(DEFAULT_ENABLED_THEMES))
 
     def to_domain(self) -> GalaxyBehaviorSettings:
@@ -40,5 +43,6 @@ class BehaviorUpdateRequest(BaseModel):
             comet_frequency=self.comet_frequency,
             flyby_asteroids_enabled=self.flyby_asteroids_enabled,
             flyby_frequency=self.flyby_frequency,
+            planet_rendering=self.planet_rendering,
             enabled_themes=tuple(self.enabled_themes),
         )
