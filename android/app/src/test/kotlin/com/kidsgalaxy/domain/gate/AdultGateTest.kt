@@ -34,7 +34,7 @@ class AdultGateTest {
 
     @Test
     fun `one digit does not unlock`() {
-        val state = AdultGateState.started(sum).pressDigit(1, now = 0L)
+        val state = AdultGateState.started(sum).pressDigit(1, nowEpochMillis = 0L)
         assertEquals("1", state.entered)
         assertFalse(state.unlocked)
         assertTrue(state.phase(0L) is AdultGatePhase.Entering)
@@ -74,7 +74,7 @@ class AdultGateTest {
         repeat(AdultGatePolicy.MAX_WRONG_ANSWERS) {
             state = enter(state, "99")
         }
-        val locked = state.pressDigit(1, now = 1L).pressDigit(3, now = 2L)
+        val locked = state.pressDigit(1, nowEpochMillis = 1L).pressDigit(3, nowEpochMillis = 2L)
         assertEquals(state, locked)
         assertFalse(locked.unlocked)
     }
@@ -91,17 +91,17 @@ class AdultGateTest {
 
     @Test
     fun `backspace removes only the last digit`() {
-        val started = AdultGateState.started(sum).pressDigit(1, now = 0L)
-        val cleared = started.pressBackspace(now = 1L)
+        val started = AdultGateState.started(sum).pressDigit(1, nowEpochMillis = 0L)
+        val cleared = started.pressBackspace(nowEpochMillis = 1L)
         assertEquals("", cleared.entered)
-        assertEquals(cleared, cleared.pressBackspace(now = 2L))
+        assertEquals(cleared, cleared.pressBackspace(nowEpochMillis = 2L))
     }
 
     @Test
     fun `digits outside zero to nine are ignored`() {
         val started = AdultGateState.started(sum)
-        assertEquals(started, started.pressDigit(-1, now = 0L))
-        assertEquals(started, started.pressDigit(10, now = 0L))
+        assertEquals(started, started.pressDigit(-1, nowEpochMillis = 0L))
+        assertEquals(started, started.pressDigit(10, nowEpochMillis = 0L))
     }
 
     @Test
