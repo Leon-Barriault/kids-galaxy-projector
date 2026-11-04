@@ -3,89 +3,100 @@
 Cette page est pour l’adulte qui ouvre la salle.
 Les enfants peuvent faire les étapes de dessin.
 Les étapes d’installation restent dans le guide d’installation.
+Ouvrez Ubuntu, puis allez dans le dossier du projet, avant de coller une commande.
 
 <!-- section: on -->
 
 ## Allumer la salle
 
-Environ 5 minutes.
+Environ 10 minutes.
 
-<!-- step: on-computer -->
+<!-- step: on-router -->
 
-1. Allumez l’ordinateur de la galaxie.
-   Attendez de voir le bureau.
-   Le programme de la galaxie démarre tout seul.
+1. Branchez le routeur de voyage.
+
+   **Ce que vous devez voir.** Un voyant Wi-Fi stable.
+
+   **Sinon.** Vérifiez la prise ou la batterie externe.
+
+<!-- step: on-wifi -->
+
+2. Sur le PC, joignez `KidsGalaxy`.
+   Ne joignez pas le Wi-Fi de la garderie.
+
+   **Ce que vous devez voir.** Le nom du Wi-Fi est `KidsGalaxy`.
+
+   **Sinon.** Oubliez les autres réseaux et joignez `KidsGalaxy` de nouveau.
+
+<!-- step: on-docker -->
+
+3. Quittez Docker Desktop si l’icône de baleine est visible.
+
+   **Ce que vous devez voir.** L’icône de baleine a disparu.
+
+   **Sinon.** La ligne d’installation de l’hôte s’arrête tant que vous ne le quittez pas.
+
+<!-- step: on-ubuntu -->
+
+4. Allumez le PC s’il est éteint.
+   Ouvrez la session Windows.
+   Ouvrez l’application Ubuntu.
+
+   **Ce que vous devez voir.** Le nom `omega`.
+
+   **Sinon.** Cliquez sur Démarrer, tapez Ubuntu, et ouvrez cette application.
+
+<!-- step: on-folder -->
+
+5. Collez cette ligne.
+
+```bash
+cd /home/omega/kids-galaxy-projector
+```
+
+   **Ce que vous devez voir.** Aucune erreur. `pwd` montre ce même dossier.
+
+   **Sinon.** Collez la ligne de nouveau avant toute autre commande.
 
 <!-- step: on-projector -->
 
-2. Allumez le projecteur.
-   Choisissez la source HDMI.
-   Vous devriez voir l’écran de l’ordinateur sur le mur.
+6. Allumez le projecteur.
+   Choisissez HDMI.
+
+   **Ce que vous devez voir.** Le bureau Windows sur le mur.
+
+   **Sinon.** Enfoncez la prise HDMI et appuyez sur le bouton source.
 
 <!-- step: on-page -->
 
-3. Si le ciel n’est pas affiché, ouvrez Terminal et collez cette ligne.
+7. Si le ciel n’est pas affiché, collez cette ligne.
 
 ```bash
 bash scripts/open_projector.sh
 ```
 
-   Appuyez sur F11 si vous voulez que l’image remplisse l’écran.
-   Vous devriez voir le ciel sombre et les mots d’attente.
+   **Ce que vous devez voir.** Le ciel sombre et les mots d’attente.
+   Chrome s’ouvre dans Windows.
+
+   **Sinon.** Dans Windows, ouvrez `http://127.0.0.1:8000/` et appuyez sur F11.
 
 <!-- step: on-tablets -->
 
-4. Réveillez les deux tablettes.
-   Vous devriez voir l’application de dessin sur la tablette enfant.
-   Ouvrez Gestionnaire Kids Galaxy sur la tablette adulte.
+8. Réveillez les deux tablettes.
+
+   **Ce que vous devez voir.** L’application de dessin sur la tablette enfant.
+   Gestionnaire Kids Galaxy s’ouvre sur la tablette adulte.
+
+   **Sinon.** Vérifiez que chaque tablette est sur `KidsGalaxy`.
 
 <!-- fix: on -->
 
 > **Si cela ne fonctionne pas**
 >
-> Lancez `bash scripts/setup_room.sh` sur l’ordinateur.
+> Allez dans le dossier du projet.
+> Collez `bash scripts/setup_room.sh`.
 > Puis ouvrez l’image de nouveau.
-> Vérifiez le câble HDMI si le mur est encore sombre.
-
-<!-- section: off -->
-
-## Éteindre la salle
-
-Environ 3 minutes.
-Les planètes restent enregistrées.
-
-<!-- step: off-screen -->
-
-1. Appuyez sur F11 si vous voulez quitter le plein écran.
-   Vous n’avez pas besoin de fermer Chrome.
-
-<!-- step: off-computer -->
-
-2. Éteignez l’ordinateur depuis le menu d’alimentation.
-   Attendez que l’écran soit noir.
-   Ne gardez pas le bouton enfoncé, sauf si le menu ne s’ouvre pas.
-
-<!-- step: off-projector -->
-
-3. Éteignez le projecteur avec son bouton d’alimentation.
-   Vous devriez voir le mur devenir sombre.
-
-<!-- step: off-tablets -->
-
-4. Laissez les tablettes dormir, ou gardez le bouton enfoncé et touchez Éteindre.
-   Le mode verrouillé revient au prochain démarrage de la tablette enfant.
-
-<!-- fix: off -->
-
-> **Si cela ne fonctionne pas**
->
-> Pour arrêter le programme et laisser l’ordinateur allumé, collez cette ligne.
-
-```bash
-bash scripts/stop_room.sh
-```
-
-> Vous devriez voir `The galaxy program is stopped.`
+> Vérifiez le HDMI si le mur est encore sombre.
 
 <!-- section: kid -->
 
@@ -94,26 +105,32 @@ bash scripts/stop_room.sh
 La tablette enfant sert seulement à dessiner.
 Les enfants ne devraient pas avoir besoin d’un mot de passe.
 
+Conseil. Chaque enfant peut avoir 30 minutes de temps d’écran par jour. Comptez les autres écrans. C’est à vous de le suivre.
+
 <!-- step: kid-open -->
 
 1. Réveillez la tablette enfant.
-   Vous devriez voir Crée ta planète.
-   Si vous voyez une autre application, le mode verrouillé n’est pas actif.
-   Utilisez le guide d’installation pour l’activer.
+
+   **Ce que vous devez voir.** Crée ta planète.
+
+   **Sinon.** Le mode verrouillé est éteint. Utilisez le guide d’installation pour l’activer.
 
 <!-- step: kid-draw -->
 
-2. L’enfant touche une forme, dessine et peut ajouter des amis de l’espace.
+2. L’enfant touche une forme, dessine, et peut ajouter des amis de l’espace.
    Puis l’enfant touche Lancer.
-   Vous devriez voir la planète sur le mur.
+
+   **Ce que vous devez voir.** La planète sur le mur.
+
+   **Sinon.** Lisez le message sur la tablette.
 
 <!-- fix: kid -->
 
 > **Si cela ne fonctionne pas**
 >
-> Lisez le message sur la tablette.
-> Si elle ne trouve pas la galaxie, vérifiez le Wi-Fi.
-> Utilisez la page de dépannage pour les correctifs exacts.
+> Si la tablette ne trouve pas la galaxie, vérifiez le nom du Wi-Fi.
+> Ce doit être `KidsGalaxy`.
+> Utilisez la page de dépannage pour les autres correctifs.
 
 <!-- section: manager -->
 
@@ -126,54 +143,66 @@ Elle n’est pas verrouillée.
 <!-- step: manager-open -->
 
 1. Ouvrez Gestionnaire Kids Galaxy.
-   Vous devriez voir la liste des planètes.
-   Si la liste est vide, aucune planète n’a encore été lancée.
+
+   **Ce que vous devez voir.** La liste des planètes.
+   Une liste vide veut dire qu’aucune planète n’a encore été lancée.
+
+   **Sinon.** Réveillez la tablette et cherchez ce nom d’application.
 
 <!-- step: manager-delete -->
 
 2. Pour retirer une planète, touchez l’icône de suppression sur sa ligne.
-   Lisez la question. Puis confirmez.
-   La planète devrait quitter le mur.
+   Lisez la question.
+   Puis confirmez.
+
+   **Ce que vous devez voir.** La planète quitte le mur.
+
+   **Sinon.** Vous avez confirmé la question sur la tablette de gestion.
 
 <!-- step: manager-clear -->
 
-3. Pour retirer toutes les planètes, touchez Tout effacer.
+3. Pour retirer chaque planète, touchez Tout effacer.
    Confirmez seulement si vous le voulez vraiment.
-   Vous devriez voir une liste vide.
+
+   **Ce que vous devez voir.** Une liste vide.
+
+   **Sinon.** Restez sur la tablette de gestion. L’application enfant ne peut pas effacer des planètes.
 
 <!-- fix: manager -->
 
 > **Si cela ne fonctionne pas**
 >
-> L’application enfant ne peut pas effacer les planètes. C’est normal.
 > Utilisez la tablette de gestion.
-> Les deux tablettes doivent être sur le même Wi-Fi que l’ordinateur.
+> Les deux tablettes doivent être sur `KidsGalaxy` avec le PC.
 
 <!-- section: language -->
 
 ## Changer la langue
 
 Il y a deux langues.
-L’anglais et le français canadien.
-Ce sont deux choix séparés.
+L’anglais et le français du Canada.
+Ce sont des choix séparés.
 
 <!-- step: language-tablet -->
 
-1. Sur une tablette, touchez EN / FR.
-   L’application se ferme et s’ouvre dans l’autre langue.
-   Vous devriez voir les mots français, ou les mots anglais, tout de suite.
+1. Sur l’une ou l’autre tablette, touchez EN / FR.
+
+   **Ce que vous devez voir.** L’application se rouvre dans l’autre langue.
    Le choix reste jusqu’à ce que vous touchiez le bouton de nouveau.
+
+   **Sinon.** Touchez EN / FR encore une fois.
 
 <!-- step: language-wall -->
 
-2. Le mur a son propre choix.
-   Ouvrez l’application de gestion.
+2. Ouvrez l’application de gestion.
    Trouvez Langue du projecteur.
    Touchez English ou Français.
-   Sur l’ordinateur, rechargez la page de la galaxie.
-   Vous devriez voir les nouveaux mots sur le mur.
-   Deux tablettes enfant peuvent utiliser des langues différentes.
+   Sur le PC, rechargez la page de la galaxie.
+
+   **Ce que vous devez voir.** Les nouveaux mots sur le mur.
    Le mur suit le choix de la gestion.
+
+   **Sinon.** Rechargez Chrome. La page est `http://127.0.0.1:8000/` sur ce PC.
 
 <!-- fix: language -->
 
@@ -181,7 +210,6 @@ Ce sont deux choix séparés.
 >
 > Touchez EN / FR encore une fois.
 > Si le mur n’a pas changé, rechargez Chrome.
-> L’adresse de la page est `http ://127.0.0.1:8000/` sur l’ordinateur de la galaxie.
 
 <!-- section: project -->
 
@@ -192,21 +220,26 @@ Environ 2 minutes.
 <!-- step: project-ready -->
 
 1. Vérifiez d’abord le mur.
-   Vous devriez voir les mots d’attente ou d’anciennes planètes.
+
+   **Ce que vous devez voir.** Les mots d’attente ou d’anciennes planètes.
+
+   **Sinon.** Ouvrez la page du mur avant que l’enfant touche Lancer.
 
 <!-- step: project-launch -->
 
 2. Sur la tablette enfant, finissez le dessin et touchez Lancer.
-   Regardez le mur.
-   Vous devriez voir la nouvelle planète arriver.
+
+   **Ce que vous devez voir.** La nouvelle planète arrive.
    Un enfant peut lancer de nouveau après une courte attente.
+
+   **Sinon.** Joignez `KidsGalaxy`, puis touchez Lancer encore une fois.
 
 <!-- fix: project -->
 
 > **Si cela ne fonctionne pas**
 >
 > Le mur peut rester sur l’ancien ciel si la tablette est sur le mauvais Wi-Fi.
-> Joignez le même Wi-Fi que l’ordinateur.
+> Joignez `KidsGalaxy`.
 > Puis touchez Lancer de nouveau.
 
 <!-- section: print -->
@@ -222,23 +255,28 @@ La tablette enfant ne peut pas imprimer.
 1. Ouvrez Gestionnaire Kids Galaxy.
    Trouvez la planète voulue.
    Touchez Imprimer.
-   Vous devriez voir la boîte d’impression d’Android.
+
+   **Ce que vous devez voir.** La boîte d’impression d’Android.
+
+   **Sinon.** Restez sur la tablette de gestion et touchez Imprimer de nouveau.
 
 <!-- step: print-send -->
 
 2. Choisissez l’imprimante.
    Touchez le bouton d’impression dans cette boîte.
-   Vous devriez obtenir une page avec la planète et le dessin de l’enfant.
-   S’il n’y a pas d’impression, la tablette offre une boîte d’enregistrement.
+
+   **Ce que vous devez voir.** Une page avec la planète et le dessin de l’enfant.
+   Si l’impression manque, la tablette offre une boîte d’enregistrement.
    Enregistrez le PDF et ouvrez-le dans une application PDF.
+
+   **Sinon.** Enregistrez le PDF et imprimez-le depuis un autre appareil.
 
 <!-- fix: print -->
 
 > **Si cela ne fonctionne pas**
 >
-> Vérifiez le Wi-Fi.
-> Touchez Imprimer de nouveau.
-> Si la tablette n’a pas d’imprimante, enregistrez le PDF et imprimez-le ailleurs.
+> Vérifiez que la tablette est sur `KidsGalaxy`.
+> Essayez Imprimer de nouveau.
 
 <!-- section: stl -->
 
@@ -247,30 +285,108 @@ La tablette enfant ne peut pas imprimer.
 Environ 10 minutes.
 Le fichier s’appelle STL.
 Une imprimante 3D peut l’utiliser.
-Le fichier est une seule planète ronde.
-Les anneaux et les petits amis n’y sont pas.
+Le fichier est une planète ronde.
+Les anneaux et les petits amis ne sont pas dans le fichier.
 
 <!-- step: stl-tap -->
 
 1. Sur la tablette de gestion, trouvez la planète.
    Touchez STL.
-   Vous devriez voir un message d’attente.
+
+   **Ce que vous devez voir.** Un message d’attente.
    Cela peut prendre un petit moment.
+
+   **Sinon.** Attendez une minute et touchez STL de nouveau.
 
 <!-- step: stl-save -->
 
 2. Quand la boîte d’enregistrement s’ouvre, choisissez un dossier.
    Touchez Enregistrer.
-   Vous devriez voir un fichier qui finit par `.stl`.
-   Copiez-le vers l’imprimante 3D sur une clé USB ou par son application.
+
+   **Ce que vous devez voir.** Un fichier qui finit par `.stl`.
+   Copiez-le vers l’imprimante 3D sur une clé USB ou par l’application de l’imprimante.
+
+   **Sinon.** Redémarrez l’application de gestion et essayez encore une fois.
 
 <!-- fix: stl -->
 
 > **Si cela ne fonctionne pas**
 >
+> Restez sur `KidsGalaxy`.
 > Attendez une minute et touchez STL de nouveau.
-> Restez sur le même Wi-Fi.
-> Si cela échoue encore, redémarrez l’application de gestion et réessayez.
+
+<!-- section: off -->
+
+## Rangement
+
+Environ 5 minutes.
+Les planètes restent enregistrées.
+Les noms ne partent pas avec vous.
+
+<!-- step: off-names -->
+
+1. Sur la tablette de gestion, touchez Avant de partir.
+   Cela efface les noms des planètes.
+   Ces noms ne sont pas dans la copie de secours sur la clé USB.
+
+   **Ce que vous devez voir.** Les noms des planètes ont disparu.
+
+   **Sinon.** Restez sur la tablette de gestion et touchez Avant de partir de nouveau.
+
+<!-- step: off-screen -->
+
+2. Fermez la page du mur sur le PC.
+
+   **Ce que vous devez voir.** Chrome est fermé, ou le ciel a disparu.
+
+   **Sinon.** Appuyez sur F11, puis fermez Chrome.
+
+<!-- step: off-computer -->
+
+3. Éteignez Windows depuis le menu d’alimentation.
+
+   **Ce que vous devez voir.** L’écran devient noir.
+
+   **Sinon.** Ne tenez pas le bouton d’alimentation, sauf si le menu ne s’ouvre pas.
+
+<!-- step: off-projector -->
+
+4. Éteignez le projecteur avec son bouton d’alimentation.
+
+   **Ce que vous devez voir.** Le mur devient sombre.
+
+   **Sinon.** Appuyez encore une fois sur le bouton du projecteur.
+
+<!-- step: off-router -->
+
+5. Débranchez le routeur de voyage et la batterie externe.
+
+   **Ce que vous devez voir.** Le voyant du routeur est éteint.
+
+   **Sinon.** Suivez le cordon jusqu’au mur ou à la batterie.
+
+<!-- step: off-tablets -->
+
+6. Mettez les deux tablettes, les chargeurs, le routeur et la carte papier dans l’étui.
+
+   **Ce que vous devez voir.** L’étui contient ces articles.
+   Le mode verrouillé revient la prochaine fois que la tablette enfant démarre.
+
+   **Sinon.** Laissez une note sur l’étui pour la pièce manquante.
+
+<!-- fix: off -->
+
+> **Si cela ne fonctionne pas**
+>
+> Pour arrêter le programme et laisser le PC allumé, ouvrez Ubuntu.
+> Allez dans le dossier du projet.
+> Collez la ligne suivante.
+
+```bash
+bash scripts/stop_room.sh
+```
+
+> Vous devriez voir `The galaxy program is stopped.`
 
 <!-- section: shutdown -->
 
@@ -278,25 +394,31 @@ Les anneaux et les petits amis n’y sont pas.
 
 <!-- step: shutdown-stop -->
 
-1. Vous pouvez éteindre l’ordinateur depuis le menu d’alimentation.
+1. Vous pouvez éteindre Windows depuis le menu d’alimentation.
    Les planètes restent sur le disque.
-   Le programme repart la prochaine fois que l’ordinateur s’allume.
+   Le programme peut repartir la prochaine fois que vous ouvrez la session.
+
+   **Ce que vous devez voir.** Le PC s’éteint.
+
+   **Sinon.** Attendez le menu. Ne tirez pas sur le cordon.
 
 <!-- step: shutdown-script -->
 
-2. Si vous devez d’abord arrêter le programme, collez cette ligne.
+2. Si vous devez d’abord arrêter le programme, collez cette ligne dans le dossier du projet.
 
 ```bash
 bash scripts/stop_room.sh
 ```
 
-   Vous devriez voir `The galaxy program is stopped.`
+   **Ce que vous devez voir.** `The galaxy program is stopped.`
    Puis utilisez le menu d’alimentation.
+
+   **Sinon.** Lisez les dernières lignes. Elles disent ce qui tourne encore.
 
 <!-- fix: shutdown -->
 
 > **Si cela ne fonctionne pas**
 >
-> Ne tirez pas sur le cordon pendant que l’ordinateur est encore allumé.
+> Ne tirez pas sur le cordon pendant que le PC est encore allumé.
 > Attendez le menu, ou demandez de l’aide.
-> Tirer le cordon peut rendre le prochain démarrage plus lent.
+> Tirer le cordon peut ralentir le prochain démarrage.

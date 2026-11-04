@@ -3,13 +3,22 @@
 # Open Terminal in this project folder, then paste:
 #   bash scripts/setup_room.sh
 #
-# Make new tablet ID cards only when the computer address changes:
-#   NEW_CERTIFICATES=1 bash scripts/setup_room.sh
+# The tablets keep one saved address. The default is 192.168.0.52.
+# Setup stops when this computer is somewhere else.
+# To move the room on purpose, then build the apps again:
+#   CHANGE_ADDRESS=1 SERVER_IP=192.168.0.52 bash scripts/setup_room.sh
+# NEW_CERTIFICATES=1 renews the card for that same saved address.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/lib/wsl.sh
+source "$ROOT/scripts/lib/wsl.sh"
+# shellcheck source=SCRIPTDIR/lib/room_address.sh
+source "$ROOT/scripts/lib/room_address.sh"
 cd "$ROOT"
+
+room_status=""
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This command is for the Linux galaxy computer."
@@ -51,33 +60,112 @@ lan_ip() {
   printf '%s' "$ip"
 }
 
-if [[ -n "${SERVER_IP:-}" ]]; then
-  ADDRESS="$SERVER_IP"
+EXPLICIT=""
+CURRENT=""
+if [[ "${CHANGE_ADDRESS:-}" == "1" ]]; then
+  if [[ -z "${SERVER_IP:-}" ]]; then
+    echo "Type the new address in the command."
+    echo "Example: CHANGE_ADDRESS=1 SERVER_IP=${DEFAULT_TABLET_ADDRESS} bash scripts/setup_room.sh"
+    exit 1
+  fi
+  EXPLICIT="$SERVER_IP"
+fi
+
+if [[ -z "$EXPLICIT" && -n "${SERVER_IP:-}" ]]; then
+  CURRENT="$SERVER_IP"
 else
-  ADDRESS="$(lan_ip)"
+  CURRENT="$(lan_ip)"
+  if [[ -z "$EXPLICIT" ]] && is_wsl; then
+    win_ip="$(windows_lan_ip || true)"
+    mode="$(wsl_config_mode)"
+    choice="$(choose_tablet_address "$CURRENT" "$win_ip" "$mode")"
+    CURRENT="$(printf '%s\n' "$choice" | sed -n '1p')"
+    room_status="$(printf '%s\n' "$choice" | sed -n '2p')"
+    case "$room_status" in
+      mirrored-pending)
+        echo "The Windows file asks for mirrored networking."
+        echo "Ubuntu still has a private address."
+        echo "In Windows PowerShell, run: wsl --shutdown"
+        echo "Open Ubuntu again. Then run this setup again."
+        exit 1
+        ;;
+      need-windows-ip)
+        echo "Ubuntu is inside Windows, and the house address was not found."
+        echo "In Windows PowerShell, run: ipconfig"
+        echo "Then run: SERVER_IP=that.address bash scripts/setup_room.sh"
+        echo "The tablets stay on ${DEFAULT_TABLET_ADDRESS} unless you ask to change it."
+        exit 1
+        ;;
+    esac
+  fi
 fi
 
-if [[ -z "$ADDRESS" ]]; then
-  echo "This computer has no network address yet."
-  echo "Join the room Wi-Fi, or plug in the network cable. Then run this again."
-  exit 1
+SAVED=""
+if [[ -f pi-server/state/room-card.txt ]]; then
+  SAVED="$(awk -F= '/^ADDRESS=/{ print $2; exit }' pi-server/state/room-card.txt)"
 fi
+decision="$(decide_room_address "$SAVED" "$CURRENT" "$EXPLICIT")"
+ADDRESS="$(printf '%s\n' "$decision" | sed -n '1p')"
+address_status="$(printf '%s\n' "$decision" | sed -n '2p')"
 
-PASSWORD="${CLIENT_P12_PASSWORD:-KidsGalaxy}"
+case "$address_status" in
+  need-current)
+    echo "This computer has no network address yet."
+    echo "Join the room Wi-Fi, or plug in the network cable. Then run this again."
+    exit 1
+    ;;
+  blocked)
+    echo "The tablets use ${ADDRESS}."
+    echo "This computer is at ${CURRENT}."
+    echo "Join the KidsGalaxy router so this computer is at ${ADDRESS}."
+    echo "Then run this setup again."
+    echo "To move the room on purpose, run:"
+    echo "  CHANGE_ADDRESS=1 SERVER_IP=the.new.address bash scripts/setup_room.sh"
+    echo "Then build the tablet apps again."
+    exit 1
+    ;;
+  change)
+    if [[ -n "$SAVED" && "$SAVED" != "$ADDRESS" ]]; then
+      echo "The room address will change from ${SAVED} to ${ADDRESS}."
+      echo "Build the tablet apps again after this setup."
+    fi
+    ;;
+  keep)
+    ;;
+  *)
+    echo "The room address could not be chosen."
+    exit 1
+    ;;
+esac
+
+case "$room_status" in
+  nat)
+    echo "Windows is sharing Ubuntu with a private network."
+    echo "Tablets will use ${ADDRESS}."
+    echo "After this setup, run the forward script in an admin PowerShell window."
+    ;;
+  mirrored)
+    echo "Windows mirrored networking is on."
+    echo "Tablets will use ${ADDRESS}."
+    echo "Run the firewall script in an admin PowerShell window if you have not yet."
+    ;;
+esac
+
 export SERVER_IP="$ADDRESS"
-export CLIENT_P12_PASSWORD="$PASSWORD"
-export MANAGER_P12_PASSWORD="${MANAGER_P12_PASSWORD:-$PASSWORD}"
+export SERVER_DNS="${SERVER_DNS:-kids-galaxy.local}"
 
 mkdir -p pi-server/state android/app/src/main/assets android/manager/src/main/assets
 
-if [[ ! -f pi-server/certs/server.crt || "${NEW_CERTIFICATES:-}" == "1" ]]; then
-  echo "Making tablet ID cards for ${ADDRESS}."
-  bash pi-server/certs/generate_certs.sh
+if [[ "${NEW_CERTIFICATES:-}" == "1" ]]; then
+  echo "Renewing the address card for ${ADDRESS}."
+  bash scripts/production_certs.sh init --force-server
 else
-  echo "Tablet ID cards are already here. They were left in place."
-  echo "Make new ones only if the address changed:"
-  echo "  NEW_CERTIFICATES=1 bash scripts/setup_room.sh"
+  bash scripts/production_certs.sh init
 fi
+
+PASSWORD="$(tr -d '[:space:]' < pi-server/certs/p12-password)"
+export CLIENT_P12_PASSWORD="$PASSWORD"
+export MANAGER_P12_PASSWORD="${MANAGER_P12_PASSWORD:-$PASSWORD}"
 
 cp pi-server/certs/client.p12 pi-server/certs/ca.crt android/app/src/main/assets/
 cp pi-server/certs/manager.p12 pi-server/certs/ca.crt android/manager/src/main/assets/
@@ -117,6 +205,13 @@ echo "  http://127.0.0.1:8000/"
 echo "Tablets use this address after the apps are installed:"
 echo "  https://${ADDRESS}:8443"
 echo "Write ${ADDRESS} on the quick-start card."
+if [[ "$room_status" == "nat" ]]; then
+  echo "This Windows PC still uses NAT mode."
+  echo "Run scripts/windows/kids-galaxy-portproxy.ps1 so tablets can reach port 8443."
+fi
+if [[ -n "$room_status" ]]; then
+  echo "On Windows, the wall page is still http://127.0.0.1:8000/"
+fi
 echo "The install password is in pi-server/state/room-card.txt on this computer."
 echo "Do not email that file. Children never type the password."
 echo "Next, show the picture: bash scripts/open_projector.sh"

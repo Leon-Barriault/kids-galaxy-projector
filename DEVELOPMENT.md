@@ -205,6 +205,44 @@ The application-level mTLS boundary is independent of the Wi-Fi or LAN technolog
 The system may run on an existing private LAN, dedicated Wi-Fi, or another local
 network topology without changing the server-side architecture.
 
+## Production room
+
+Parents and teachers follow
+[docs/user/en/production-setup.md](docs/user/en/production-setup.md)
+and [docs/user/en/kid-tablet.md](docs/user/en/kid-tablet.md)
+(French: `docs/user/fr/`).
+Those pages are the operating procedure.
+
+The scripts behind them:
+
+| Script | Role |
+| --- | --- |
+| `scripts/setup_host.sh` | Install Docker Engine inside Ubuntu, OpenSSL, and adb. On WSL it stops if Docker Desktop is running |
+| `scripts/wsl_bringup.sh` | Start Docker and the room after a Windows sign-in |
+| `scripts/print_windows_commands.sh` | Print the admin PowerShell lines with this distro name and user filled in |
+| `scripts/windows/kids-galaxy-firewall.ps1` | Private-profile firewall rules. Keeps an existing KidsGalaxy rule for the same port |
+| `scripts/windows/kids-galaxy-portproxy.ps1` | NAT-mode forward of port 8443. The distro name is detected |
+| `scripts/windows/kids-galaxy-autostart.ps1` | Sign-in task. Distro and user default to the Windows default distro |
+| `scripts/windows/kids-galaxy-hotspot.ps1` | Windows hotspot plan. `-WhatIf` does not start it. No uplink means stop |
+| `scripts/production_certs.sh` | Idempotent CA, server renewal, extra server names, per-tablet cards, CRL revoke |
+| `scripts/setup_room.sh` | Calls `production_certs.sh init`, then the secure compose stack |
+| `scripts/check_room.sh` | Health, tablet door, certificate dates, disk, backup presence |
+| `scripts/backup_room.sh` / `restore_room.sh` | Planets, state, certificates, and the release keystore |
+| `scripts/update_room.sh` / `rollback_room.sh` | Retag `kids-galaxy-pi-server:room` and `:previous` |
+| `scripts/create_tablet_keystore.sh` | Room signing key, gitignored |
+| `scripts/provision_kid_tablet.sh` | Install, device owner, lock task |
+| `scripts/replace_kid_tablet.sh` | Revoke, issue, build, provision, print elapsed seconds |
+
+`pi-server/certs/generate_certs.sh` remains the lab reset used by CI.
+It now also writes an empty `ca.crl` so the gateway can start.
+A real room should use `production_certs.sh`, which keeps the CA and can
+cancel one tablet. The secure compose file tags the server image
+`kids-galaxy-pi-server:room` and nginx reads `ca.crl`.
+
+Kid-tablet lock mode is device owner plus Lock Task. There is no paid MDM.
+`KidTabletPolicy` is the restriction list. USB debugging stays available on
+purpose. Boot-on-charge is not an Android API this project can set.
+
 ## Android kiosk / single-app mode
 
 The kid app is intended to be the **only** application on its tablet
