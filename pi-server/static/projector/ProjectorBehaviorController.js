@@ -25,7 +25,13 @@ export class ProjectorBehaviorController {
   }
 
   async refresh() {
-    const response = await fetch('/api/behavior');
+    const response = await fetch('/api/behavior', {
+      cache: 'no-store',
+      signal:
+        typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+          ? AbortSignal.timeout(4000)
+          : undefined,
+    });
     if (!response.ok) return;
     const payload = await response.json();
     this.apply(payload?.effective);

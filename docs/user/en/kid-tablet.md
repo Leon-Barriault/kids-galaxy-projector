@@ -89,7 +89,7 @@ These facts come from the app build.
 
    **What you should see.** The Wi-Fi name matches the paper card.
 
-   **If not.** Join the room Wi-Fi before lock mode.
+   **If not.** Join `KidsGalaxy` before lock mode.
 
 <!-- step: specs-fire -->
 
@@ -185,7 +185,7 @@ No account may be on it.
 
 1. Erase the kid tablet.
    Skip every account prompt.
-   Join the room Wi-Fi when the tablet asks.
+   Join `KidsGalaxy` when the tablet asks.
    Turn on USB debugging, as in the install guide.
 
    **What you should see.** A home screen with no email account.
@@ -233,7 +233,8 @@ bash scripts/prepare_kid_tablet.sh
 >
 > 1. Unplug other tablets.
 > 2. Erase the kid tablet and do not sign in.
-> 3. Join the room Wi-Fi, then run the command again.
+> 3. Join `KidsGalaxy`, then run the command again.
+> 4. If the line says no tablet is ready, do the USB share steps in the install guide.
 > 4. On a Fire tablet, stop if lock mode will not turn on.
 
 <!-- section: block -->
@@ -427,7 +428,7 @@ The command prints the real seconds.
 
 2. Erase the new tablet.
    Skip every account.
-   Join the room Wi-Fi.
+   Join `KidsGalaxy`.
    Turn on USB debugging.
    Plug it into the galaxy computer.
    Tap Allow.

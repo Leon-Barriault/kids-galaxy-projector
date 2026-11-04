@@ -176,7 +176,20 @@ class EventPublisher(ABC):
 
     @abstractmethod
     def subscribe(self) -> AbstractAsyncContextManager:
-        """Async context manager yielding a queue of ApplicationEvent values."""
+        """Async context manager yielding a queue of application events.
+
+        A queued ``None`` is not an event. It asks the subscriber to finish
+        so a long-lived stream can end. ``request_disconnect`` is what
+        enqueues it.
+        """
+
+    def request_disconnect(self) -> None:
+        """Ask every subscriber to finish.
+
+        The default does nothing. Streaming adapters override it so a
+        graceful process stop is not stuck behind an infinite response.
+        """
+        return
 
 
 class RateLimiter(ABC):

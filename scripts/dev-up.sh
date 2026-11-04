@@ -17,6 +17,9 @@
 #
 # Every step is idempotent. Running it twice is a no-op that re-checks health.
 #
+# Developer machines may use Docker Desktop. The room PC does not.
+# The room PC uses Docker Engine inside Ubuntu, with Docker Desktop stopped.
+#
 # Environment overrides:
 #   KG_HEALTH_URL        default http://localhost:8000/health
 #   KG_SERVER_TIMEOUT    seconds to wait for the server, default 300

@@ -60,6 +60,12 @@ val httpPort: String = setting("kidsGalaxyHttpPort", "8000")
 val httpsPort: String = setting("kidsGalaxyHttpsPort", "8443")
 val certPassword: String = setting("kidsGalaxyCertPassword", "KidsGalaxy")
 
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.kidsgalaxy"
 
@@ -78,6 +84,17 @@ android {
         buildConfigField("String", "CLIENT_CERT_PASSWORD", "\"$certPassword\"")
     }
 
+    if (keystorePropertiesFile.exists()) {
+        signingConfigs {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Lab / development: plain HTTP against the Docker stack or the Pi.
@@ -88,6 +105,9 @@ android {
             // Field deployment: certificate-authenticated HTTPS (mTLS).
             buildConfigField("String", "SERVER_BASE_URL", "\"https://$serverHost:$httpsPort/\"")
             buildConfigField("boolean", "USE_MTLS", "true")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             isMinifyEnabled = true
             proguardFiles(

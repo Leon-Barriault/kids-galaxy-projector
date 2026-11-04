@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NBSP = "\u00a0"
 PUNCTUATION = ":?!"
+# Python \s includes NBSP (U+00A0) and narrow NBSP (U+202F).
+# A web address must be http:// or https:// with no space before ://.
+URL_SCHEME_GAP = re.compile(r"https?[\s]+://", re.IGNORECASE)
 ANDROID_STRING = re.compile(
     r'<string\s+name="([^"]+)"[^>]*>(.*?)</string>',
     re.DOTALL,
@@ -48,6 +51,8 @@ def french_punctuation_issues(text: str) -> list[str]:
             continue
         previous = text[index - 1]
         if char == ":" and previous.isdigit():
+            continue
+        if char == ":" and text.startswith("://", index):
             continue
         if previous == NBSP:
             continue
@@ -139,8 +144,44 @@ USER_GUIDES = (
     "daily.md",
     "troubleshooting.md",
     "quick-start.md",
+    "production-setup.md",
     "kid-tablet.md",
 )
+REQUIRED_GUIDE_MARKERS = {
+    "production-setup.md": (
+        "section:hardware",
+        "section:network",
+        "section:wsl",
+        "section:travel",
+        "section:specs",
+        "section:computer",
+        "section:docker",
+        "section:certificates",
+        "section:renew",
+        "section:lost",
+        "section:tablets",
+        "section:first-run",
+        "section:backup",
+        "section:restore",
+        "section:update",
+        "section:rollback",
+        "section:watch",
+        "section:golive",
+        "section:kid",
+    ),
+    "kid-tablet.md": (
+        "section:specs",
+        "section:case",
+        "section:protector",
+        "section:kiosk",
+        "section:block",
+        "section:boot",
+        "section:charge",
+        "section:dropped",
+        "section:replace",
+        "section:limits",
+    ),
+}
 MAX_SENTENCE_WORDS = 22
 MAX_AVERAGE_WORDS = 16
 MAX_ENGLISH_GRADE = 8.5
@@ -222,6 +263,26 @@ def reading_problems(label: str, text: str, *, english: bool) -> list[str]:
     return problems
 
 
+def url_scheme_gap_problems() -> list[str]:
+    """Fail when a web address has any space before ://."""
+    for sample in ("http\u00a0://x", "https\u202f://x", "http ://x"):
+        if URL_SCHEME_GAP.search(sample) is None:
+            raise SystemExit(f"url check missed {sample!r}")
+    if URL_SCHEME_GAP.search("https://192.168.0.52:8443"):
+        raise SystemExit("url check flagged a normal address")
+    problems: list[str] = []
+    root = ROOT / "docs" / "user"
+    for path in sorted(root.rglob("*")):
+        if path.suffix.lower() not in {".md", ".html", ".pdf"}:
+            continue
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        for match in URL_SCHEME_GAP.finditer(text):
+            problems.append(
+                f"{path.relative_to(ROOT)}: space in web address {match.group(0)!r}"
+            )
+    return problems
+
+
 def user_guide_problems() -> list[str]:
     problems: list[str] = []
     english_root = ROOT / "docs" / "user" / "en"
@@ -248,6 +309,11 @@ def user_guide_problems() -> list[str]:
                 problems.append(f"user guide {name}: extra in French: {', '.join(extra)}")
         if not english_markers:
             problems.append(f"user guide {name}: no section markers")
+        required = REQUIRED_GUIDE_MARKERS.get(name, ())
+        english_ids = [f"{kind}:{marker}" for kind, marker in english_markers]
+        for required_id in required:
+            if required_id not in english_ids:
+                problems.append(f"user guide {name}: missing required marker {required_id}")
         problems.extend(reading_problems(f"user guide en/{name}", english, english=True))
         problems.extend(reading_problems(f"user guide fr/{name}", french, english=False))
         for issue in french_punctuation_issues(prose_for_reading(french)):
@@ -278,6 +344,7 @@ def collect_problems() -> list[str]:
     locales = js_locale_entries(projector)
     problems.extend(compare_named("projector", locales["en"], locales["fr"], decode=decode_js))
     problems.extend(user_guide_problems())
+    problems.extend(url_scheme_gap_problems())
     return problems
 
 
