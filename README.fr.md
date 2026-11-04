@@ -60,7 +60,7 @@ kids-galaxy-projector/
 └── DEVELOPMENT.md    # Développement local, certificats, kiosque
 ```
 
-Voir [ARCHITECTURE.md](ARCHITECTURE.md), [DEVELOPMENT.md](DEVELOPMENT.md) et [BRANCHING.md](BRANCHING.md). Le journal en préparation est [UNRELEASED.md](UNRELEASED.md).
+Voir [ARCHITECTURE.md](ARCHITECTURE.md), [DEVELOPMENT.md](DEVELOPMENT.md) et [BRANCHING.md](BRANCHING.md). Le journal en préparation est [UNRELEASED.md](UNRELEASED.md). Les versions publiées sont dans [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

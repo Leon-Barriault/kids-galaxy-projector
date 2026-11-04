@@ -124,7 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.6.0",
+        version="1.7.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
