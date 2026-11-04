@@ -98,6 +98,7 @@ kids-galaxy-projector/
 ├── .github/workflows/ci.yml     # CI: lint, architecture, tests, Android, Docker
 ├── ARCHITECTURE.md              # Layering + testing strategy
 ├── BRANCHING.md                 # SDLC branching + release promotion
+├── CHANGELOG.md                 # Release notes for tagged versions
 ├── UNRELEASED.md                # Changelog staging (keep-a-changelog style)
 └── DEVELOPMENT.md               # Local + SDLC guidance
 ```
