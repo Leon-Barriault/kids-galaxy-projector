@@ -27,8 +27,12 @@ export class LiveUpdates {
   constructor({
     url = '/api/events',
     EventSourceImpl = globalThis.EventSource,
-    setTimeoutFn = setTimeout,
-    clearTimeoutFn = clearTimeout,
+    // Wrapped, not passed bare: these are called as this.setTimeoutFn(...),
+    // and a browser throws "Illegal invocation" when its timers run with
+    // `this` set to anything but the window. Node does not, so only the
+    // browser suite and the strict-timer case in check_live_updates.mjs see it.
+    setTimeoutFn = (callback, ms) => setTimeout(callback, ms),
+    clearTimeoutFn = (handle) => clearTimeout(handle),
     heartbeatTimeoutMs = HEARTBEAT_TIMEOUT_MS,
     backoffBaseMs = RECONNECT_BASE_MS,
     backoffMaxMs = RECONNECT_MAX_MS,

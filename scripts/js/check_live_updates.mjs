@@ -191,4 +191,42 @@ assert.deepEqual(backoff, [500, 1000, 2000, 4000, 5000, 5000, 5000]);
   assert.equal(currentSource().closed, true);
 }
 
+// The wall runs on the default timers, not the fakes above. A browser throws
+// "Illegal invocation" when setTimeout or clearTimeout is called as a method
+// of another object; Node does not, so stand in a browser-strict pair here.
+{
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  const scheduled = [];
+  globalThis.setTimeout = function browserSetTimeout(_fn, ms) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    scheduled.push(ms);
+    return scheduled.length;
+  };
+  globalThis.clearTimeout = function browserClearTimeout(_id) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+  };
+  try {
+    FakeEventSource.instances = [];
+    const planets = [];
+    const raw = JSON.stringify({ id: 'planet-on-default-timers', has_planet: true });
+    assert.doesNotThrow(() => {
+      const updates = new LiveUpdates({
+        EventSourceImpl: FakeEventSource,
+        onPlanet: (data) => planets.push(data),
+      });
+      updates.start();
+      currentSource().emit('heartbeat');
+      currentSource().emit('planet', raw);
+      currentSource().emit('error');
+      updates.stop();
+    }, 'the default timers must work in a browser');
+    assert.deepEqual(planets, [raw], 'a planet must reach the wall on the default timers');
+    assert.ok(scheduled.length > 0, 'the defaults must use the global timers');
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+  }
+}
+
 console.log('live update reconnect checks passed');

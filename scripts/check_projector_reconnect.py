@@ -156,6 +156,8 @@ def main() -> int:
         with sync_playwright() as playwright:
             browser = launch_browser(playwright)
             page = browser.new_page(viewport={"width": 1280, "height": 720})
+            script_errors: list[str] = []
+            page.on("pageerror", lambda error: script_errors.append(str(error)))
             event_responses: list[str] = []
             page.on(
                 "response",
@@ -173,6 +175,7 @@ def main() -> int:
                 page.wait_for_timeout(100)
             check(bool(event_responses), "wall opened its live event stream")
 
+            streams_before_restart = len(event_responses)
             released = server.stop_gracefully(GRACEFUL_STOP_SECONDS)
             check(
                 released,
@@ -195,6 +198,17 @@ def main() -> int:
                 print(f"planet did not appear: {exc}")
                 print(server.output())
             check(visible, "new planet appears on the open wall without a reload")
+
+            # The polling fallback can show the planet on its own, so a wall
+            # whose live stream died for good would still pass the check above.
+            deadline = time.monotonic() + 10
+            while len(event_responses) <= streams_before_restart and time.monotonic() < deadline:
+                page.wait_for_timeout(100)
+            check(
+                len(event_responses) > streams_before_restart,
+                "wall reopens its live event stream after the restart",
+            )
+            check(not script_errors, f"no script errors on the wall (got {script_errors[:3]})")
             browser.close()
     except Exception as exc:  # noqa: BLE001 - the script's result is the failure list
         failures.append(f"reconnect check crashed: {exc}")
