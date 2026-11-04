@@ -74,7 +74,7 @@ These are not fixed by this procedure. They need a decision or a room test.
 
 - The Linux hotspot script now makes a password and stores it in a root-only file. The install guide no longer prints a shared password. A Windows room should use the travel router.
 - `nginx:stable-alpine` is a moving tag. A pinned digest would be more stable and harder to refresh offline.
-- Export routes for print and STL stay open on purpose. Destructive routes stay role-gated.
+- Decided in November 2026: the preview, print and STL export routes require the manager role, like the destructive routes.
 - USB debugging on the kid tablet is a physical-access path. The case must leave the port usable, and the cable must stay with the adult.
 - A child who gets out of Lock Task can still open Settings, because Wi-Fi changes were not forbidden. Android 8 is weaker on the shade than Android 9.
 - Cancelling a tablet restarts the tablet door so the old card stops at once. A reload alone can leave the old door process accepting that card for a moment. If the door is stopped, the cancel list applies at the next start.
