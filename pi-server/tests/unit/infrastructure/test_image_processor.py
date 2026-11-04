@@ -37,15 +37,11 @@ def jpeg_bytes(width=64, height=64, color=(0, 128, 255)):
 
 class TestNormalizeToPng:
     def test_returns_png_bytes(self, processor):
-        result = processor.normalize_to_png(
-            png_bytes(), max_dimension=2048, target_size=1024
-        )
+        result = processor.normalize_to_png(png_bytes(), max_dimension=2048, target_size=1024)
         assert result.startswith(PNG_MAGIC)
 
     def test_converts_jpeg_to_png(self, processor):
-        result = processor.normalize_to_png(
-            jpeg_bytes(), max_dimension=2048, target_size=1024
-        )
+        result = processor.normalize_to_png(jpeg_bytes(), max_dimension=2048, target_size=1024)
         assert result.startswith(PNG_MAGIC)
 
     def test_preserves_image_dimensions_when_small_enough(self, processor):
@@ -76,23 +72,17 @@ class TestNormalizeToPng:
         with Image.open(io.BytesIO(original)) as img:
             assert "smuggled-payload" in str(img.info)
 
-        cleaned = processor.normalize_to_png(
-            original, max_dimension=2048, target_size=1024
-        )
+        cleaned = processor.normalize_to_png(original, max_dimension=2048, target_size=1024)
         with Image.open(io.BytesIO(cleaned)) as img:
             assert "smuggled-payload" not in str(img.info)
 
     def test_rejects_oversized_dimensions(self, processor):
         with pytest.raises(ImageValidationError) as exc:
-            processor.normalize_to_png(
-                png_bytes(3000, 100), max_dimension=2048, target_size=1024
-            )
+            processor.normalize_to_png(png_bytes(3000, 100), max_dimension=2048, target_size=1024)
         assert "dimensions" in str(exc.value).lower()
 
     def test_accepts_dimensions_exactly_at_the_limit(self, processor):
-        processor.normalize_to_png(
-            png_bytes(2048, 10), max_dimension=2048, target_size=1024
-        )
+        processor.normalize_to_png(png_bytes(2048, 10), max_dimension=2048, target_size=1024)
 
     def test_rejects_garbage_bytes(self, processor):
         with pytest.raises(ImageValidationError):
@@ -103,14 +93,10 @@ class TestNormalizeToPng:
     def test_rejects_truncated_png(self, processor):
         truncated = png_bytes()[:40]
         with pytest.raises(ImageValidationError):
-            processor.normalize_to_png(
-                truncated, max_dimension=2048, target_size=1024
-            )
+            processor.normalize_to_png(truncated, max_dimension=2048, target_size=1024)
 
     def test_handles_palette_and_alpha_modes(self, processor):
         for mode, color in (("P", 1), ("RGBA", (255, 0, 0, 128)), ("L", 128)):
             data = png_bytes(mode=mode, color=color)
-            result = processor.normalize_to_png(
-                data, max_dimension=2048, target_size=1024
-            )
+            result = processor.normalize_to_png(data, max_dimension=2048, target_size=1024)
             assert result.startswith(PNG_MAGIC)

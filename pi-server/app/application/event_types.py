@@ -14,6 +14,4 @@ from app.application.events import (
     PlanetRemoved,
 )
 
-type ApplicationEvent = (
-    PlanetCreated | PlanetRemoved | GalaxyCleared | GalaxyBehaviorChanged
-)
+type ApplicationEvent = PlanetCreated | PlanetRemoved | GalaxyCleared | GalaxyBehaviorChanged

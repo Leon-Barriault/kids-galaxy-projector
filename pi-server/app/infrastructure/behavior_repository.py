@@ -37,12 +37,8 @@ class JsonBehaviorRepository(BehaviorRepository):
             )
             return GalaxyBehaviorSettings(
                 mode=BehaviorMode(raw.get("mode", BehaviorMode.AUTO.value)),
-                manual_theme=GalaxyTheme(
-                    raw.get("manual_theme", GalaxyTheme.DEFAULT.value)
-                ),
-                region=CanadianRegion(
-                    raw.get("region", CanadianRegion.QUEBEC.value)
-                ),
+                manual_theme=GalaxyTheme(raw.get("manual_theme", GalaxyTheme.DEFAULT.value)),
+                region=CanadianRegion(raw.get("region", CanadianRegion.QUEBEC.value)),
                 planet_speed=float(raw.get("planet_speed", 1.0)),
                 ambient_effects=bool(raw.get("ambient_effects", True)),
                 projector_language=ProjectorLanguage(
@@ -53,9 +49,7 @@ class JsonBehaviorRepository(BehaviorRepository):
                 comet_frequency=EventFrequency(
                     raw.get("comet_frequency", EventFrequency.NORMAL.value)
                 ),
-                flyby_asteroids_enabled=bool(
-                    raw.get("flyby_asteroids_enabled", False)
-                ),
+                flyby_asteroids_enabled=bool(raw.get("flyby_asteroids_enabled", False)),
                 flyby_frequency=EventFrequency(
                     raw.get("flyby_frequency", EventFrequency.NORMAL.value)
                 ),

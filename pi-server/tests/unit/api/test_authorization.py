@@ -11,8 +11,7 @@ def request(
     headers: dict[str, str] | None = None,
 ) -> Request:
     encoded_headers = [
-        (key.lower().encode(), value.encode())
-        for key, value in (headers or {}).items()
+        (key.lower().encode(), value.encode()) for key, value in (headers or {}).items()
     ]
     return Request(
         {
@@ -56,9 +55,7 @@ def test_verified_proxy_role_is_accepted():
 
 
 def test_proxy_role_without_certificate_verification_is_rejected():
-    role = secure_policy().role_for(
-        request(headers=proxy_headers("manager", verified="NONE"))
-    )
+    role = secure_policy().role_for(request(headers=proxy_headers("manager", verified="NONE")))
     assert role is None
 
 

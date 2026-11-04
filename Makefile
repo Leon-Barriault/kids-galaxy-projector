@@ -41,6 +41,7 @@ lint: lint-python lint-docker lint-shell lint-kotlin
 
 lint-python:
 	cd pi-server && ruff check . --config ruff.toml
+	cd pi-server && ruff format --check . --config ruff.toml
 
 lint-docker:
 	hadolint --config .hadolint.yaml pi-server/Dockerfile
@@ -54,7 +55,8 @@ lint-shell:
 		scripts/clear_planet_names.sh \
 		scripts/rollback_room.sh scripts/production_certs.sh \
 		scripts/check_production_certs.sh scripts/create_tablet_keystore.sh \
-		scripts/provision_kid_tablet.sh 		scripts/replace_kid_tablet.sh scripts/wsl_bringup.sh \
+		scripts/provision_kid_tablet.sh \
+		scripts/replace_kid_tablet.sh scripts/wsl_bringup.sh \
 		scripts/check_wsl_detect.sh scripts/print_windows_commands.sh \
 		scripts/lib/room.sh scripts/lib/wsl.sh scripts/lib/room_address.sh \
 		pi-server/certs/generate_certs.sh
