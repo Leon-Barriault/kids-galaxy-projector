@@ -232,7 +232,8 @@ class PillowPlanetExportRenderer(PlanetExportRenderer):
             rgb[crater] *= 0.68
 
         alpha = (mask * 255).astype(np.uint8)
-        sphere = Image.fromarray(np.dstack((rgb.astype(np.uint8), alpha)), "RGBA")
+        # Four uint8 channels: Pillow infers RGBA. The mode argument goes in Pillow 13.
+        sphere = Image.fromarray(np.dstack((rgb.astype(np.uint8), alpha)))
         if planet.style == "ringed":
             sphere = self._add_ring_preview(sphere, planet)
         return sphere
