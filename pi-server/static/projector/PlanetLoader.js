@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import { LiveUpdates } from './LiveUpdates.js';
 import { PlanetEntity } from './PlanetEntity.js';
 
 const DEFAULT_POLL_INTERVAL_MS = 2500;
@@ -28,6 +29,8 @@ export class PlanetLoader {
     this.arrivalCounter = 0;
     this.galleryReady = false;
     this.pollTimer = null;
+    this.pollInFlight = false;
+    this.liveUpdates = null;
   }
 
   textureUrlOf(payload) {
@@ -155,7 +158,10 @@ export class PlanetLoader {
   }
 
   async syncGallery(celebrateNew) {
-    const response = await fetch('/api/planets?limit=' + this.gallerySize);
+    const response = await fetch('/api/planets?limit=' + this.gallerySize, {
+      cache: 'no-store',
+      signal: abortAfter(4000),
+    });
     if (!response.ok) return;
     const body = await response.json();
     const list = Array.isArray(body) ? body : body.planets || [];
@@ -179,10 +185,21 @@ export class PlanetLoader {
 
   startPolling() {
     if (this.pollTimer !== null) return;
-    this.pollTimer = setInterval(() => {
-      this.syncGallery(true).catch(() => {});
-      this.behaviorController?.refresh().catch(() => {});
-    }, this.pollIntervalMs);
+    const tick = () => {
+      // One poll at a time. A dying server can accept a fetch and then never
+      // answer; stacking those fills the browser's per-host connection pool
+      // and the wall stops being able to ask for anything.
+      if (this.pollInFlight) return;
+      this.pollInFlight = true;
+      Promise.allSettled([
+        this.syncGallery(true),
+        this.behaviorController?.refresh(),
+      ]).finally(() => {
+        this.pollInFlight = false;
+      });
+    };
+    tick();
+    this.pollTimer = setInterval(tick, this.pollIntervalMs);
   }
 
   stopPolling() {
@@ -213,48 +230,27 @@ export class PlanetLoader {
   }
 
   connectLiveUpdates() {
+    if (this.liveUpdates) return;
     if (typeof EventSource === 'undefined') {
       this.startPolling();
       return;
     }
 
-    let failures = 0;
-    const connect = () => {
-      let source;
-      try {
-        source = new EventSource('/api/events');
-      } catch (_error) {
-        this.startPolling();
-        return;
-      }
-
-      source.addEventListener('open', () => {
-        failures = 0;
+    this.liveUpdates = new LiveUpdates({
+      onPlanet: (raw) => this.handlePlanetEvent(raw),
+      onPlanetRemoved: (raw) => this.handlePlanetEvent(raw),
+      onBehavior: (raw) => this.behaviorController?.handleEvent(raw),
+      onLive: () => {
         this.stopPolling();
-      });
-      source.addEventListener('planet', (event) => {
-        this.handlePlanetEvent(event.data);
-      });
-      source.addEventListener('planet-removed', (event) => {
-        this.handlePlanetEvent(event.data);
-      });
-      source.addEventListener('behavior', (event) => {
-        this.behaviorController?.handleEvent(event.data);
-      });
-      source.addEventListener('error', () => {
-        this.startPolling();
-        failures += 1;
-        if (failures >= 5) {
-          source.close();
-          setTimeout(connect, 5000);
-        }
-      });
-    };
-
-    connect();
-    setTimeout(() => {
-      if (this.pollTimer === null && this.kidPlanets.size === 0) this.startPolling();
-    }, this.pollIntervalMs * 2);
+        // The stream only primes the latest planet. Reconcile the gallery so
+        // a planet that arrived while the socket was down still shows up,
+        // without celebrating planets the wall already has.
+        this.syncGallery(true).catch(() => {});
+        this.behaviorController?.refresh().catch(() => {});
+      },
+      onOffline: () => this.startPolling(),
+    });
+    this.liveUpdates.start();
   }
 
   bootstrap() {
@@ -263,4 +259,11 @@ export class PlanetLoader {
       this.connectLiveUpdates();
     });
   }
+}
+
+function abortAfter(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  return undefined;
 }

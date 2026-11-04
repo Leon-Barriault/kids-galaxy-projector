@@ -25,9 +25,7 @@ class BehaviorUpdateRequest(BaseModel):
     comet_frequency: EventFrequency = EventFrequency.NORMAL
     flyby_asteroids_enabled: bool = False
     flyby_frequency: EventFrequency = EventFrequency.NORMAL
-    enabled_themes: list[GalaxyTheme] = Field(
-        default_factory=lambda: list(DEFAULT_ENABLED_THEMES)
-    )
+    enabled_themes: list[GalaxyTheme] = Field(default_factory=lambda: list(DEFAULT_ENABLED_THEMES))
 
     def to_domain(self) -> GalaxyBehaviorSettings:
         return GalaxyBehaviorSettings(

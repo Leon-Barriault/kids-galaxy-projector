@@ -77,12 +77,20 @@ class Settings:
             values = tuple(value.strip() for value in raw.split(",") if value.strip())
             return values or default
 
-        origins_raw = (source.get("ALLOWED_ORIGINS") or "*").strip()
-        origins = (
-            ("*",)
-            if origins_raw == "*"
-            else tuple(o.strip() for o in origins_raw.split(",") if o.strip())
+        authorization_enabled = _flag(
+            "AUTHORIZATION_ENABLED",
+            default=DEFAULT_AUTHORIZATION_ENABLED,
         )
+        # A secure room serves the projector page and the API from one origin,
+        # and the tablets are native apps, so no web page needs cross-origin
+        # reads there. The bench keeps "*". ALLOWED_ORIGINS overrides both.
+        origins_raw = (source.get("ALLOWED_ORIGINS") or "").strip()
+        if not origins_raw:
+            origins: tuple[str, ...] = () if authorization_enabled else ("*",)
+        elif origins_raw == "*":
+            origins = ("*",)
+        else:
+            origins = tuple(o.strip() for o in origins_raw.split(",") if o.strip())
 
         return cls(
             upload_dir=Path(source.get("UPLOAD_DIR") or "uploads"),
@@ -91,9 +99,7 @@ class Settings:
             max_file_size=_int("MAX_FILE_SIZE", DEFAULT_MAX_FILE_SIZE),
             max_dimension=_int("MAX_DIMENSION", DEFAULT_MAX_DIMENSION),
             texture_size=_int("TEXTURE_SIZE", DEFAULT_TEXTURE_SIZE),
-            rate_limit_seconds=float(
-                _int("RATE_LIMIT_SECONDS", int(DEFAULT_RATE_LIMIT_SECONDS))
-            ),
+            rate_limit_seconds=float(_int("RATE_LIMIT_SECONDS", int(DEFAULT_RATE_LIMIT_SECONDS))),
             max_stored_planets=_int("MAX_STORED_PLANETS", DEFAULT_MAX_STORED_PLANETS),
             gallery_size=_int("GALLERY_SIZE", DEFAULT_GALLERY_SIZE),
             galaxy_name=(source.get("GALAXY_NAME") or DEFAULT_GALAXY_NAME).strip()
@@ -104,10 +110,7 @@ class Settings:
                 ADVERTISE_SCHEMES,
                 DEFAULT_ADVERTISE_SCHEME,
             ),
-            authorization_enabled=_flag(
-                "AUTHORIZATION_ENABLED",
-                default=DEFAULT_AUTHORIZATION_ENABLED,
-            ),
+            authorization_enabled=authorization_enabled,
             trusted_role_proxy_hosts=_csv(
                 "TRUSTED_ROLE_PROXY_HOSTS",
                 DEFAULT_TRUSTED_ROLE_PROXY_HOSTS,

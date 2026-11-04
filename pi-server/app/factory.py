@@ -9,11 +9,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import AuthorizationPolicy
 from app.api.routes import build_router
+from app.api.sse import install_graceful_stream_shutdown
 from app.application.behavior_use_cases import (
     GetGalaxyBehaviorUseCase,
     UpdateGalaxyBehaviorUseCase,
 )
 from app.application.use_cases import (
+    ClearPlanetNamesUseCase,
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
@@ -47,17 +49,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repository = FileSystemPlanetRepository(settings.upload_dir)
     behavior_repository = JsonBehaviorRepository(settings.state_dir)
     publisher = InMemoryEventPublisher()
-    rate_limiter = InMemoryRateLimiter(
-        cooldown_seconds=settings.rate_limit_seconds
-    )
+    rate_limiter = InMemoryRateLimiter(cooldown_seconds=settings.rate_limit_seconds)
     image_processor = PillowImageProcessor()
     # Projector snapshots are derived render-cache artifacts. Keep the cache
     # generation in the directory name so a framing/rendering fix cannot keep
     # serving an older clipped 700x700 capture after deployment. Existing planets
     # are republished when the projector page reloads and rebuilds its gallery.
-    export_renderer = WebglPlanetExportRenderer(
-        settings.state_dir / "projector-snapshots-v2"
-    )
+    export_renderer = WebglPlanetExportRenderer(settings.state_dir / "projector-snapshots-v2")
     authorizer = AuthorizationPolicy(settings)
     clock = SystemClock()
     seasonal_resolver = SeasonalThemeResolver()
@@ -82,12 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         repository,
         max_limit=settings.max_stored_planets,
     )
-    delete_planet = DeletePlanetUseCase(
-        repository=repository, publisher=publisher
-    )
-    clear_planets = ClearPlanetsUseCase(
-        repository=repository, publisher=publisher
-    )
+    delete_planet = DeletePlanetUseCase(repository=repository, publisher=publisher)
+    clear_planet_names = ClearPlanetNamesUseCase(repository)
+    clear_planets = ClearPlanetsUseCase(repository=repository, publisher=publisher)
     get_behavior = GetGalaxyBehaviorUseCase(
         behavior_repository,
         clock,
@@ -114,16 +109,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         advertiser.start()
+        restore_signals = install_graceful_stream_shutdown(publisher)
         try:
             yield
         finally:
+            # Release any stream still open. Uvicorn runs this only after
+            # responses finish, so the signal hook above is what actually
+            # unblocks a graceful stop; this covers other shutdown paths.
+            publisher.request_disconnect()
+            restore_signals()
             advertiser.stop()
 
     app = FastAPI(
         lifespan=lifespan,
         title="Kids Galaxy Projector",
         description="Secure backend for the kid planet drawing project",
-        version="1.6.0",
+        version="1.7.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url=None,
     )
@@ -154,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             list_recent_planets=list_recent_planets,
             delete_planet=delete_planet,
             clear_planets=clear_planets,
+            clear_planet_names=clear_planet_names,
             get_behavior=get_behavior,
             update_behavior=update_behavior,
             repository=repository,

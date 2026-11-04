@@ -18,6 +18,7 @@ from app.domain.planet_customization import (
     DEFAULT_MOUNTAIN_COLOR,
     DEFAULT_RING_COLOR,
 )
+from app.domain.planet_privacy import NAME_CLEARED, clear_stored_planet_names
 from app.ports import PlanetRepository
 
 logger = logging.getLogger(__name__)
@@ -183,12 +184,15 @@ class FileSystemPlanetRepository(PlanetRepository):
         metadata = self._read_metadata(image_path)
         fallback_name = stem.split("_", 1)[1] if "_" in stem else stem
 
-        raw_name = metadata.get("name")
-        display_name = (
-            raw_name.strip()
-            if isinstance(raw_name, str) and raw_name.strip()
-            else fallback_name
-        )
+        if metadata.get(NAME_CLEARED) is True:
+            display_name = ""
+        else:
+            raw_name = metadata.get("name")
+            display_name = (
+                raw_name.strip()
+                if isinstance(raw_name, str) and raw_name.strip()
+                else fallback_name
+            )
 
         raw_style = metadata.get("style")
         style = (
@@ -272,6 +276,10 @@ class FileSystemPlanetRepository(PlanetRepository):
                 return None
             return planet
         return None
+
+    def clear_names(self) -> int:
+        """Blank every stored planet name. Drawings stay. Safe to call twice."""
+        return clear_stored_planet_names(self._directory)
 
     def clear(self) -> list[Planet]:
         removed: list[Planet] = []

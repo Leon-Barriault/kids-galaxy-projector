@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,11 @@ class FakeRepository(PlanetRepository):
 
     def recent(self, limit: int) -> list[Planet]:
         return self.planets[:limit]
+
+    def clear_names(self) -> int:
+        for index, planet in enumerate(self.planets):
+            self.planets[index] = replace(planet, display_name="")
+        return len(self.planets)
 
     def clear(self) -> list[Planet]:
         removed = list(self.planets)

@@ -121,7 +121,6 @@ check(
   `${rowMin.toFixed(3)} to ${rowMax.toFixed(3)} across one row`,
 );
 
-const skyDirection = [0, 1, 0];
 let skySample = 0;
 let skyCount = 0;
 for (let column = 0; column < width; column += 1) {

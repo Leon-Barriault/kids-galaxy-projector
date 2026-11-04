@@ -1,0 +1,182 @@
+# Windows script checks. scripts/windows/*.ps1 are not on every branch yet.
+# When none are present this job succeeds and emits a notice. When they are
+# present, PSScriptAnalyzer errors fail the job, and each script that accepts
+# -WhatIf is dry-run with Windows PowerShell 5.1.
+#
+# The scripts that support -WhatIf give every other parameter a default, so
+# the dry run passes -WhatIf and no other arguments. kids-galaxy-hotspot.ps1
+# is the one that does this today: -Ssid defaults to KidsGalaxy and -Password
+# defaults to empty, and -WhatIf returns before any hotspot is started.
+# A script that declares SupportsShouldProcess is dry-run the same way.
+# Shared helpers and scripts without -WhatIf are analyzed only.
+
+name: Windows scripts CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-scripts:
+    name: PSScriptAnalyzer and WhatIf dry run
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Analyze Windows scripts and dry-run -WhatIf
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $ProgressPreference = 'SilentlyContinue'
+
+          function ConvertTo-RepoRelativePath {
+              param([string]$Path)
+              if (-not $Path) {
+                  return 'scripts/windows'
+              }
+              $root = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+              $full = [System.IO.Path]::GetFullPath($Path)
+              $relative = $full
+              if ($full.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+                  $relative = $full.Substring($root.Length).TrimStart('\', '/')
+              }
+              return ($relative -replace '\\', '/')
+          }
+
+          function Write-AnalyzerAnnotation {
+              param(
+                  [string]$Level,
+                  $Finding
+              )
+              $relative = ConvertTo-RepoRelativePath $Finding.ScriptPath
+              $message = (($Finding.Message -replace '[\r\n]+', ' ').Trim())
+              $rule = $Finding.RuleName
+              if (-not $rule) {
+                  $rule = 'ParseError'
+              }
+              Write-Output "::$Level file=$relative,line=$($Finding.Line),col=$($Finding.Column)::${rule}: $message"
+          }
+
+          function Test-SupportsWhatIf {
+              param([Parameter(Mandatory)][string]$Path)
+
+              $tokens = $null
+              $parseErrors = $null
+              $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+                  $Path,
+                  [ref]$tokens,
+                  [ref]$parseErrors)
+              if ($parseErrors -and @($parseErrors).Count -gt 0) {
+                  $first = @($parseErrors)[0]
+                  throw "Cannot parse ${Path}: $first"
+              }
+
+              $paramBlock = $ast.ParamBlock
+              if (-not $paramBlock) {
+                  return $false
+              }
+
+              foreach ($parameter in $paramBlock.Parameters) {
+                  if ($parameter.Name.VariablePath.UserPath -eq 'WhatIf') {
+                      return $true
+                  }
+              }
+
+              foreach ($attribute in $paramBlock.Attributes) {
+                  if ($attribute.TypeName.Name -ne 'CmdletBinding') {
+                      continue
+                  }
+                  foreach ($argument in $attribute.NamedArguments) {
+                      if ($argument.ArgumentName -ne 'SupportsShouldProcess') {
+                          continue
+                      }
+                      if (-not $argument.Argument) {
+                          return $true
+                      }
+                      $text = $argument.Argument.Extent.Text.Trim()
+                      if ($text -ne '$false' -and $text -ne '0') {
+                          return $true
+                      }
+                  }
+              }
+
+              return $false
+          }
+
+          $directory = Join-Path $env:GITHUB_WORKSPACE 'scripts/windows'
+          $scripts = @()
+          if (Test-Path -LiteralPath $directory) {
+              $scripts = @(Get-ChildItem -LiteralPath $directory -Filter '*.ps1' -File)
+          }
+
+          if ($scripts.Count -eq 0) {
+              Write-Output '::notice title=Windows scripts not present::No scripts/windows/*.ps1 files found. PSScriptAnalyzer and WhatIf dry runs are skipped until those scripts are added.'
+              exit 0
+          }
+
+          Write-Output "Checking $($scripts.Count) script(s) under scripts/windows."
+
+          $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+          if (-not $gallery) {
+              Register-PSRepository -Default
+          }
+          try {
+              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          }
+          catch {
+              Write-Output "PSGallery was already available. Trust update was not required: $($_.Exception.Message)"
+          }
+          Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force -AcceptLicense
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.25.0
+          Write-Output "PSScriptAnalyzer $((Get-Module PSScriptAnalyzer).Version)"
+
+          # -Path accepts one script. Pass files one at a time so a future
+          # nested folder is not pulled in by a directory scan.
+          $findings = @()
+          foreach ($scriptPath in @($scripts | ForEach-Object { $_.FullName })) {
+              $found = @(Invoke-ScriptAnalyzer -Path $scriptPath | Where-Object { $_ })
+              if ($found.Count -gt 0) {
+                  $findings += $found
+              }
+          }
+          $failures = @($findings | Where-Object { $_.Severity -eq 'Error' -or $_.Severity -eq 'ParseError' })
+          $warnings = @($findings | Where-Object { $_.Severity -eq 'Warning' })
+
+          foreach ($warning in $warnings) {
+              Write-AnalyzerAnnotation -Level 'warning' -Finding $warning
+          }
+          if ($failures.Count -gt 0) {
+              foreach ($failure in $failures) {
+                  Write-AnalyzerAnnotation -Level 'error' -Finding $failure
+              }
+              throw "PSScriptAnalyzer reported $($failures.Count) error(s)."
+          }
+          Write-Output 'PSScriptAnalyzer reported no errors.'
+
+          $dryRuns = @($scripts | Where-Object { Test-SupportsWhatIf -Path $_.FullName })
+          if ($dryRuns.Count -eq 0) {
+              Write-Output '::notice title=No WhatIf scripts::No scripts/windows/*.ps1 files accept -WhatIf. Dry run skipped.'
+              exit 0
+          }
+
+          $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (-not (Test-Path -LiteralPath $powershell)) {
+              throw "Windows PowerShell 5.1 was not found at $powershell"
+          }
+
+          foreach ($script in $dryRuns) {
+              Write-Output "WhatIf dry run: $($script.Name) (other parameters keep their defaults)."
+              & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script.FullName -WhatIf
+              if ($LASTEXITCODE -ne 0) {
+                  throw "WhatIf dry run failed for $($script.Name) with exit code $LASTEXITCODE"
+              }
+          }
+
+          Write-Output "WhatIf dry run passed for $($dryRuns.Count) script(s)."

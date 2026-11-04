@@ -89,7 +89,7 @@ These facts come from the app build.
 
    **What you should see.** The Wi-Fi name matches the paper card.
 
-   **If not.** Join the room Wi-Fi before lock mode.
+   **If not.** Join `KidsGalaxy` before lock mode.
 
 <!-- step: specs-fire -->
 
@@ -185,7 +185,7 @@ No account may be on it.
 
 1. Erase the kid tablet.
    Skip every account prompt.
-   Join the room Wi-Fi when the tablet asks.
+   Join `KidsGalaxy` when the tablet asks.
    Turn on USB debugging, as in the install guide.
 
    **What you should see.** A home screen with no email account.
@@ -233,7 +233,8 @@ bash scripts/prepare_kid_tablet.sh
 >
 > 1. Unplug other tablets.
 > 2. Erase the kid tablet and do not sign in.
-> 3. Join the room Wi-Fi, then run the command again.
+> 3. Join `KidsGalaxy`, then run the command again.
+> 4. If the line says no tablet is ready, do the USB share steps in the install guide.
 > 4. On a Fire tablet, stop if lock mode will not turn on.
 
 <!-- section: block -->
@@ -427,7 +428,7 @@ The command prints the real seconds.
 
 2. Erase the new tablet.
    Skip every account.
-   Join the room Wi-Fi.
+   Join `KidsGalaxy`.
    Turn on USB debugging.
    Plug it into the galaxy computer.
    Tap Allow.
@@ -469,6 +470,63 @@ bash scripts/replace_kid_tablet.sh --name kid-2 --old-name kid-1
 > 2. Use a data cable and tap Allow.
 > 3. Run the replace line again. A second run is safe.
 > 4. If the first build is still running, wait. Do not unplug the tablet.
+
+<!-- section: grown-up -->
+
+## Grown-up controls
+
+A child can draw.
+A child cannot change the galaxy address.
+A child cannot change the language.
+A short tap does nothing on those two controls.
+
+<!-- step: grown-hold-language -->
+
+1. Press and hold EN / FR.
+
+   **What you should see.** A number question, with big keys.
+
+   **If not.** Hold a little longer. A quick tap does nothing.
+
+<!-- step: grown-answer-language -->
+
+2. Type the two-digit answer.
+
+   **What you should see.** A grown-up menu with two choices.
+
+   **If not.** Wait when it says too many tries. Then hold EN / FR again.
+
+<!-- step: grown-pick-language -->
+
+3. Tap Change the language.
+
+   **What you should see.** The app opens again in the other language.
+
+   **If not.** Hold EN / FR again and answer the new question.
+
+<!-- step: grown-hold-galaxy -->
+
+4. Press and hold the galaxy name.
+
+   **What you should see.** A new number question.
+
+   **If not.** Hold the name longer. A quick tap does nothing.
+
+<!-- step: grown-answer-galaxy -->
+
+5. Type that answer.
+
+   **What you should see.** The grown-up menu again.
+
+   **If not.** Wait if the tries are used up. Then hold the name again.
+
+<!-- step: grown-pick-galaxy -->
+
+6. Tap Change the galaxy.
+
+   **What you should see.** The galaxy list, or a place to type an address.
+
+   **If not.** Hold the galaxy name again. Do not hand this step to a child.
 
 <!-- section: limits -->
 

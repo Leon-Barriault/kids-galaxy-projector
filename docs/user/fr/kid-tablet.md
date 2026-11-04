@@ -89,7 +89,7 @@ Ces faits viennent de la construction de l’application.
 
    **Ce que vous devez voir.** Le nom du Wi-Fi correspond à la carte papier.
 
-   **Sinon.** Joignez le Wi-Fi de la salle avant le mode verrouillé.
+   **Sinon.** Joignez `KidsGalaxy` avant le mode verrouillé.
 
 <!-- step: specs-fire -->
 
@@ -185,7 +185,7 @@ Aucun compte ne doit s’y trouver.
 
 1. Effacez la tablette enfant.
    Sautez chaque demande de compte.
-   Joignez le Wi-Fi de la salle quand la tablette le demande.
+   Joignez `KidsGalaxy` quand la tablette le demande.
    Activez le débogage USB, comme dans le guide d’installation.
 
    **Ce que vous devez voir.** Un écran d’accueil sans compte de courriel.
@@ -233,7 +233,8 @@ bash scripts/prepare_kid_tablet.sh
 >
 > 1. Débranchez les autres tablettes.
 > 2. Effacez la tablette enfant et ne vous connectez pas.
-> 3. Joignez le Wi-Fi de la salle, puis relancez la commande.
+> 3. Joignez `KidsGalaxy`, puis relancez la commande.
+> 4. Si la ligne dit qu’aucune tablette n’est prête, faites les étapes de partage USB du guide d’installation.
 > 4. Sur une tablette Fire, arrêtez-vous si le mode verrouillé ne s’active pas.
 
 <!-- section: block -->
@@ -427,7 +428,7 @@ La commande affiche les vraies secondes.
 
 2. Effacez la nouvelle tablette.
    Sautez chaque compte.
-   Joignez le Wi-Fi de la salle.
+   Joignez `KidsGalaxy`.
    Activez le débogage USB.
    Branchez-la à l’ordinateur de la galaxie.
    Touchez Autoriser.
@@ -469,6 +470,63 @@ bash scripts/replace_kid_tablet.sh --name kid-2 --old-name kid-1
 > 2. Utilisez un câble de données et touchez Autoriser.
 > 3. Relancez la ligne de remplacement. Un second passage est sûr.
 > 4. Si la première construction tourne encore, attendez. Ne débranchez pas la tablette.
+
+<!-- section: grown-up -->
+
+## Contrôles adulte
+
+Un enfant peut dessiner.
+Un enfant ne peut pas changer l’adresse de la galaxie.
+Un enfant ne peut pas changer la langue.
+Un toucher court ne fait rien sur ces deux contrôles.
+
+<!-- step: grown-hold-language -->
+
+1. Maintenez EN / FR.
+
+   **Ce que vous devez voir.** Une question de nombres, avec de grandes touches.
+
+   **Sinon.** Maintenez plus longtemps. Un toucher court ne fait rien.
+
+<!-- step: grown-answer-language -->
+
+2. Tapez la réponse à deux chiffres.
+
+   **Ce que vous devez voir.** Un menu adulte avec deux choix.
+
+   **Sinon.** Attendez si trop d’essais sont utilisés. Puis maintenez EN / FR de nouveau.
+
+<!-- step: grown-pick-language -->
+
+3. Touchez Changer la langue.
+
+   **Ce que vous devez voir.** L’application s’ouvre de nouveau dans l’autre langue.
+
+   **Sinon.** Maintenez EN / FR de nouveau et répondez à la nouvelle question.
+
+<!-- step: grown-hold-galaxy -->
+
+4. Maintenez le nom de la galaxie.
+
+   **Ce que vous devez voir.** Une nouvelle question de nombres.
+
+   **Sinon.** Maintenez le nom plus longtemps. Un toucher court ne fait rien.
+
+<!-- step: grown-answer-galaxy -->
+
+5. Tapez cette réponse.
+
+   **Ce que vous devez voir.** Le menu adulte de nouveau.
+
+   **Sinon.** Attendez si les essais sont épuisés. Puis maintenez le nom de nouveau.
+
+<!-- step: grown-pick-galaxy -->
+
+6. Touchez Changer la galaxie.
+
+   **Ce que vous devez voir.** La liste des galaxies, ou un endroit pour taper une adresse.
+
+   **Sinon.** Maintenez le nom de la galaxie de nouveau. Ne donnez pas cette étape à un enfant.
 
 <!-- section: limits -->
 

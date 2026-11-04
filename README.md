@@ -11,7 +11,7 @@ A complete, kid-friendly system where children draw a planet on an Android table
 - [The kid tablet](docs/user/en/kid-tablet.md)
 - [Each day](docs/user/en/daily.md)
 - [When something goes wrong](docs/user/en/troubleshooting.md)
-- [One-page card](docs/user/en/quick-start.md) ([PDF](docs/user/en/quick-start.pdf))
+- [Day-of card](docs/user/en/quick-start.md) ([PDF](docs/user/en/quick-start.pdf))
 
 **Target age**: 4–10 years  
 **Hardware**: Android tablet (kiosk / single-app) + modern laptop/desktop GPU + HDMI/DisplayPort projector  
@@ -98,6 +98,7 @@ kids-galaxy-projector/
 ├── .github/workflows/ci.yml     # CI: lint, architecture, tests, Android, Docker
 ├── ARCHITECTURE.md              # Layering + testing strategy
 ├── BRANCHING.md                 # SDLC branching + release promotion
+├── CHANGELOG.md                 # Release notes for tagged versions
 ├── UNRELEASED.md                # Changelog staging (keep-a-changelog style)
 └── DEVELOPMENT.md               # Local + SDLC guidance
 ```

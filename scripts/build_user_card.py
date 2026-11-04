@@ -73,16 +73,16 @@ def page(title: str, body: str, *, lang: str) -> str:
   <meta charset="utf-8" />
   <title>{html.escape(title)}</title>
   <style>
-    @page {{ size: letter; margin: 0.45in; }}
+    @page {{ size: letter; margin: 0.38in; }}
     body {{
       font-family: Georgia, "Times New Roman", serif;
-      font-size: 11pt;
-      line-height: 1.25;
+      font-size: 9pt;
+      line-height: 1.15;
       color: #111;
     }}
-    h1 {{ font-size: 16pt; margin: 0 0 6px; }}
-    h2 {{ font-size: 12pt; margin: 8px 0 2px; }}
-    p, ul {{ margin: 0 0 4px; }}
+    h1 {{ font-size: 13pt; margin: 0 0 3px; }}
+    h2 {{ font-size: 10.5pt; margin: 5px 0 1px; }}
+    p, ul {{ margin: 0 0 2px; }}
     li {{ margin: 0; }}
   </style>
 </head>

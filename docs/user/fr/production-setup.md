@@ -10,7 +10,7 @@ Faites une étape à la fois.
 
 ## À qui s’adresse cette page
 
-Vous pouvez le faire si vous savez coller une ligne dans Terminal.
+Vous pouvez le faire si vous savez coller une ligne dans Ubuntu.
 Une personne-ressource aide pour le routeur et les tablettes.
 Les enfants ne font pas cette préparation.
 
@@ -45,11 +45,12 @@ Le guide d’installation liste le projecteur et les câbles.
 
 <!-- step: hardware-computer -->
 
-1. Un ordinateur Linux avec 8 Go de mémoire ou plus.
+1. Le PC Windows 11 de cette salle.
+   Ubuntu 22.04 tourne à l’intérieur, avec l’utilisateur `omega`.
    Il lui faut un port HDMI, ou un USB-C plus un adaptateur HDMI.
    Il doit ouvrir Chrome.
 
-   **Ce que vous devez voir.** Un ordinateur qui montre un bureau sur le projecteur.
+   **Ce que vous devez voir.** Windows montre un bureau sur le projecteur.
 
    **Sinon.** Suivez le guide d’installation pour placer l’ordinateur.
 
@@ -94,34 +95,38 @@ Le guide d’installation liste le projecteur et les câbles.
 
 <!-- section: network -->
 
-## Écrire le plan réseau
+## Le routeur de voyage est le seul réseau
 
 Environ 20 minutes.
-Utilisez le Wi-Fi du bâtiment.
-Le point d’accès du guide d’installation est seulement un secours.
+Apportez ce routeur à chaque garderie.
+Son Wi-Fi s’appelle `KidsGalaxy`.
+L’adresse du PC sur ce réseau est `192.168.0.52`.
+N’utilisez pas le Wi-Fi de la garderie.
+Le point d’accès Windows est seulement un secours.
+Ses limites sont dans la section du voyage.
 
 <!-- step: network-paper -->
 
-1. Prenez une carte papier.
-   Écrivez le nom du Wi-Fi.
-   Écrivez le mot de passe du Wi-Fi sur la même carte.
+1. Prenez la carte papier.
+   Écrivez le nom Wi-Fi `KidsGalaxy`.
+   Écrivez le mot de passe du routeur de voyage sur la même carte.
    Gardez la carte avec l’adulte, pas avec les enfants.
 
-   **Ce que vous devez voir.** Le nom du Wi-Fi et le mot de passe sont sur papier.
+   **Ce que vous devez voir.** `KidsGalaxy` et le mot de passe sont sur papier.
 
-   **Sinon.** Demandez à la personne qui gère le routeur.
+   **Sinon.** Ouvrez la page d’administration du routeur et lisez le nom sans fil.
 
 <!-- step: network-address -->
 
-2. Choisissez une adresse fixe pour l’ordinateur de la galaxie.
-   Exemple. `192.168.1.50`.
-   Réservez cette adresse dans le routeur.
+2. L’adresse de l’ordinateur de la galaxie est `192.168.0.52`.
+   Le routeur de voyage réserve cette adresse pour ce PC.
    Écrivez-la sur la carte papier.
    Le nom d’ordinateur à écrire est `kids-galaxy`.
 
-   **Ce que vous devez voir.** Le routeur montre la même adresse après un redémarrage.
+   **Ce que vous devez voir.** Après un redémarrage, Ubuntu montre `192.168.0.52`.
 
-   **Sinon.** Demandez de réserver l’adresse. Ne continuez pas avec une adresse qui change.
+   **Sinon.** Reprenez l’étape de réservation dans la section du voyage.
+   Ne continuez pas avec une autre adresse.
 
 <!-- step: network-ports -->
 
@@ -129,30 +134,402 @@ Le point d’accès du guide d’installation est seulement un secours.
    Les tablettes utilisent `8443`.
    La page du mur utilise `8000` seulement sur l’ordinateur de la galaxie.
    La découverte de la salle utilise `5353`.
-   L’adresse des tablettes ressemble à `https://192.168.1.50:8443`.
-   Utilisez votre vraie adresse, pas l’exemple.
+   L’adresse des tablettes est `https://192.168.0.52:8443`.
 
-   **Ce que vous devez voir.** La carte papier a l’adresse et les trois numéros de port.
+   **Ce que vous devez voir.** La carte papier a `192.168.0.52` et les trois numéros de port.
 
    **Sinon.** Copiez les numéros de cette étape avant de continuer.
 
 <!-- step: network-isolation -->
 
-4. Désactivez l’isolation des invités sur le routeur.
-   Les tablettes doivent pouvoir voir l’ordinateur.
-   Un réseau invité qui cache les appareils ne fonctionne pas.
+4. Désactivez l’isolation des invités sur le routeur de voyage.
+   Les tablettes doivent pouvoir voir le PC.
+   Ne mettez pas le PC ni les tablettes sur le Wi-Fi de la garderie.
 
-   **Ce que vous devez voir.** Une tablette peut ouvrir l’adresse de l’ordinateur plus tard.
+   **Ce que vous devez voir.** Une tablette sur `KidsGalaxy` peut ouvrir l’adresse plus tard.
 
-   **Sinon.** Mettez l’ordinateur et les tablettes sur le même Wi-Fi privé.
+   **Sinon.** Gardez l’ordinateur et les tablettes sur `KidsGalaxy`.
 
 <!-- fix: network -->
 
 > **Si cela ne fonctionne pas**
 >
-> 1. Vérifiez l’icône Wi-Fi de l’ordinateur. Elle doit être stable.
-> 2. Demandez de réserver l’adresse.
-> 3. N’utilisez pas le Wi-Fi public d’un café.
+> 1. L’icône Wi-Fi doit dire `KidsGalaxy`.
+> 2. Dans Ubuntu, collez `hostname -I` et cherchez `192.168.0.52`.
+> 3. N’utilisez pas le Wi-Fi de la garderie. N’utilisez pas le Wi-Fi d’un café.
+
+<!-- section: wsl -->
+
+## Windows avec Ubuntu
+
+Cette salle utilise le PC Windows nommé `DESKTOP-VJV7DLM`.
+Ubuntu 22.04 tourne à l’intérieur, avec l’utilisateur `omega`.
+Docker démarre déjà avec Ubuntu.
+Faites cette section avant de préparer l’ordinateur de la galaxie.
+Le seul Wi-Fi est le routeur de voyage nommé `KidsGalaxy`.
+Ne joignez pas le Wi-Fi de la garderie.
+
+<!-- step: wsl-version -->
+
+1. Ouvrez PowerShell sur Windows.
+   Collez cette ligne.
+
+```powershell
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+```
+
+   Puis collez cette ligne.
+
+```powershell
+wsl -l -v
+```
+
+   **Ce que vous devez voir.** Le nom du PC et un nom de distribution.
+   Sur ce PC, le nom de distribution est `Ubuntu`.
+   Windows 11, y compris la version 26H2, peut utiliser le mode miroir.
+   Windows 10 utilise le mode NAT.
+   Ouvrez Ubuntu dans ce dossier de projet et collez la ligne d’aide.
+   Elle imprime les commandes Windows avec les vrais chemins.
+
+```bash
+bash scripts/print_windows_commands.sh
+```
+
+   L’aide imprime un dossier qui commence par `\\wsl$\` plus le nom de distribution.
+   Sur ce PC, ce dossier contient `Ubuntu` et `omega`.
+
+   **Sinon.** Demandez de l’aide avant de continuer. Le nom du PC doit être `DESKTOP-VJV7DLM`.
+   Dans PowerShell, `wsl -l -q` montre le nom de distribution.
+
+<!-- step: wsl-mirrored -->
+
+2. Sur Windows 11, ouvrez le Bloc-notes.
+   Enregistrez ce fichier sous `C:\Users\votre-nom\.wslconfig`.
+   Le point devant le nom est obligatoire.
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+   Dans PowerShell, collez `wsl --shutdown`.
+   Ouvrez Ubuntu de nouveau.
+   Dans Ubuntu, collez `hostname -I`.
+
+   **Ce que vous devez voir.** Une adresse qui commence par `192.168`.
+   Sur ce PC, Ubuntu montre `192.168.0.52`.
+   Elle doit correspondre à la carte papier.
+
+   **Sinon.** Le fichier est dans le mauvais dossier, ou `wsl --shutdown` n’a pas été lancé.
+   Utilisez alors l’étape NAT.
+
+<!-- step: wsl-nat -->
+
+3. Sur Windows 10, ou si le mode miroir ne tient pas, gardez le mode NAT.
+   Ouvrez Ubuntu une fois pour qu’il ait une adresse.
+   Ouvrez PowerShell en tant qu’administrateur.
+   Collez la ligne de transfert que l’aide a imprimée.
+   Cette ligne contient le nom de distribution et l’utilisateur Linux.
+
+   **Ce que vous devez voir.** Une ligne qui dit que le port `8443` pointe vers une adresse qui commence par `172`.
+   Les tablettes utilisent quand même l’adresse Windows de la carte papier.
+
+   **Sinon.** Ouvrez Ubuntu d’abord. Le transfert a besoin qu’Ubuntu soit allumé.
+   Relancez la même ligne après chaque `wsl --shutdown`.
+   La tâche d’ouverture de session fait ce rafraîchissement pour vous.
+
+<!-- step: wsl-firewall -->
+
+4. Dans la même fenêtre PowerShell administrateur, collez la ligne de pare-feu que l’aide a imprimée.
+
+   **Ce que vous devez voir.** Des règles pour `8443`, `8000` et `5353`.
+   Sur Windows 11 en mode miroir, une ligne parle aussi du pare-feu Hyper-V.
+   Une règle déjà nommée KidsGalaxy est conservée.
+   Le script n’ajoute pas une deuxième copie pour le même port.
+   Les règles visent seulement un réseau privé.
+   Une ligne dit aussi si un adaptateur branché est Public.
+
+   **Sinon.** La fenêtre n’est pas une fenêtre administrateur.
+   Fermez-la et ouvrez PowerShell avec Exécuter en tant qu’administrateur.
+   Si le script dit que le réseau est Public, il imprime une ligne pour le mettre Privé.
+   Lancez cette ligne seulement pour le routeur de voyage `KidsGalaxy`.
+   Laissez un réseau de café en Public.
+   Pour retirer les règles du script plus tard, ajoutez `-Remove` à la fin de la ligne.
+   Les règles faites à la main restent en place.
+
+<!-- step: wsl-mdns -->
+
+5. Le nom `kids-galaxy.local` est un confort.
+   En mode miroir, il peut marcher si le pare-feu laisse passer le port `5353`.
+   Le routeur de voyage peut quand même cacher ce nom.
+   En mode NAT, ce nom ne rejoint pas les tablettes.
+   Ubuntu annoncerait une adresse `172` que les tablettes ne peuvent pas utiliser.
+   Le script de transfert ne transporte que le port `8443`.
+   Il ne transporte pas le nom.
+   Dans les deux modes, écrivez l’adresse Windows sur la carte papier.
+   Les tablettes doivent utiliser cette adresse.
+
+   **Ce que vous devez voir.** La carte papier montre une adresse `192.168`, pas une adresse `172`.
+
+   **Sinon.** Reprenez l’étape miroir ou l’étape NAT avant de construire les applications.
+
+<!-- step: wsl-docker -->
+
+6. Quittez Docker Desktop avant d’installer Docker dans Ubuntu.
+   Éteignez le démarrage de Docker Desktop à l’ouverture de session.
+   Dans Ubuntu, allez dans le dossier du projet.
+   Collez la ligne des programmes de la section suivante.
+   Si Docker Desktop tourne encore, cette ligne s’arrête.
+   Quittez-le, puis relancez la ligne.
+   Le script démarre Docker avec Ubuntu.
+   Il ne crée pas de point d’accès Wi-Fi.
+
+   **Ce que vous devez voir.** Les mots `The galaxy computer programs are installed.`
+   Docker Desktop ne tourne pas.
+   Sur ce PC, Docker démarre déjà avec Ubuntu.
+
+   **Sinon.** Si la ligne s’arrête, vous devriez voir `Docker Desktop is running on Windows.`
+   Quittez-le et relancez la ligne de l’hôte.
+   Si Docker ne démarre pas avec Ubuntu, ajoutez ces lignes dans `/etc/wsl.conf`.
+
+```ini
+[boot]
+systemd=true
+```
+
+   Lancez `wsl --shutdown` dans PowerShell, ouvrez Ubuntu, et relancez la ligne de l’hôte.
+   Fermez Ubuntu et rouvrez-le avant `setup_room.sh`.
+   Sinon Docker refuse encore votre utilisateur.
+
+<!-- step: wsl-hotspot -->
+
+7. Ne lancez pas le script Linux de point d’accès sur ce PC.
+   Ubuntu dans Windows ne possède pas la carte Wi-Fi.
+   Le script refuse de tourner.
+   À chaque garderie, le PC et les tablettes joignent `KidsGalaxy`.
+   Ne joignez pas le Wi-Fi de la garderie.
+   Le point d’accès Windows est seulement un secours.
+   Ses limites sont dans la section du voyage.
+
+   **Ce que vous devez voir.** Le PC et une tablette montrent tous les deux `KidsGalaxy`.
+
+   **Sinon.** Éteignez l’isolation des invités sur le routeur de voyage, comme dans la section réseau.
+
+<!-- step: wsl-start -->
+
+8. Windows n’ouvre pas Ubuntu tout seul après un redémarrage.
+   Dans une fenêtre PowerShell administrateur, collez la ligne d’ouverture de session que l’aide a imprimée.
+
+   **Ce que vous devez voir.** Les mots `The start task is in place.`
+   La prochaine fois que vous ouvrez une session Windows, le programme de la galaxie démarre.
+
+   **Sinon.** Ouvrez Ubuntu une fois avant cette ligne, pour que Windows voie le fichier.
+   La tâche peut être lancée de nouveau sans risque.
+   Si Windows demande une permission à l’ouverture de session, choisissez Oui.
+
+<!-- step: wsl-wall -->
+
+9. Branchez le projecteur sur le port HDMI.
+   Appuyez ensemble sur la touche Windows et la touche P.
+   Choisissez `Second screen only` pour le spectacle.
+   Dans Ubuntu, collez cette ligne.
+
+```bash
+bash scripts/open_projector.sh
+```
+
+   Chrome s’ouvre en plein écran sur Windows à `http://127.0.0.1:8000/`.
+   Un raccourci du Bureau nommé `Kids Galaxy wall` ouvre cette page en mode kiosque.
+   Gardez le PC éveillé. Dans PowerShell, collez ces deux lignes.
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change monitor-timeout-ac 0
+```
+
+   **Ce que vous devez voir.** Le mur montre la galaxie, et le PC branché ne s’endort pas.
+
+   **Sinon.** Ouvrez Chrome vous-même à `http://127.0.0.1:8000/` et appuyez sur F11.
+   Si l’image est sur l’écran du portable, appuyez sur la touche Windows, Maj, et la flèche droite.
+
+<!-- section: travel -->
+
+## Un réseau que vous pouvez transporter
+
+La galaxie se déplace entre les garderies.
+Une garderie peut n’avoir ni Wi-Fi ni Internet.
+Utilisez la même adresse à chaque site.
+Cette adresse est `192.168.0.52`.
+Les applications des tablettes sont construites une fois pour cette adresse.
+Vous ne les reconstruisez pas quand vous changez de salle.
+Utilisez le routeur de voyage pour garder cette adresse.
+Le point d’accès Windows ne peut pas l’utiliser.
+Gardez le point d’accès Windows seulement comme secours.
+
+<!-- step: travel-router -->
+
+1. Achetez un petit routeur de voyage.
+   Un Opal GLiNet ou un Beryl GLiNet convient.
+   Le modèle Opal est `GL-SFT1200`.
+   Le modèle Beryl est `GL-MT3000`.
+   Chacun fonctionne sur USB-C ou sur une batterie externe.
+   Un Opal coûte souvent de 35 à 50 dollars américains.
+   Un Beryl coûte souvent de 80 à 110 dollars américains.
+   Les prix changent. Ce n’est pas un prix de magasin.
+
+   **Ce que vous devez voir.** La boîte indique une alimentation USB-C et le Wi-Fi.
+
+   **Sinon.** Tout petit routeur qui peut enregistrer une adresse de PC peut faire ce travail.
+
+<!-- step: travel-lan -->
+
+2. Branchez le routeur sur le courant.
+   Joignez son premier Wi-Fi depuis le PC.
+   Ouvrez la page d’administration.
+   Sur un routeur GLiNet neuf, cette page est souvent `http://192.168.8.1`.
+   Réglez l’adresse du réseau local à `192.168.0.1`.
+   Réglez le masque à `255.255.255.0`.
+   Éteignez toute vérification qui a besoin d’Internet.
+   Éteignez une page d’accueil et un interrupteur de coupure.
+   Laissez le port Internet vide.
+
+   **Ce que vous devez voir.** La page d’administration montre le réseau local `192.168.0.1`.
+   Le routeur ne demande pas Internet.
+
+   **Sinon.** Restez sur la première page d’administration et cherchez LAN ou DHCP.
+
+<!-- step: travel-wifi -->
+
+3. Réglez le nom du Wi-Fi à `KidsGalaxy`.
+   Choisissez WPA2 ou WPA3.
+   Créez un long mot de passe et écrivez-le sur la carte papier.
+   Ne copiez pas un mot de passe de ce guide.
+
+   **Ce que vous devez voir.** La carte papier a le nom du Wi-Fi et le mot de passe.
+
+   **Sinon.** Ouvrez de nouveau la page sans fil et enregistrez.
+
+<!-- step: travel-reserve -->
+
+4. Sur le PC, ouvrez PowerShell et collez `getmac /v`.
+   Trouvez l’adaptateur Wi-Fi.
+   Écrivez son adresse physique sur la carte papier.
+   Dans le routeur, enregistrez `192.168.0.52` pour cette adresse.
+   Ubuntu dans Windows partage l’adresse Windows et la carte Wi-Fi Windows.
+   Vous enregistrez la carte Windows.
+   Il n’y a pas de carte Ubuntu séparée.
+   Joignez le PC à `KidsGalaxy`.
+   Dans Ubuntu, collez `hostname -I`.
+
+   **Ce que vous devez voir.** Ubuntu montre `192.168.0.52`.
+
+   **Sinon.** Oubliez les autres Wi-Fi sur le PC pour qu’il reste sur le routeur de voyage.
+   Lancez `wsl --shutdown`, ouvrez Ubuntu, et vérifiez de nouveau.
+
+<!-- step: travel-hotspot -->
+
+5. Le point d’accès mobile de Windows est un secours.
+   Son adresse est toujours `192.168.137.1`.
+   Windows refuse souvent de le démarrer sans Internet à partager.
+   Une fausse carte réseau peut le tromper.
+   N’en construisez pas une pour une garderie.
+   Le point d’accès s’éteint aussi quand la dernière tablette part.
+   Partager le Wi-Fi pendant que le PC est aussi sur le Wi-Fi est peu fiable.
+   Ubuntu peut ne pas voir cet adaptateur.
+   Cette partie demande encore une vérification sur ce PC.
+   L’adaptateur se montre souvent comme un réseau public.
+   Si c’est le cas, mettez cet adaptateur en Privé, comme à l’étape du pare-feu.
+   Collez la ligne de plan du point d’accès que l’aide a imprimée.
+   Cette ligne finit par `-WhatIf` et ne démarre pas le point d’accès.
+
+   **Ce que vous devez voir.** Le plan dit que le point d’accès a besoin d’une connexion à partager.
+   Un vrai démarrage sans Internet doit s’arrêter.
+   Il vous dit ensuite d’utiliser le routeur de voyage.
+
+   **Sinon.** Utilisez le routeur de voyage.
+   Ne passez pas la visite sur le point d’accès.
+
+<!-- step: travel-cert -->
+
+6. Les applications des tablettes gardent une adresse au moment de la construction.
+   Des noms en plus sur la carte du serveur ne changent pas cette adresse.
+   Construisez les applications une fois pour `192.168.0.52`.
+   Ajoutez ensuite des noms de secours à la carte du serveur.
+   Une adresse de secours peut encore correspondre à la carte.
+   La carte de la salle et les cartes des tablettes restent les mêmes.
+   Dans Ubuntu, collez cette ligne.
+
+```bash
+bash scripts/production_certs.sh add-addresses --ip 192.168.0.52 --ip 192.168.137.1 --dns kids-galaxy.local
+```
+
+   **Ce que vous devez voir.** Une ligne qui dit que la carte de la salle et les cartes des tablettes ont été gardées.
+   La carte d’adresse couvre `192.168.0.52`, `192.168.137.1` et `kids-galaxy.local`.
+
+   **Sinon.** Lancez `bash scripts/setup_room.sh` une fois pour que la carte de la salle existe.
+   Relancez ensuite la ligne d’adresse.
+
+<!-- step: travel-password -->
+
+7. Un ordinateur Linux qui possède une carte Wi-Fi peut lancer le script de point d’accès.
+   Le script crée un mot de passe et l’affiche.
+   Écrivez ce mot de passe sur la carte papier.
+   Le script n’utilise pas un mot de passe de ce guide.
+   Ubuntu dans Windows ne peut pas lancer ce point d’accès.
+   Il ne possède pas la carte Wi-Fi.
+   Sur ce PC, utilisez le mot de passe du routeur de voyage.
+
+   **Ce que vous devez voir.** La carte papier a le mot de passe du routeur de voyage.
+
+   **Sinon.** Ne lancez pas le script Linux de point d’accès sur ce PC.
+   Ubuntu le refuse. Lisez le mot de passe sur la page du routeur.
+
+<!-- step: travel-arrive -->
+
+8. Dans une nouvelle garderie, faites ces vérifications dans l’ordre.
+   Branchez le PC et le projecteur.
+   Branchez le routeur de voyage, ou alimentez-le avec la batterie externe.
+   Attendez que son voyant Wi-Fi soit stable.
+   Joignez le PC à `KidsGalaxy`.
+   Ne joignez pas le Wi-Fi de la garderie.
+   Quittez Docker Desktop s’il est ouvert.
+   Ouvrez Ubuntu et allez dans le dossier du projet.
+   Collez `hostname -I` et confirmez `192.168.0.52`.
+   Collez `bash scripts/check_room.sh`.
+   Joignez une tablette à `KidsGalaxy`.
+   Ouvrez l’application enfant et envoyez un dessin.
+   Ouvrez le mur avec `bash scripts/open_projector.sh`.
+
+   **Ce que vous devez voir.** Le mur montre la nouvelle planète.
+
+   **Sinon.** Si l’installation s’arrête, le PC est sur le mauvais réseau ou Docker Desktop tourne.
+   Joignez `KidsGalaxy` et quittez Docker Desktop.
+   Les tablettes gardent `192.168.0.52`.
+
+<!-- step: travel-names -->
+
+9. Sur la tablette de gestion, touchez Avant de partir.
+   Cela efface les noms des planètes.
+   Ces noms ne sont pas dans la copie de secours sur la clé USB.
+
+   **Ce que vous devez voir.** Les noms des planètes ont disparu.
+
+   **Sinon.** Restez sur la tablette de gestion et touchez Avant de partir de nouveau.
+
+<!-- step: travel-pack -->
+
+10. Quand vous rangez l’étui, faites ces vérifications.
+   Fermez Chrome sur le PC du mur.
+   Éteignez Windows.
+   Débranchez le câble du projecteur.
+   Débranchez le routeur et la batterie externe.
+   Mettez la carte papier, les tablettes, les chargeurs et le routeur dans l’étui.
+   Les tablettes gardent leurs applications.
+   Vous ne les reconstruisez pas pour le prochain site.
+
+   **Ce que vous devez voir.** L’étui contient le routeur, la carte papier et les deux tablettes.
+
+   **Sinon.** Laissez une note sur l’étui pour la pièce manquante avant la prochaine visite.
 
 <!-- section: specs -->
 
@@ -212,7 +589,7 @@ La page de la tablette enfant les répète pour la personne qui s’occupe des t
 
    **Ce que vous devez voir.** Le nom Wi-Fi de la tablette correspond à la carte papier.
 
-   **Sinon.** Joignez le Wi-Fi de la salle avant d’activer le mode verrouillé.
+   **Sinon.** Joignez `KidsGalaxy` avant d’activer le mode verrouillé.
 
 <!-- step: specs-fire -->
 
@@ -234,60 +611,64 @@ Environ 40 minutes la première fois.
 
 <!-- step: computer-linux -->
 
-1. Allumez l’ordinateur et joignez le Wi-Fi de la salle.
-   Ouvrez Terminal.
+1. Joignez `KidsGalaxy` sur le PC.
+   Quittez Docker Desktop, et laissez-le fermé.
+   Ouvrez Ubuntu. Le nom sur la ligne est `omega`.
 
-   **Ce que vous devez voir.** Un curseur qui clignote.
+   **Ce que vous devez voir.** Le nom `omega`.
 
-   **Sinon.** Ouvrez Terminal dans la liste des applications.
+   **Sinon.** Cliquez sur Démarrer, tapez Ubuntu, et ouvrez cette application.
 
 <!-- step: computer-packages -->
 
-2. Collez cette ligne et appuyez sur Entrée.
+2. Allez dans le dossier du projet, puis collez la ligne de l’hôte.
 
 ```bash
-bash scripts/setup_host.sh
+cd /home/omega/kids-galaxy-projector && bash scripts/setup_host.sh
 ```
 
-   Tapez le mot de passe de l’ordinateur s’il le demande.
+   Tapez le mot de passe Ubuntu de `omega` s’il le demande.
    Vous ne verrez pas les lettres.
 
    **Ce que vous devez voir.** Les mots `The galaxy computer programs are installed.`
 
-   **Sinon.** Lisez les dernières lignes. Elles nomment ce qui manque.
+   **Sinon.** Si Docker Desktop tourne, la ligne s’arrête.
+   Vous devriez voir `Docker Desktop is running on Windows.`
+   Quittez-le et relancez la ligne.
 
 <!-- step: computer-login -->
 
-3. Déconnectez-vous, puis reconnectez-vous.
-   Cela permet à votre utilisateur de lancer Docker.
+3. Fermez Ubuntu et rouvrez-le.
+   Cela permet à `omega` d’utiliser Docker.
 
-   **Ce que vous devez voir.** Le bureau est revenu.
+   **Ce que vous devez voir.** Le nom `omega` est revenu.
 
-   **Sinon.** Redémarrez l’ordinateur et reconnectez-vous.
+   **Sinon.** Redémarrez le PC, ouvrez la session, et rouvrez Ubuntu.
 
 <!-- step: computer-setup -->
 
-4. Collez cette ligne.
+4. Retournez dans le dossier du projet, puis collez la ligne de la salle.
 
 ```bash
-cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
+cd /home/omega/kids-galaxy-projector && bash scripts/setup_room.sh
 ```
 
    Attendez. Le premier passage peut prendre plusieurs minutes.
 
    **Ce que vous devez voir.** Les mots `The galaxy computer is running.`
-   Vous devriez aussi voir une adresse qui correspond à la carte papier.
+   Vous devriez aussi voir `https://192.168.0.52:8443`.
 
-   **Sinon.** Joignez le Wi-Fi et relancez la même ligne.
+   **Sinon.** Si le PC n’est pas à `192.168.0.52`, l’installation s’arrête et garde cette adresse.
+   Joignez `KidsGalaxy` et relancez la ligne.
 
 <!-- fix: computer -->
 
 > **Si cela ne fonctionne pas**
 >
-> 1. Si Docker manque, relancez la ligne de l’ordinateur, puis reconnectez-vous.
-> 2. Si l’adresse est mauvaise, corrigez la réservation du routeur.
-> 3. Puis collez `NEW_CERTIFICATES=1 bash scripts/setup_room.sh`.
-> 4. Reconstruisez les applications après un changement d’adresse.
+> 1. Si Docker Desktop tourne, quittez-le et relancez la ligne de l’hôte.
+> 2. Si l’adresse n’est pas `192.168.0.52`, joignez le routeur de voyage.
+> 3. Ne changez pas l’adresse, sauf si vous voulez vraiment déplacer la salle.
+> 4. Une personne-ressource utilise `CHANGE_ADDRESS=1` et un nouveau `SERVER_IP`, puis reconstruit les applications.
 
 <!-- section: docker -->
 
@@ -390,18 +771,20 @@ bash scripts/production_certs.sh list
 
 <!-- step: renew-server -->
 
-2. Collez cette ligne si l’adresse de l’ordinateur a changé, ou si la carte d’adresse approche de sa date.
+2. Collez cette ligne quand la carte d’adresse approche de sa date.
+   L’adresse reste `192.168.0.52`.
 
 ```bash
 NEW_CERTIFICATES=1 bash scripts/setup_room.sh
 ```
 
-   Puis reconstruisez les applications pour qu’elles apprennent l’adresse.
-   La carte de la salle elle-même reste la même.
+   Ne reconstruisez pas les applications des tablettes pour ce renouvellement.
+   Pour déplacer la salle exprès, une personne-ressource utilise `CHANGE_ADDRESS=1` et un nouveau `SERVER_IP`.
+   Puis reconstruisez les applications des tablettes.
 
-   **Ce que vous devez voir.** Le message de démarrage, et la nouvelle adresse.
+   **Ce que vous devez voir.** Le message de démarrage, et la même adresse `192.168.0.52`.
 
-   **Sinon.** Vérifiez la carte papier et la réservation du routeur.
+   **Sinon.** Vérifiez la carte papier et la réservation du routeur de voyage.
 
 <!-- step: renew-crl -->
 
@@ -499,6 +882,7 @@ bash scripts/build_tablets.sh
    Sautez chaque compte.
    Activez le débogage USB, comme dans le guide d’installation.
    Branchez-la seule.
+   Partagez-la avec Ubuntu avant cette ligne. Ubuntu ne voit pas le câble tout seul.
    Collez cette ligne.
 
 ```bash
@@ -508,7 +892,8 @@ bash scripts/prepare_kid_tablet.sh
    **Ce que vous devez voir.** L’application de dessin remplit l’écran.
    La ligne indique aussi le nombre de secondes.
 
-   **Sinon.** Effacez la tablette de nouveau. N’ajoutez pas de compte. Relancez la même ligne.
+   **Sinon.** Si la ligne dit qu’aucune tablette n’est prête, répétez les étapes de partage USB.
+   Puis effacez la tablette de nouveau si un compte est encore dessus.
 
 <!-- step: tablets-manager -->
 

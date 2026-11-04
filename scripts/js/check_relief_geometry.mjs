@@ -8,6 +8,8 @@ import {
   chamferDistance,
   edgeSeedDistance,
   relaxDistanceField,
+  RELIEF_SEGMENTS_H,
+  RELIEF_SEGMENTS_W,
 } from './BeveledPatchRelief.js';
 
 let failures = 0;
@@ -298,8 +300,10 @@ check(
 );
 
 console.log('\n4. seam and pole normal welding');
-const segmentsW = 512;
-const segmentsH = 256;
+// Read the size the builder used. A hard-coded 512x256 here outlived the
+// drop to 384x192 and checked the wrong vertices.
+const segmentsW = RELIEF_SEGMENTS_W;
+const segmentsH = RELIEF_SEGMENTS_H;
 const columns = segmentsW + 1;
 check('vertex layout is the one the fast weld assumes', position.count === columns * (segmentsH + 1));
 let seamMismatch = 0;

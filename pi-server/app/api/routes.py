@@ -35,6 +35,7 @@ from app.application.behavior_use_cases import (
     UpdateGalaxyBehaviorUseCase,
 )
 from app.application.use_cases import (
+    ClearPlanetNamesUseCase,
     ClearPlanetsUseCase,
     DeletePlanetUseCase,
     GetCurrentPlanetUseCase,
@@ -121,6 +122,7 @@ def build_router(
     list_recent_planets: ListRecentPlanetsUseCase,
     delete_planet: DeletePlanetUseCase,
     clear_planets: ClearPlanetsUseCase,
+    clear_planet_names: ClearPlanetNamesUseCase,
     get_behavior: GetGalaxyBehaviorUseCase,
     update_behavior: UpdateGalaxyBehaviorUseCase,
     repository: PlanetRepository,
@@ -366,6 +368,12 @@ def build_router(
     async def clear_planets_route():
         removed = clear_planets.execute()
         return {"status": "cleared", "removed": removed}
+
+    @router.post("/api/planets/clear-names", dependencies=[Depends(manager_only)])
+    async def clear_planet_names_route():
+        """Blank planet names. Drawings stay. A second tap is the same result."""
+        planets = clear_planet_names.execute()
+        return {"status": "cleared", "planets": planets}
 
     @router.delete("/api/planets/{planet_id}", dependencies=[Depends(manager_only)])
     async def delete_planet_route(planet_id: str, request: Request):

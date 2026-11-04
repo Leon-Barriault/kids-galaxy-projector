@@ -10,7 +10,7 @@ Do one step at a time.
 
 ## Who this page is for
 
-You can do this if you can copy one line into Terminal.
+You can do this if you can paste one line into Ubuntu.
 A helper is useful for the router and the tablets.
 Children should not do this setup.
 
@@ -45,11 +45,12 @@ The install guide lists the projector and the cables.
 
 <!-- step: hardware-computer -->
 
-1. One Linux computer with 8 GB of memory or more.
+1. The Windows 11 PC for this room.
+   Ubuntu 22.04 runs inside it, as the user `omega`.
    It needs HDMI, or USB-C plus an HDMI adapter.
    It must open Chrome.
 
-   **What you should see.** A computer that shows a desktop on the projector.
+   **What you should see.** Windows shows a desktop on the projector.
 
    **If not.** Use the install guide section on placing the computer.
 
@@ -94,34 +95,38 @@ The install guide lists the projector and the cables.
 
 <!-- section: network -->
 
-## Write the network plan
+## The travel router is the only network
 
 About 20 minutes.
-Use the building Wi-Fi.
-The hotspot in the install guide is only a backup.
+Take that router to every daycare.
+Its Wi-Fi name is `KidsGalaxy`.
+The PC address on it is `192.168.0.52`.
+Do not use the daycare Wi-Fi.
+The Windows hotspot is only a spare.
+Its limits are in the travel section.
 
 <!-- step: network-paper -->
 
-1. Get a paper card.
-   Write the Wi-Fi name.
-   Write the Wi-Fi password on the same card.
+1. Get the paper card.
+   Write the Wi-Fi name `KidsGalaxy`.
+   Write the travel router password on the same card.
    Keep the card with the grown-up, not with the children.
 
-   **What you should see.** The Wi-Fi name and password are on paper.
+   **What you should see.** `KidsGalaxy` and the password are on paper.
 
-   **If not.** Ask the person who runs the router.
+   **If not.** Open the router admin page and read the wireless name.
 
 <!-- step: network-address -->
 
-2. Pick a fixed address for the galaxy computer.
-   Example: `192.168.1.50`.
-   Reserve that address in the router.
+2. The galaxy computer address is `192.168.0.52`.
+   The travel router reserves that address for this PC.
    Write it on the paper card.
    The computer name to write is `kids-galaxy`.
 
-   **What you should see.** The router shows the same address after a reboot.
+   **What you should see.** After a reboot, Ubuntu shows `192.168.0.52`.
 
-   **If not.** Ask a helper to reserve the address. Do not continue with a changing address.
+   **If not.** Repeat the reserve step in the travel section.
+   Do not continue with another address.
 
 <!-- step: network-ports -->
 
@@ -129,30 +134,402 @@ The hotspot in the install guide is only a backup.
    Tablets use `8443`.
    The wall page uses `8000` on the galaxy computer only.
    Finding the room uses `5353`.
-   The tablet address looks like `https://192.168.1.50:8443`.
-   Use your real address, not the example.
+   The tablet address is `https://192.168.0.52:8443`.
 
-   **What you should see.** The paper card has the address and the three port numbers.
+   **What you should see.** The paper card has `192.168.0.52` and the three port numbers.
 
    **If not.** Copy the numbers from this step before you go on.
 
 <!-- step: network-isolation -->
 
-4. Turn off guest isolation on the router.
-   The tablets must be able to see the computer.
-   A guest network that hides devices will not work.
+4. Turn off guest isolation on the travel router.
+   The tablets must be able to see the PC.
+   Do not put the PC or the tablets on the daycare Wi-Fi.
 
-   **What you should see.** A tablet can open the computer address later in this page.
+   **What you should see.** A tablet on `KidsGalaxy` can open the computer address later.
 
-   **If not.** Put the computer and the tablets on the same private Wi-Fi.
+   **If not.** Keep the computer and the tablets on `KidsGalaxy`.
 
 <!-- fix: network -->
 
 > **If this does not work**
 >
-> 1. Check the Wi-Fi icon on the computer. It should be steady.
-> 2. Ask a helper to reserve the address.
-> 3. Do not use the public cafe Wi-Fi.
+> 1. The Wi-Fi icon should say `KidsGalaxy`.
+> 2. In Ubuntu, paste `hostname -I` and look for `192.168.0.52`.
+> 3. Do not use the daycare Wi-Fi. Do not use a cafe Wi-Fi.
+
+<!-- section: wsl -->
+
+## Windows with Ubuntu
+
+This room uses the Windows PC named `DESKTOP-VJV7DLM`.
+Ubuntu 22.04 runs inside it, as the user `omega`.
+Docker already starts with Ubuntu.
+Do this section before you prepare the galaxy computer.
+The only Wi-Fi is the travel router named `KidsGalaxy`.
+Do not join the daycare Wi-Fi.
+
+<!-- step: wsl-version -->
+
+1. Open PowerShell on Windows.
+   Paste this line.
+
+```powershell
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+```
+
+   Then paste this line.
+
+```powershell
+wsl -l -v
+```
+
+   **What you should see.** The PC name and a distro name.
+   On this PC the distro name is `Ubuntu`.
+   Windows 11, including version 26H2, can use mirrored mode.
+   Windows 10 uses NAT mode.
+   Open Ubuntu in this project folder and paste the helper line.
+   It prints the Windows commands with the real paths filled in.
+
+```bash
+bash scripts/print_windows_commands.sh
+```
+
+   The helper prints a folder that starts with `\\wsl$\` plus the distro name.
+   On this PC that folder contains `Ubuntu` and `omega`.
+
+   **If not.** Ask a helper before you go on. The PC name should be `DESKTOP-VJV7DLM`.
+   In PowerShell, `wsl -l -q` shows the distro name.
+
+<!-- step: wsl-mirrored -->
+
+2. On Windows 11, open Notepad.
+   Save this file as `C:\Users\your-name\.wslconfig`.
+   The dot in front of the name is required.
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+   In PowerShell, paste `wsl --shutdown`.
+   Open Ubuntu again.
+   In Ubuntu, paste `hostname -I`.
+
+   **What you should see.** An address that starts with `192.168`.
+   On this PC, Ubuntu shows `192.168.0.52`.
+   It should match the paper card.
+
+   **If not.** The file is in the wrong folder, or `wsl --shutdown` was not run.
+   Use the NAT step instead.
+
+<!-- step: wsl-nat -->
+
+3. On Windows 10, or if mirrored mode does not stick, keep NAT mode.
+   Open Ubuntu once so it has an address.
+   Open PowerShell as administrator.
+   Paste the port-forward line that the helper printed.
+   That line includes your distro name and your Linux user.
+
+   **What you should see.** A line that says port `8443` forwards to an address that starts with `172`.
+   Tablets still use the Windows address on the paper card.
+
+   **If not.** Open Ubuntu first. The forward needs Ubuntu to be awake.
+   Run the same line again after every `wsl --shutdown`.
+   The sign-in task does this refresh for you.
+
+<!-- step: wsl-firewall -->
+
+4. In the same admin PowerShell window, paste the firewall line the helper printed.
+
+   **What you should see.** Rules for `8443`, `8000`, and `5353`.
+   On Windows 11 mirrored mode, a line also mentions the Hyper-V firewall.
+   A rule you already named KidsGalaxy is kept.
+   The script does not add a second copy for the same port.
+   The rules apply to a private network only.
+   A line also says whether any connected adapter is Public.
+
+   **If not.** The window is not an admin window.
+   Close it and open PowerShell with Run as administrator.
+   If the script says the network is Public, it prints one line to set Private.
+   Run that line only for the `KidsGalaxy` travel router.
+   Leave a cafe network as Public.
+   To take the script rules away later, add `-Remove` at the end of the line.
+   Rules you made by hand stay in place.
+
+<!-- step: wsl-mdns -->
+
+5. The name `kids-galaxy.local` is a convenience.
+   In mirrored mode it can work when the firewall allows port `5353`.
+   The travel router can still hide that name.
+   In NAT mode the name does not reach the tablets.
+   Ubuntu would announce a `172` address that tablets cannot use.
+   The forward script carries port `8443` only.
+   It cannot carry the name.
+   In both modes, write the Windows address on the paper card.
+   The tablets must use that address.
+
+   **What you should see.** The paper card shows a `192.168` address, not a `172` address.
+
+   **If not.** Repeat the mirrored step or the NAT step before you build the apps.
+
+<!-- step: wsl-docker -->
+
+6. Quit Docker Desktop before you install Docker inside Ubuntu.
+   Turn off Start Docker Desktop when you sign in.
+   In Ubuntu, go to the project folder.
+   Paste the program line from the next section.
+   If Docker Desktop is still running, that line stops.
+   Quit it, then run the line again.
+   The script starts Docker with Ubuntu.
+   It does not create a Wi-Fi hotspot.
+
+   **What you should see.** The words `The galaxy computer programs are installed.`
+   Docker Desktop is not running.
+   On this PC, Docker already starts with Ubuntu.
+
+   **If not.** If the line stops, you should see `Docker Desktop is running on Windows.`
+   Quit it and run the host line again.
+   If Docker does not start with Ubuntu, add these lines to `/etc/wsl.conf`.
+
+```ini
+[boot]
+systemd=true
+```
+
+   Run `wsl --shutdown` in PowerShell, open Ubuntu, and run the host line again.
+   Close Ubuntu and open it again before `setup_room.sh`.
+   Otherwise Docker still refuses your user.
+
+<!-- step: wsl-hotspot -->
+
+7. Do not run the Linux hotspot script on this PC.
+   Ubuntu inside Windows does not own the Wi-Fi card.
+   The script refuses to run.
+   At every daycare, the PC and the tablets join `KidsGalaxy`.
+   Do not join the daycare Wi-Fi.
+   The Windows hotspot is only a spare.
+   Its limits are in the travel section.
+
+   **What you should see.** The PC and a tablet both show `KidsGalaxy`.
+
+   **If not.** Turn off guest isolation on the travel router, as in the network section.
+
+<!-- step: wsl-start -->
+
+8. Windows does not open Ubuntu by itself after a restart.
+   In an admin PowerShell window, paste the sign-in line the helper printed.
+
+   **What you should see.** The words `The start task is in place.`
+   The next time you sign in to Windows, the galaxy program starts.
+
+   **If not.** Open Ubuntu once before this line, so Windows can see the file.
+   The task is safe to run again.
+   If Windows asks for permission at sign-in, choose Yes.
+
+<!-- step: wsl-wall -->
+
+9. Plug the projector into the HDMI port.
+   Press the Windows key and P together.
+   Choose `Second screen only` for the show.
+   In Ubuntu, paste this line.
+
+```bash
+bash scripts/open_projector.sh
+```
+
+   Chrome opens full screen on Windows at `http://127.0.0.1:8000/`.
+   A desktop shortcut named `Kids Galaxy wall` opens that page in kiosk mode.
+   Keep the PC awake. In PowerShell, paste these two lines.
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change monitor-timeout-ac 0
+```
+
+   **What you should see.** The wall shows the galaxy, and the plugged-in PC does not sleep.
+
+   **If not.** Open Chrome yourself at `http://127.0.0.1:8000/` and press F11.
+   If the picture is on the laptop screen, press the Windows key, Shift, and the Right arrow.
+
+<!-- section: travel -->
+
+## A network you can carry
+
+The galaxy moves between daycares.
+A daycare may have no Wi-Fi and no internet.
+Use the same address at every site.
+That address is `192.168.0.52`.
+The tablet apps are built for that address once.
+You do not rebuild them when you change rooms.
+Use the travel router to keep that address.
+The Windows hotspot cannot use it.
+Keep the Windows hotspot as a spare only.
+
+<!-- step: travel-router -->
+
+1. Buy a small travel router.
+   A GLiNet Opal or a GLiNet Beryl works.
+   The Opal model is `GL-SFT1200`.
+   The Beryl model is `GL-MT3000`.
+   Either one runs from USB-C or a power bank.
+   An Opal is often 35 to 50 US dollars.
+   A Beryl is often 80 to 110 US dollars.
+   Prices change. This is not a store quote.
+
+   **What you should see.** The box lists USB-C power and Wi-Fi.
+
+   **If not.** Any small router that can save one PC address can do this job.
+
+<!-- step: travel-lan -->
+
+2. Plug the router into power.
+   Join its first Wi-Fi from the PC.
+   Open the admin page.
+   On a new GLiNet router that page is often `http://192.168.8.1`.
+   Set the LAN address to `192.168.0.1`.
+   Set the LAN mask to `255.255.255.0`.
+   Turn off any check that needs the internet.
+   Turn off a welcome page and a kill switch.
+   Leave the internet port empty.
+
+   **What you should see.** The admin page shows LAN `192.168.0.1`.
+   The router does not ask for the internet.
+
+   **If not.** Stay on the first admin page and look for LAN or DHCP.
+
+<!-- step: travel-wifi -->
+
+3. Set the Wi-Fi name to `KidsGalaxy`.
+   Choose WPA2 or WPA3.
+   Make a long password and write it on the paper card.
+   Do not copy a password from this guide.
+
+   **What you should see.** The paper card has the Wi-Fi name and the password.
+
+   **If not.** Open the wireless page again and save.
+
+<!-- step: travel-reserve -->
+
+4. On the PC, open PowerShell and paste `getmac /v`.
+   Find the Wi-Fi adapter.
+   Write its physical address on the paper card.
+   In the router, save `192.168.0.52` for that address.
+   Ubuntu inside Windows shares the Windows address and the Windows Wi-Fi card.
+   You save the Windows card.
+   There is no separate Ubuntu card.
+   Join the PC to `KidsGalaxy`.
+   In Ubuntu, paste `hostname -I`.
+
+   **What you should see.** Ubuntu shows `192.168.0.52`.
+
+   **If not.** Forget other Wi-Fi on the PC so it stays on the travel router.
+   Run `wsl --shutdown`, open Ubuntu, and check again.
+
+<!-- step: travel-hotspot -->
+
+5. The Windows mobile hotspot is a spare.
+   Its address is always `192.168.137.1`.
+   Windows often will not start it when there is no internet to share.
+   A fake network card can trick it.
+   Do not build that for a daycare.
+   The hotspot also turns off when the last tablet leaves.
+   Sharing Wi-Fi while the PC is also on Wi-Fi is unreliable.
+   Ubuntu may not see that adapter.
+   That part still needs a check on this PC.
+   The adapter often shows as a public network.
+   If it does, set that adapter to Private, as in the firewall step.
+   Paste the hotspot plan line that the helper printed.
+   That line ends with `-WhatIf` and does not start the hotspot.
+
+   **What you should see.** The plan says the hotspot needs a connection to share.
+   A real start with no internet should stop.
+   It then tells you to use the travel router.
+
+   **If not.** Use the travel router.
+   Do not spend the visit on the hotspot.
+
+<!-- step: travel-cert -->
+
+6. The tablet apps store one address at build time.
+   Extra names on the server card do not change that address.
+   Build the apps once for `192.168.0.52`.
+   Then add spare names to the server card.
+   A spare address can still match the card.
+   The room card and the tablet cards stay the same.
+   In Ubuntu, paste this line.
+
+```bash
+bash scripts/production_certs.sh add-addresses --ip 192.168.0.52 --ip 192.168.137.1 --dns kids-galaxy.local
+```
+
+   **What you should see.** A line that the room card and the tablet cards were kept.
+   The address card covers `192.168.0.52`, `192.168.137.1`, and `kids-galaxy.local`.
+
+   **If not.** Run `bash scripts/setup_room.sh` once so the room card exists.
+   Then run the address line again.
+
+<!-- step: travel-password -->
+
+7. A Linux computer that owns a Wi-Fi card can run the hotspot script.
+   The script makes a password and prints it.
+   Write that password on the paper card.
+   The script does not use a password from this guide.
+   Ubuntu inside Windows cannot run that hotspot.
+   It does not own the Wi-Fi card.
+   Use the travel router password on this PC.
+
+   **What you should see.** The paper card has the travel router password.
+
+   **If not.** Do not run the Linux hotspot script on this PC.
+   Ubuntu refuses it. Read the password from the router admin page.
+
+<!-- step: travel-arrive -->
+
+8. At a new daycare, do these checks in order.
+   Plug in the PC and the projector.
+   Plug in the travel router, or power it from the power bank.
+   Wait until its Wi-Fi light is steady.
+   Join the PC to `KidsGalaxy`.
+   Do not join the daycare Wi-Fi.
+   Quit Docker Desktop if it is open.
+   Open Ubuntu and go to the project folder.
+   Paste `hostname -I` and confirm `192.168.0.52`.
+   Paste `bash scripts/check_room.sh`.
+   Join one tablet to `KidsGalaxy`.
+   Open the kid app and send a drawing.
+   Open the wall with `bash scripts/open_projector.sh`.
+
+   **What you should see.** The wall shows the new planet.
+
+   **If not.** If setup stops, the PC is on the wrong network or Docker Desktop is running.
+   Join `KidsGalaxy` and quit Docker Desktop.
+   The tablets keep `192.168.0.52`.
+
+<!-- step: travel-names -->
+
+9. On the manager tablet, tap Before you leave.
+   This clears the planet names.
+   Those names are left out of the USB safety copy.
+
+   **What you should see.** The planet names are gone.
+
+   **If not.** Stay on the manager tablet and tap Before you leave again.
+
+<!-- step: travel-pack -->
+
+10. When you pack the case, do these checks.
+   Close Chrome on the wall PC.
+   Shut down Windows.
+   Unplug the projector cable.
+   Unplug the router and the power bank.
+   Put the paper card, the tablets, the chargers, and the router in the case.
+   The tablets keep their apps.
+   You do not rebuild them for the next site.
+
+   **What you should see.** The case has the router, the paper card, and both tablets.
+
+   **If not.** Leave a note on the case for the missing piece before the next visit.
 
 <!-- section: specs -->
 
@@ -212,7 +589,7 @@ The kid tablet page repeats them for the person who handles tablets.
 
    **What you should see.** The tablet Wi-Fi name matches the paper card.
 
-   **If not.** Join the room Wi-Fi before you turn on lock mode.
+   **If not.** Join `KidsGalaxy` before you turn on lock mode.
 
 <!-- step: specs-fire -->
 
@@ -234,60 +611,64 @@ About 40 minutes the first time.
 
 <!-- step: computer-linux -->
 
-1. Turn on the computer and join the room Wi-Fi.
-   Open Terminal.
+1. Join `KidsGalaxy` on the PC.
+   Quit Docker Desktop, and leave it closed.
+   Open Ubuntu. The name on the line is `omega`.
 
-   **What you should see.** A blinking cursor.
+   **What you should see.** The name `omega`.
 
-   **If not.** Open Terminal from the app list.
+   **If not.** Click Start, type Ubuntu, and open that app.
 
 <!-- step: computer-packages -->
 
-2. Paste this line and press Enter.
+2. Go to the project folder, then paste the host line.
 
 ```bash
-bash scripts/setup_host.sh
+cd /home/omega/kids-galaxy-projector && bash scripts/setup_host.sh
 ```
 
-   Type the computer password if it asks.
+   Type the Ubuntu password for `omega` if it asks.
    You will not see the letters.
 
    **What you should see.** The words `The galaxy computer programs are installed.`
 
-   **If not.** Read the last lines. They name the missing piece.
+   **If not.** If Docker Desktop is running, the line stops.
+   You should see `Docker Desktop is running on Windows.`
+   Quit it and run the line again.
 
 <!-- step: computer-login -->
 
-3. Log out and log back in.
-   This lets your user run Docker.
+3. Close Ubuntu and open it again.
+   This lets `omega` use Docker.
 
-   **What you should see.** The desktop is back.
+   **What you should see.** The name `omega` is back.
 
-   **If not.** Restart the computer and log in again.
+   **If not.** Restart the PC, sign in, and open Ubuntu again.
 
 <!-- step: computer-setup -->
 
-4. Paste this line.
+4. Go to the project folder again, then paste the room line.
 
 ```bash
-cd "$HOME/kids-galaxy-projector" && bash scripts/setup_room.sh
+cd /home/omega/kids-galaxy-projector && bash scripts/setup_room.sh
 ```
 
    Wait. The first run can take several minutes.
 
    **What you should see.** The words `The galaxy computer is running.`
-   You should also see an address that matches the paper card.
+   You should also see `https://192.168.0.52:8443`.
 
-   **If not.** Join the Wi-Fi and run the same line again.
+   **If not.** If the PC is not at `192.168.0.52`, setup stops and keeps that address.
+   Join `KidsGalaxy` and run the line again.
 
 <!-- fix: computer -->
 
 > **If this does not work**
 >
-> 1. If Docker is missing, run the host line again, then log in again.
-> 2. If the address is wrong, fix the router reservation.
-> 3. Then paste `NEW_CERTIFICATES=1 bash scripts/setup_room.sh`.
-> 4. Build the tablet apps again after an address change.
+> 1. If Docker Desktop is running, quit it and run the host line again.
+> 2. If the address is not `192.168.0.52`, join the travel router.
+> 3. Do not change the address unless you mean to move the room.
+> 4. A helper uses `CHANGE_ADDRESS=1` and a new `SERVER_IP`, then builds the apps again.
 
 <!-- section: docker -->
 
@@ -390,18 +771,20 @@ bash scripts/production_certs.sh list
 
 <!-- step: renew-server -->
 
-2. Paste this line when the computer address changed, or the address card is near its date.
+2. Paste this line when the address card is near its date.
+   The address stays `192.168.0.52`.
 
 ```bash
 NEW_CERTIFICATES=1 bash scripts/setup_room.sh
 ```
 
-   Then build the tablet apps again so they learn the address.
-   The room card itself stays the same.
+   Do not build the tablet apps again for this renewal.
+   To move the room on purpose, a helper uses `CHANGE_ADDRESS=1` and a new `SERVER_IP`.
+   Then build the tablet apps again.
 
-   **What you should see.** The running message, and the new address.
+   **What you should see.** The running message, and the same address `192.168.0.52`.
 
-   **If not.** Check the paper card and the router reservation.
+   **If not.** Check the paper card and the travel router reservation.
 
 <!-- step: renew-crl -->
 
@@ -499,6 +882,7 @@ bash scripts/build_tablets.sh
    Skip every account.
    Turn on USB debugging, as in the install guide.
    Plug it in alone.
+   Share it with Ubuntu before this line. Ubuntu cannot see the cable by itself.
    Paste this line.
 
 ```bash
@@ -508,7 +892,8 @@ bash scripts/prepare_kid_tablet.sh
    **What you should see.** The drawing app fills the screen.
    The line also prints how many seconds it took.
 
-   **If not.** Erase the tablet again. Do not add an account. Run the same line.
+   **If not.** If the line says no tablet is ready, repeat the USB share steps.
+   Then erase the tablet again if an account is still on it.
 
 <!-- step: tablets-manager -->
 

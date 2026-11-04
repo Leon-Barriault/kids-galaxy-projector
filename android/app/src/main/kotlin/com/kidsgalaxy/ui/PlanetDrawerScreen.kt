@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -30,7 +31,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +54,8 @@ import com.kidsgalaxy.R
 import com.kidsgalaxy.connection.GalaxyTarget
 import com.kidsgalaxy.connection.UiLanguage
 import com.kidsgalaxy.di.ServiceLocator
+import com.kidsgalaxy.domain.gate.AdultGateState
+import com.kidsgalaxy.domain.gate.AdultSum
 import com.kidsgalaxy.domain.model.PlanetCompanion
 import com.kidsgalaxy.domain.model.PlanetStyle
 import com.kidsgalaxy.presentation.DrawingUiState
@@ -83,19 +88,23 @@ fun PlanetDrawerScreen(
     var planetName by rememberSaveable { mutableStateOf("") }
     var step by rememberSaveable { mutableStateOf(CreationStep.STYLE) }
     val defaultName = stringResource(R.string.default_planet_name)
-    val languageDescription = stringResource(R.string.language_toggle_description)
+    val languageHold = stringResource(R.string.adult_hold_language)
+    val galaxyHold = stringResource(R.string.adult_hold_galaxy, galaxy.name)
+    var adultGate by remember { mutableStateOf<AdultGateState?>(null) }
+    var gateNow by remember { mutableLongStateOf(0L) }
+    val openAdultGate = {
+        gateNow = System.currentTimeMillis()
+        adultGate = AdultGateState.started(AdultSum.random())
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.screen_title)) },
                 actions = {
-                    TextButton(
-                        onClick = onToggleLanguage,
-                        modifier =
-                            Modifier.semantics {
-                                contentDescription = languageDescription
-                            },
+                    AdultHoldTarget(
+                        holdLabel = languageHold,
+                        onGranted = openAdultGate,
                     ) {
                         Text(
                             stringResource(
@@ -106,13 +115,19 @@ fun PlanetDrawerScreen(
                                 },
                             ),
                             fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }
-                    TextButton(onClick = onConfigureGalaxy) {
+                    AdultHoldTarget(
+                        holdLabel = galaxyHold,
+                        onGranted = openAdultGate,
+                        modifier = Modifier.widthIn(max = 240.dp),
+                    ) {
                         Text(
                             text = "🌌 ${galaxy.name}",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }
                 },
@@ -190,6 +205,24 @@ fun PlanetDrawerScreen(
                     Text(stringResource(R.string.awesome))
                 }
             },
+        )
+    }
+
+    adultGate?.let { gate ->
+        AdultGateDialog(
+            state = gate,
+            nowEpochMillis = gateNow,
+            onStateChange = { adultGate = it },
+            onNowChange = { gateNow = it },
+            onToggleLanguage = {
+                adultGate = null
+                onToggleLanguage()
+            },
+            onConfigureGalaxy = {
+                adultGate = null
+                onConfigureGalaxy()
+            },
+            onDismiss = { adultGate = null },
         )
     }
 }

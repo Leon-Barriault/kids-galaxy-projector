@@ -4,95 +4,97 @@
   <meta charset="utf-8" />
   <title>Démarrage rapide Kids Galaxy</title>
   <style>
-    @page { size: letter; margin: 0.45in; }
+    @page { size: letter; margin: 0.38in; }
     body {
       font-family: Georgia, "Times New Roman", serif;
-      font-size: 11pt;
-      line-height: 1.25;
+      font-size: 9pt;
+      line-height: 1.15;
       color: #111;
     }
-    h1 { font-size: 16pt; margin: 0 0 6px; }
-    h2 { font-size: 12pt; margin: 8px 0 2px; }
-    p, ul { margin: 0 0 4px; }
+    h1 { font-size: 13pt; margin: 0 0 3px; }
+    h2 { font-size: 10.5pt; margin: 5px 0 1px; }
+    p, ul { margin: 0 0 2px; }
     li { margin: 0; }
   </style>
 </head>
 <body>
-<h1>Démarrage rapide Kids Galaxy</h1>
-<p>Gardez cette page à côté du projecteur.</p>
-<p>Les étapes complètes sont dans le guide d’installation et le guide de tous les jours.</p>
-<h2>Avant l’arrivée des enfants</h2>
-<p>Environ 5 minutes.</p>
+<h1>Fiche du jour Kids Galaxy</h1>
+<p>Gardez cette page à la garderie. Le guide de tous les jours a les étapes complètes.</p>
+<h2>Arrivée</h2>
 <ul>
-<li>L’ordinateur est allumé et montre le bureau.</li>
+<li>Branchez le routeur de voyage. Vous devriez voir un voyant Wi-Fi stable.</li>
 </ul>
 <ul>
-<li>Le projecteur est allumé et montre cet ordinateur.</li>
+<li>Sur le PC, joignez `KidsGalaxy`. Ne joignez pas le Wi-Fi de la garderie. Vous devriez voir ce nom.</li>
 </ul>
 <ul>
-<li>Les deux tablettes sont sur le même Wi-Fi que l’ordinateur.</li>
+<li>Allumez le PC et ouvrez la session Windows. Vous devriez voir le bureau.</li>
+</ul>
+<h2>Installation</h2>
+<ul>
+<li>Quittez Docker Desktop si vous voyez l’icône de baleine. Vous devriez voir l’icône disparue.</li>
 </ul>
 <ul>
-<li>Le mur montre le ciel sombre.</li>
-</ul>
-<h2>Allumer la salle</h2>
-<ul>
-<li>Allumez l’ordinateur. Attendez le bureau.</li>
+<li>Ouvrez l’application Ubuntu. Vous devriez voir le nom `omega`.</li>
 </ul>
 <ul>
-<li>Allumez le projecteur. Choisissez HDMI.</li>
+<li>Collez `cd /home/omega/kids-galaxy-projector`. Vous ne devriez voir aucune erreur.</li>
 </ul>
 <ul>
-<li>Sur l’ordinateur, ouvrez `http ://127.0.0.1:8000/`.</li>
+<li>Allumez le projecteur et choisissez HDMI. Vous devriez voir le PC sur le mur.</li>
 </ul>
 <ul>
-<li>Appuyez sur F11 pour remplir l’écran.</li>
+<li>Collez `bash scripts/open_projector.sh`. Vous devriez voir le ciel sombre.</li>
+</ul>
+<h2>Essai</h2>
+<ul>
+<li>Réveillez la tablette enfant. Vous devriez voir l’application de dessin sur `KidsGalaxy`.</li>
 </ul>
 <ul>
-<li>Réveillez les tablettes.</li>
-</ul>
-<h2>Un enfant dessine</h2>
-<ul>
-<li>Sur la tablette enfant, touchez une forme et dessinez.</li>
+<li>Tracez une petite marque et touchez Lancer. Vous devriez voir la marque sur la tablette.</li>
 </ul>
 <ul>
-<li>Touchez Lancer.</li>
+<li>Regardez le mur. Vous devriez voir la nouvelle planète.</li>
+</ul>
+<h2>Rangement</h2>
+<ul>
+<li>Sur la tablette de gestion, touchez Avant de partir. Vous devriez voir les noms des planètes effacés.</li>
 </ul>
 <ul>
-<li>Regardez le mur. La nouvelle planète devrait apparaître.</li>
-</ul>
-<h2>Un adulte</h2>
-<ul>
-<li>Ouvrez Gestionnaire Kids Galaxy. Ce n’est pas l’application de dessin.</li>
+<li>Éteignez Windows depuis le menu d’alimentation. Vous devriez voir le PC s’éteindre.</li>
 </ul>
 <ul>
-<li>Touchez EN / FR pour changer cette tablette.</li>
+<li>Éteignez le projecteur et débranchez le routeur. Rangez le routeur, la carte papier, les deux tablettes et les chargeurs. Vous devriez voir ces articles dans l’étui.</li>
+</ul>
+<h2>Si vous êtes bloqué</h2>
+<ul>
+<li>Si le voyant du routeur est éteint, vérifiez la prise. Vous devriez voir le voyant Wi-Fi.</li>
 </ul>
 <ul>
-<li>Touchez Langue du projecteur pour changer les mots du mur.</li>
+<li>Si l’installation s’arrête parce que Docker Desktop tourne, quittez-le et relancez la ligne. Vous devriez voir le message d’installation.</li>
 </ul>
 <ul>
-<li>Touchez Imprimer pour le papier. Touchez STL pour un fichier 3D.</li>
-</ul>
-<h2>Éteindre la salle</h2>
-<ul>
-<li>Éteignez l’ordinateur depuis le menu d’alimentation.</li>
+<li>Si l’installation s’arrête parce que le PC n’est pas à `192.168.0.52`, joignez `KidsGalaxy`. Ne changez pas l’adresse des tablettes. Vous devriez voir `192.168.0.52`.</li>
 </ul>
 <ul>
-<li>Éteignez le projecteur.</li>
+<li>Si la tablette ne trouve pas la salle, joignez aussi `KidsGalaxy` sur la tablette. Vous devriez voir le même nom Wi-Fi que le PC.</li>
+</ul>
+<h2>Première fois sur une nouvelle tablette ou après une mise à jour</h2>
+<p>Ces vérifications ne sont pas faites. Personne ne les a encore faites sur le vrai PC ou la vraie tablette. Laissez chaque case vide jusqu’à ce que vous voyiez le résultat vous-même.</p>
+<ul>
+<li>[ ] Le verrou enfant tient. Un enfant ne peut pas quitter l’application de dessin. Vous devriez voir Accueil rester dans l’application.</li>
 </ul>
 <ul>
-<li>Laissez les tablettes dormir.</li>
-</ul>
-<h2>Si le mur est sombre</h2>
-<ul>
-<li>Vérifiez les deux voyants d’alimentation.</li>
+<li>[ ] Redémarrez la tablette. Vous devriez voir l’application de dessin s’ouvrir toute seule.</li>
 </ul>
 <ul>
-<li>Vérifiez le câble HDMI et la source HDMI.</li>
+<li>[ ] La tablette rejoint l’adresse sécurisée sur le port `8443`. Vous ne devriez voir aucun avertissement de certificat. L’adresse est `https://192.168.0.52:8443`.</li>
 </ul>
 <ul>
-<li>Sur l’ordinateur, ouvrez `http ://127.0.0.1:8000/`.</li>
+<li>[ ] Dans Windows PowerShell, lancez le script d’installation, le script de mise à jour et le script d’arrêt. Vous ne devriez voir aucune erreur en rouge. Ces scripts sont `setup_room.sh`, `update_room.sh` et `stop_room.sh`.</li>
+</ul>
+<ul>
+<li>[ ] Après une mise à jour, ou un arrêt puis un démarrage, envoyez une planète. Vous devriez la voir sur le mur en environ 15 secondes. Sinon, rechargez la page du mur. Une reconnexion automatique n’est pas encore là. Ce correctif arrive à part.</li>
 </ul>
 </body>
 </html>

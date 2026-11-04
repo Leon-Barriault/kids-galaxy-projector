@@ -67,9 +67,7 @@ def fake_zeroconf(monkeypatch):
 
 class TestAdvertising:
     def test_registers_under_the_galaxy_name(self, fake_zeroconf):
-        advertiser = ZeroconfServiceAdvertiser(
-            Galaxy(name="Playroom"), 8000, "10.0.0.5"
-        )
+        advertiser = ZeroconfServiceAdvertiser(Galaxy(name="Playroom"), 8000, "10.0.0.5")
         advertiser.start()
 
         info = FakeZeroconf.instances[0].registered[0]
@@ -92,9 +90,7 @@ class TestAdvertising:
         assert properties["scheme"] == "https"
 
     def test_unknown_scheme_falls_back_to_http(self, fake_zeroconf):
-        ZeroconfServiceAdvertiser(
-            Galaxy(), 8000, "10.0.0.5", scheme="gopher"
-        ).start()
+        ZeroconfServiceAdvertiser(Galaxy(), 8000, "10.0.0.5", scheme="gopher").start()
 
         properties = FakeZeroconf.instances[0].registered[0].properties
         assert properties["scheme"] == "http"

@@ -108,4 +108,19 @@
     <string name="discovery_search_failed">Impossible de chercher des galaxies (erreur %1$d)</string>
     <string name="discovery_search_unavailable">Impossible de chercher des galaxies</string>
     <string name="discovery_stop_failed">Impossible d’arrêter la recherche de galaxies (erreur %1$d)</string>
+
+    <string name="adult_hold_language">Maintenez pour changer la langue. Pour un adulte.</string>
+    <string name="adult_hold_galaxy">Maintenez pour changer la galaxie. Pour un adulte. Galaxie actuelle %1$s.</string>
+    <string name="adult_gate_title">Vérification adulte</string>
+    <string name="adult_gate_prompt">Combien font %1$d + %2$d\u00A0?</string>
+    <string name="adult_gate_answer_empty">Réponse</string>
+    <string name="adult_gate_answer_entered">Réponse %1$s</string>
+    <string name="adult_gate_wrong">Ce n’est pas la bonne réponse.</string>
+    <string name="adult_gate_delete">Effacer le dernier chiffre</string>
+    <string name="adult_gate_locked">Trop d’essais. Attendez un moment.</string>
+    <string name="adult_gate_cancel">Annuler</string>
+    <string name="adult_menu_title">Réglages adulte</string>
+    <string name="adult_menu_language">Changer la langue</string>
+    <string name="adult_menu_galaxy">Changer la galaxie</string>
+    <string name="adult_menu_close">Fermer</string>
 </resources>

@@ -123,14 +123,10 @@ def _projected_stroke(stroke: dict, stroke_index: int) -> dict | None:
 
 def _choose_pole_owners(projections: list[dict]) -> dict[str, int]:
     candidates = [
-        projection
-        for projection in projections
-        if projection["horizontal_pole_candidate"]
+        projection for projection in projections if projection["horizontal_pole_candidate"]
     ]
     north_candidates = [
-        projection
-        for projection in candidates
-        if projection["band_from"] <= POLE_CLAIM_THRESHOLD
+        projection for projection in candidates if projection["band_from"] <= POLE_CLAIM_THRESHOLD
     ]
     south_candidates = [
         projection
@@ -138,9 +134,7 @@ def _choose_pole_owners(projections: list[dict]) -> dict[str, int]:
         if projection["band_to"] >= 1.0 - POLE_CLAIM_THRESHOLD
     ]
     north_candidates.sort(key=lambda projection: (projection["band_from"], projection["center_y"]))
-    south_candidates.sort(
-        key=lambda projection: (-projection["band_to"], -projection["center_y"])
-    )
+    south_candidates.sort(key=lambda projection: (-projection["band_to"], -projection["center_y"]))
     return {
         "north": north_candidates[0]["stroke_index"] if north_candidates else -1,
         "south": south_candidates[0]["stroke_index"] if south_candidates else -1,

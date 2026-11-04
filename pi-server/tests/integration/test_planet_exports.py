@@ -170,14 +170,10 @@ def test_ringed_print_preserves_projector_render_including_ring(client):
     # marker and Saturn ring survive that framing rather than requiring their old
     # absolute coordinates.
     marker_pixels = sum(
-        1
-        for red, green, blue in hero.getdata()
-        if red < 40 and green > 220 and 80 < blue < 190
+        1 for red, green, blue in hero.getdata() if red < 40 and green > 220 and 80 < blue < 190
     )
     ring_pixels = sum(
-        1
-        for red, green, blue in hero.getdata()
-        if red > 220 and 160 < green < 230 and blue < 140
+        1 for red, green, blue in hero.getdata() if red > 220 and 160 < green < 230 and blue < 140
     )
     assert marker_pixels > 500
     assert ring_pixels > 2_000
@@ -199,9 +195,7 @@ def test_print_sheet_uses_white_paper_and_kid_drawing_guide(client):
     # in the same soft-blue circular guide used on the tablet.
     drawing = sheet.crop((895, 145, 1515, 765))
     red_pixels = sum(
-        1
-        for red, green, blue in drawing.getdata()
-        if red > 190 and green < 110 and blue < 110
+        1 for red, green, blue in drawing.getdata() if red > 190 and green < 110 and blue < 110
     )
     assert red_pixels > 1_000
     assert drawing.getpixel((310, 50)) == (100, 181, 246)
@@ -304,9 +298,7 @@ def test_stl_signed_volume_is_positive(client, upload_planet):
             "<9f", response.content, offset + 12
         )
         signed_volume += (
-            ax * (by * cz - bz * cy)
-            - ay * (bx * cz - bz * cx)
-            + az * (bx * cy - by * cx)
+            ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)
         ) / 6.0
         # The cached facet normal must agree with the vertex winding, or
         # slicers that trust the header disagree with slicers that recompute.
