@@ -243,6 +243,11 @@ Kid-tablet lock mode is device owner plus Lock Task. There is no paid MDM.
 `KidTabletPolicy` is the restriction list. USB debugging stays available on
 purpose. Boot-on-charge is not an Android API this project can set.
 
+The manager tablet has a button labeled Before you leave.
+It blanks saved planet names and keeps the drawings.
+`scripts/clear_planet_names.sh` does the same thing on the computer.
+`scripts/backup_room.sh` copies the drawings and leaves those names out.
+
 ## Android kiosk / single-app mode
 
 The kid app is intended to be the **only** application on its tablet

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -75,6 +76,7 @@ fun ManagerScreen(
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
     onClearAll: () -> Unit,
+    onClearNames: () -> Unit,
     onClearError: () -> Unit,
 ) {
     var pendingDelete by remember { mutableStateOf<PlanetDto?>(null) }
@@ -135,6 +137,26 @@ fun ManagerScreen(
                     tint = Accent,
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(
+            onClick = onClearNames,
+            enabled = !state.isClearingNames,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+        ) {
+            if (state.isClearingNames) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.before_you_leave))
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -363,6 +385,9 @@ private fun managerStatusText(status: ManagerStatus): String =
         is ManagerStatus.Cleared ->
             stringResource(R.string.status_cleared, status.count)
 
+        ManagerStatus.NamesCleared ->
+            stringResource(R.string.status_names_cleared)
+
         is ManagerStatus.ProjectorLanguageChanged ->
             stringResource(
                 R.string.status_projector_language_changed,
@@ -380,6 +405,8 @@ private fun managerErrorText(error: ManagerError): String =
         is ManagerError.LoadFailed -> stringResource(R.string.error_load_failed, error.code)
         is ManagerError.DeleteFailed -> stringResource(R.string.error_delete_failed, error.code)
         is ManagerError.ClearFailed -> stringResource(R.string.error_clear_failed, error.code)
+        is ManagerError.NamesClearFailed ->
+            stringResource(R.string.error_names_clear_failed, error.code)
         is ManagerError.BehaviorLoadFailed ->
             stringResource(R.string.error_behavior_load_failed, error.code)
         is ManagerError.BehaviorUpdateFailed ->
@@ -413,7 +440,7 @@ private fun PlanetRow(
     ) {
         AsyncImage(
             model = imageUrl,
-            contentDescription = planet.name,
+            contentDescription = planet.name.ifBlank { shape },
             contentScale = ContentScale.Crop,
             modifier =
                 Modifier
@@ -423,14 +450,16 @@ private fun PlanetRow(
         )
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = planet.name,
-                color = TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (planet.name.isNotBlank()) {
+                Text(
+                    text = planet.name,
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = stringResource(R.string.planet_shape, shape),
                 color = Accent,
@@ -458,7 +487,12 @@ private fun PlanetRow(
             IconButton(onClick = onDeleteClick) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.remove_named, planet.name),
+                    contentDescription =
+                        if (planet.name.isBlank()) {
+                            stringResource(R.string.remove_planet)
+                        } else {
+                            stringResource(R.string.remove_named, planet.name)
+                        },
                     tint = Danger,
                 )
             }

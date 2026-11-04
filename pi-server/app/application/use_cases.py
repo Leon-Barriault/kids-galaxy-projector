@@ -197,6 +197,16 @@ class DeletePlanetUseCase:
         return planet
 
 
+class ClearPlanetNamesUseCase:
+    """Blank stored planet names. The drawings stay. A second call is safe."""
+
+    def __init__(self, repository: PlanetRepository):
+        self._repository = repository
+
+    def execute(self) -> int:
+        return self._repository.clear_names()
+
+
 class ClearPlanetsUseCase:
     """Remove every stored planet and broadcast one clear event."""
 

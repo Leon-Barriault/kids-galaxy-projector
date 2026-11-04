@@ -32,6 +32,7 @@ fun ManagerTabbedScreen(
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
     onClearAll: () -> Unit,
+    onClearNames: () -> Unit,
     onClearError: () -> Unit,
     onRegionChange: (String) -> Unit,
     onAsteroidBeltChange: (Boolean) -> Unit,
@@ -76,6 +77,7 @@ fun ManagerTabbedScreen(
                 onRefresh = onRefresh,
                 onDelete = onDelete,
                 onClearAll = onClearAll,
+                onClearNames = onClearNames,
                 onClearError = onClearError,
             )
         } else {

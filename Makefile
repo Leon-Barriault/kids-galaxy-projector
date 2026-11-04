@@ -51,6 +51,7 @@ lint-shell:
 		scripts/prepare_kid_tablet.sh scripts/prepare_manager_tablet.sh \
 		scripts/build_tablets.sh scripts/setup_host.sh scripts/check_room.sh \
 		scripts/backup_room.sh scripts/restore_room.sh scripts/update_room.sh \
+		scripts/clear_planet_names.sh \
 		scripts/rollback_room.sh scripts/production_certs.sh \
 		scripts/check_production_certs.sh scripts/create_tablet_keystore.sh \
 		scripts/provision_kid_tablet.sh 		scripts/replace_kid_tablet.sh scripts/wsl_bringup.sh \

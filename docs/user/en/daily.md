@@ -185,10 +185,12 @@ They are separate choices.
 
 <!-- step: language-tablet -->
 
-1. On either tablet, tap EN / FR.
+1. On the manager tablet, tap EN / FR.
 
    **What you should see.** The app opens again in the other language.
    The choice stays until you tap the button again.
+   On the kid tablet, hold EN / FR and answer the number question.
+   Read the kid tablet page for that hold.
 
    **If not.** Tap EN / FR once more.
 
@@ -392,9 +394,20 @@ bash scripts/stop_room.sh
 
 ## Shut down safely
 
+Planets stay saved.
+Names do not stay with you.
+
+<!-- step: shutdown-names -->
+
+1. On the manager tablet, tap Before you leave.
+   This clears the planet names.
+   Those names are left out of the USB safety copy.
+   You should see the planet names gone.
+   If not, stay on the manager tablet and tap Before you leave again.
+
 <!-- step: shutdown-stop -->
 
-1. You can shut down Windows from the power menu.
+2. You can shut down Windows from the power menu.
    The planets stay on the disk.
    The program can start again the next time you sign in.
 
@@ -404,7 +417,7 @@ bash scripts/stop_room.sh
 
 <!-- step: shutdown-script -->
 
-2. If you must stop the program first, paste this line in the project folder.
+3. If you must stop the program first, paste this line in the project folder.
 
 ```bash
 bash scripts/stop_room.sh

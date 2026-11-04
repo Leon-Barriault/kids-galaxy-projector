@@ -471,6 +471,63 @@ bash scripts/replace_kid_tablet.sh --name kid-2 --old-name kid-1
 > 3. Run the replace line again. A second run is safe.
 > 4. If the first build is still running, wait. Do not unplug the tablet.
 
+<!-- section: grown-up -->
+
+## Grown-up controls
+
+A child can draw.
+A child cannot change the galaxy address.
+A child cannot change the language.
+A short tap does nothing on those two controls.
+
+<!-- step: grown-hold-language -->
+
+1. Press and hold EN / FR.
+
+   **What you should see.** A number question, with big keys.
+
+   **If not.** Hold a little longer. A quick tap does nothing.
+
+<!-- step: grown-answer-language -->
+
+2. Type the two-digit answer.
+
+   **What you should see.** A grown-up menu with two choices.
+
+   **If not.** Wait when it says too many tries. Then hold EN / FR again.
+
+<!-- step: grown-pick-language -->
+
+3. Tap Change the language.
+
+   **What you should see.** The app opens again in the other language.
+
+   **If not.** Hold EN / FR again and answer the new question.
+
+<!-- step: grown-hold-galaxy -->
+
+4. Press and hold the galaxy name.
+
+   **What you should see.** A new number question.
+
+   **If not.** Hold the name longer. A quick tap does nothing.
+
+<!-- step: grown-answer-galaxy -->
+
+5. Type that answer.
+
+   **What you should see.** The grown-up menu again.
+
+   **If not.** Wait if the tries are used up. Then hold the name again.
+
+<!-- step: grown-pick-galaxy -->
+
+6. Tap Change the galaxy.
+
+   **What you should see.** The galaxy list, or a place to type an address.
+
+   **If not.** Hold the galaxy name again. Do not hand this step to a child.
+
 <!-- section: limits -->
 
 ## What this setup cannot do

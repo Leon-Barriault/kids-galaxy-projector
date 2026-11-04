@@ -185,10 +185,12 @@ Ce sont des choix séparés.
 
 <!-- step: language-tablet -->
 
-1. Sur l’une ou l’autre tablette, touchez EN / FR.
+1. Sur la tablette de gestion, touchez EN / FR.
 
    **Ce que vous devez voir.** L’application se rouvre dans l’autre langue.
    Le choix reste jusqu’à ce que vous touchiez le bouton de nouveau.
+   Sur la tablette enfant, maintenez EN / FR et répondez à la question de nombres.
+   Lisez la page de la tablette enfant pour ce maintien.
 
    **Sinon.** Touchez EN / FR encore une fois.
 
@@ -392,9 +394,20 @@ bash scripts/stop_room.sh
 
 ## Éteindre en sécurité
 
+Les planètes restent enregistrées.
+Les noms ne partent pas avec vous.
+
+<!-- step: shutdown-names -->
+
+1. Sur la tablette de gestion, touchez Avant de partir.
+   Cela efface les noms des planètes.
+   Ces noms ne sont pas dans la copie de secours sur la clé USB.
+   Vous devriez voir les noms des planètes disparus.
+   Sinon, restez sur la tablette de gestion et touchez Avant de partir de nouveau.
+
 <!-- step: shutdown-stop -->
 
-1. Vous pouvez éteindre Windows depuis le menu d’alimentation.
+2. Vous pouvez éteindre Windows depuis le menu d’alimentation.
    Les planètes restent sur le disque.
    Le programme peut repartir la prochaine fois que vous ouvrez la session.
 
@@ -404,7 +417,7 @@ bash scripts/stop_room.sh
 
 <!-- step: shutdown-script -->
 
-2. Si vous devez d’abord arrêter le programme, collez cette ligne dans le dossier du projet.
+3. Si vous devez d’abord arrêter le programme, collez cette ligne dans le dossier du projet.
 
 ```bash
 bash scripts/stop_room.sh

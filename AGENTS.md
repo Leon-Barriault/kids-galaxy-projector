@@ -126,6 +126,7 @@ shellcheck -x scripts/setup_hotspot.sh scripts/start_kiosk.sh \
  scripts/open_projector.sh scripts/prepare_kid_tablet.sh \
  scripts/prepare_manager_tablet.sh scripts/build_tablets.sh \
  scripts/setup_host.sh scripts/check_room.sh scripts/backup_room.sh \
+ scripts/clear_planet_names.sh \
  scripts/restore_room.sh scripts/update_room.sh scripts/rollback_room.sh \
  scripts/production_certs.sh scripts/check_production_certs.sh \
  scripts/create_tablet_keystore.sh scripts/provision_kid_tablet.sh \

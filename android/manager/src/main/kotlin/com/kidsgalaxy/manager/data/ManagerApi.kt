@@ -6,6 +6,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -32,6 +33,11 @@ data class DeleteResponse(
 data class ClearResponse(
     @SerializedName("status") val status: String,
     @SerializedName("removed") val removed: Int = 0,
+)
+
+data class ClearNamesResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("planets") val planets: Int = 0,
 )
 
 data class BehaviorSettingsDto(
@@ -91,6 +97,10 @@ interface ManagerApi {
     /** Empties the whole gallery. The server publishes one clear event. */
     @DELETE("api/planets")
     suspend fun clearPlanets(): Response<ClearResponse>
+
+    /** Blanks planet names and keeps the drawings. A second call is safe. */
+    @POST("api/planets/clear-names")
+    suspend fun clearPlanetNames(): Response<ClearNamesResponse>
 
     @GET("api/behavior")
     suspend fun getBehavior(): Response<BehaviorStateDto>

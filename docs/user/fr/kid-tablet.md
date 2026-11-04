@@ -471,6 +471,63 @@ bash scripts/replace_kid_tablet.sh --name kid-2 --old-name kid-1
 > 3. Relancez la ligne de remplacement. Un second passage est sûr.
 > 4. Si la première construction tourne encore, attendez. Ne débranchez pas la tablette.
 
+<!-- section: grown-up -->
+
+## Contrôles adulte
+
+Un enfant peut dessiner.
+Un enfant ne peut pas changer l’adresse de la galaxie.
+Un enfant ne peut pas changer la langue.
+Un toucher court ne fait rien sur ces deux contrôles.
+
+<!-- step: grown-hold-language -->
+
+1. Maintenez EN / FR.
+
+   **Ce que vous devez voir.** Une question de nombres, avec de grandes touches.
+
+   **Sinon.** Maintenez plus longtemps. Un toucher court ne fait rien.
+
+<!-- step: grown-answer-language -->
+
+2. Tapez la réponse à deux chiffres.
+
+   **Ce que vous devez voir.** Un menu adulte avec deux choix.
+
+   **Sinon.** Attendez si trop d’essais sont utilisés. Puis maintenez EN / FR de nouveau.
+
+<!-- step: grown-pick-language -->
+
+3. Touchez Changer la langue.
+
+   **Ce que vous devez voir.** L’application s’ouvre de nouveau dans l’autre langue.
+
+   **Sinon.** Maintenez EN / FR de nouveau et répondez à la nouvelle question.
+
+<!-- step: grown-hold-galaxy -->
+
+4. Maintenez le nom de la galaxie.
+
+   **Ce que vous devez voir.** Une nouvelle question de nombres.
+
+   **Sinon.** Maintenez le nom plus longtemps. Un toucher court ne fait rien.
+
+<!-- step: grown-answer-galaxy -->
+
+5. Tapez cette réponse.
+
+   **Ce que vous devez voir.** Le menu adulte de nouveau.
+
+   **Sinon.** Attendez si les essais sont épuisés. Puis maintenez le nom de nouveau.
+
+<!-- step: grown-pick-galaxy -->
+
+6. Touchez Changer la galaxie.
+
+   **Ce que vous devez voir.** La liste des galaxies, ou un endroit pour taper une adresse.
+
+   **Sinon.** Maintenez le nom de la galaxie de nouveau. Ne donnez pas cette étape à un enfant.
+
 <!-- section: limits -->
 
 ## Ce que cette préparation ne peut pas faire
