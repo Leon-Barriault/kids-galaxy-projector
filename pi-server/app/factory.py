@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import AuthorizationPolicy
 from app.api.routes import build_router
+from app.api.sse import install_graceful_stream_shutdown
 from app.application.behavior_use_cases import (
     GetGalaxyBehaviorUseCase,
     UpdateGalaxyBehaviorUseCase,
@@ -114,9 +115,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         advertiser.start()
+        restore_signals = install_graceful_stream_shutdown(publisher)
         try:
             yield
         finally:
+            # Release any stream still open. Uvicorn runs this only after
+            # responses finish, so the signal hook above is what actually
+            # unblocks a graceful stop; this covers other shutdown paths.
+            publisher.request_disconnect()
+            restore_signals()
             advertiser.stop()
 
     app = FastAPI(

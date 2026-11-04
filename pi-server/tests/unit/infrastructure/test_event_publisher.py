@@ -53,3 +53,18 @@ class TestInMemoryEventPublisher:
 
     async def test_publish_with_no_subscribers_is_safe(self):
         InMemoryEventPublisher().publish(PAYLOAD)  # must not raise
+
+    async def test_request_disconnect_unblocks_a_waiting_subscriber(self):
+        """A graceful stop has to wake a projector blocked on the stream."""
+        publisher = InMemoryEventPublisher()
+        async with publisher.subscribe() as stream:
+            waiter = asyncio.create_task(stream.get())
+            await asyncio.sleep(0)
+            publisher.request_disconnect()
+            assert await asyncio.wait_for(waiter, timeout=1) is None
+
+    async def test_subscriber_opened_after_shutdown_is_not_stuck(self):
+        publisher = InMemoryEventPublisher()
+        publisher.request_disconnect()
+        async with publisher.subscribe() as stream:
+            assert await asyncio.wait_for(stream.get(), timeout=1) is None

@@ -109,6 +109,7 @@ check-projector:
 	@command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
 	python3 scripts/check_projector.py
 	python3 scripts/check_seasonal_themes.py
+	python3 scripts/check_projector_reconnect.py
 
 check-render-math:
 	@command -v node >/dev/null || { echo "node required"; exit 1; }
