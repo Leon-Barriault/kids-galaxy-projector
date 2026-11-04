@@ -21,6 +21,8 @@ jobs:
           done
       - name: Wall reconnects after a silent stream
         run: node scripts/js/check_live_updates.mjs
+      - name: Rendering maths (relief, environment, tone curve)
+        run: bash scripts/js/run-checks.sh
       - name: Keep projector offline
         run: |
           if grep -rnE "https?://" \
@@ -34,7 +36,8 @@ jobs:
   browser-smoke:
     name: Manifest-driven WebGL acceptance
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # About 6 minutes on a normal runner; a slow one passed 10 on develop.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python

@@ -45,9 +45,9 @@ Do not re-litigate these unless the owner explicitly asks to change them.
 - New tablet uploads keep the original authored drawing and send an explicit
   body/background colour when available.
 - Manager and kid tablets are separate applications.
-- Print/STL actions are exposed only by the manager APK. The export endpoints
-  intentionally do **not** require a manager role; app separation is the chosen
-  access boundary for those two non-destructive export actions.
+- Print/STL actions are exposed only by the manager APK, and the export
+  endpoints require the manager role in secure deployments. Owner decision,
+  November 2026: keep the role check; app separation alone is not the boundary.
 - Delete, clear-all, and other authority-bearing manager operations remain
   protected by the role/auth layer in secure deployments.
 - STL v1 is one slicer-friendly radial planet mesh. Rings and orbiting
@@ -157,8 +157,9 @@ make check-projector
 Projector CI also installs Chromium/Playwright and runs the core
 `check_projector.py` contract as a required gate, followed by the focused
 sculpted-artwork, artwork-coverage, ring-colour, and explicit-body-colour checks.
-The syntax job parses every active projector ES module and verifies the runtime
-stays offline/self-hosted.
+The syntax job parses every active projector ES module, verifies the runtime
+stays offline/self-hosted, and runs the rendering-maths checks
+(`make check-render-math`).
 
 ---
 
@@ -196,11 +197,13 @@ compatibility only.
 
 ### Export routes
 
+- `GET /api/admin/planets/{planet_id}/preview.png`
 - `GET /api/admin/planets/{planet_id}/print.png`
+- `GET /api/admin/planets/{planet_id}/print.pdf`
 - `GET /api/admin/planets/{planet_id}/model.stl?diameter_mm=...`
 
-These routes are intentionally not role-gated by owner decision. Do not confuse
-that with the destructive manager routes, which are authority-bearing.
+These routes require the manager role in secure deployments, by owner decision.
+`test_planet_exports_are_manager_only` holds that line; do not open them up.
 
 ---
 
