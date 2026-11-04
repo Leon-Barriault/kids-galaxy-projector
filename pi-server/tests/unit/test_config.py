@@ -71,6 +71,16 @@ class TestAllowedOrigins:
         settings = Settings.from_env({"ALLOWED_ORIGINS": "http://a,,http://b,"})
         assert settings.allowed_origins == ("http://a", "http://b")
 
+    def test_secure_mode_allows_no_cross_origin_reads_by_default(self):
+        settings = Settings.from_env({"AUTHORIZATION_ENABLED": "true"})
+        assert settings.allowed_origins == ()
+
+    def test_secure_mode_keeps_an_explicit_origin_list(self):
+        settings = Settings.from_env(
+            {"AUTHORIZATION_ENABLED": "true", "ALLOWED_ORIGINS": "https://kids-galaxy.local"}
+        )
+        assert settings.allowed_origins == ("https://kids-galaxy.local",)
+
 
 class TestEnvironmentFlag:
     def test_development_aliases(self):
@@ -88,9 +98,7 @@ class TestDiscoveryAdvertisement:
         assert Settings.from_env({}).advertise_scheme == "http"
 
     def test_https_is_accepted_for_mtls_field_deployments(self):
-        settings = Settings.from_env(
-            {"ADVERTISE_SCHEME": "https", "PORT": "8443"}
-        )
+        settings = Settings.from_env({"ADVERTISE_SCHEME": "https", "PORT": "8443"})
         assert settings.advertise_scheme == "https"
         assert settings.port == 8443
 
@@ -112,9 +120,7 @@ class TestAuthorizationSettings:
         assert Settings.from_env({}).trusted_role_proxy_hosts == ("127.0.0.1", "::1")
 
     def test_trusted_role_proxy_hosts_are_parsed_as_csv(self):
-        settings = Settings.from_env(
-            {"TRUSTED_ROLE_PROXY_HOSTS": "127.0.0.1, ::1, 10.0.0.2"}
-        )
+        settings = Settings.from_env({"TRUSTED_ROLE_PROXY_HOSTS": "127.0.0.1, ::1, 10.0.0.2"})
         assert settings.trusted_role_proxy_hosts == (
             "127.0.0.1",
             "::1",

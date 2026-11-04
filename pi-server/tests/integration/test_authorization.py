@@ -174,3 +174,23 @@ def test_unmarked_forwarded_role_is_rejected(tmp_path):
         },
     )
     assert response.status_code == 403
+
+
+def test_secure_mode_refuses_cross_origin_reads(tmp_path):
+    client = TestClient(
+        create_app(
+            Settings.from_env(
+                {
+                    "UPLOAD_DIR": str(tmp_path / "uploads"),
+                    "STATIC_DIR": str(tmp_path / "static"),
+                    "AUTHORIZATION_ENABLED": "true",
+                }
+            )
+        )
+    )
+    preflight = client.options(
+        "/api/planets",
+        headers={"Origin": "http://elsewhere.example", "Access-Control-Request-Method": "GET"},
+    )
+    assert preflight.status_code == 400
+    assert "access-control-allow-origin" not in preflight.headers
