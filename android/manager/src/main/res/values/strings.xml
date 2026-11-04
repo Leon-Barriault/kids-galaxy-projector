@@ -47,6 +47,12 @@
     <string name="tab_galaxy">Galaxy</string>
     <string name="galaxy_controls_title">Galaxy controls</string>
     <string name="galaxy_controls_subtitle">Live environment for %1$s</string>
+    <string name="planet_look">Planet look</string>
+    <string name="planet_look_hint">Choose how the kids’ drawings are wrapped onto their planets. Planets already in the galaxy are redrawn right away.</string>
+    <string name="planet_look_classic">Classic</string>
+    <string name="planet_look_classic_hint">Marks are stretched around the planet and swirled from pole to pole.</string>
+    <string name="planet_look_front_view">Like the drawing</string>
+    <string name="planet_look_front_view_hint">The front of the planet shows the drawing as it was painted. The back shows its mirror image.</string>
     <string name="space_activity">Space activity</string>
     <string name="space_activity_hint">Control the persistent and intermittent objects flying through the projected galaxy.</string>
     <string name="asteroid_belt">Asteroid belt</string>

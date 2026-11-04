@@ -78,6 +78,7 @@ fun GalaxyAdminScreen(
     onManualThemeChange: (String) -> Unit,
     onThemeEnabledChange: (String, Boolean) -> Unit,
     onAmbientEffectsChange: (Boolean) -> Unit,
+    onPlanetRenderingChange: (String) -> Unit,
 ) {
     val settings = state.behaviorSettings
     LazyColumn(
@@ -96,6 +97,13 @@ fun GalaxyAdminScreen(
                 onToggleLanguage = onToggleLanguage,
                 onConfigureGalaxy = onConfigureGalaxy,
                 onRefresh = onRefresh,
+            )
+        }
+        item {
+            PlanetLookCard(
+                settings = settings,
+                enabled = !state.isBehaviorLoading && !state.isUpdatingBehavior,
+                onPlanetRenderingChange = onPlanetRenderingChange,
             )
         }
         item {
@@ -184,6 +192,46 @@ private fun AdminHeader(
         TextButton(onClick = onRefresh) {
             Text(stringResource(R.string.refresh))
         }
+    }
+}
+
+@Composable
+private fun PlanetLookCard(
+    settings: BehaviorSettingsDto,
+    enabled: Boolean,
+    onPlanetRenderingChange: (String) -> Unit,
+) {
+    val frontView = settings.planetRendering == "front-view"
+    SettingsCard(
+        title = stringResource(R.string.planet_look),
+        subtitle = stringResource(R.string.planet_look_hint),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChoiceButton(
+                selected = !frontView,
+                enabled = enabled,
+                label = stringResource(R.string.planet_look_classic),
+                onClick = { onPlanetRenderingChange("classic") },
+            )
+            ChoiceButton(
+                selected = frontView,
+                enabled = enabled,
+                label = stringResource(R.string.planet_look_front_view),
+                onClick = { onPlanetRenderingChange("front-view") },
+            )
+        }
+        Text(
+            text =
+                stringResource(
+                    if (frontView) {
+                        R.string.planet_look_front_view_hint
+                    } else {
+                        R.string.planet_look_classic_hint
+                    },
+                ),
+            color = AdminMuted,
+            fontSize = 13.sp,
+        )
     }
 }
 

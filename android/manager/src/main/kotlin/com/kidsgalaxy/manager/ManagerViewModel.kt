@@ -229,6 +229,12 @@ class ManagerViewModel(
         updateBehavior { it.copy(ambientEffects = enabled) }
     }
 
+    fun setPlanetRendering(rendering: String) {
+        val normalized = rendering.lowercase()
+        if (normalized !in PLANET_RENDERINGS) return
+        updateBehavior { it.copy(planetRendering = normalized) }
+    }
+
     private fun updateBehavior(
         status: ((BehaviorSettingsDto) -> ManagerStatus?)? = null,
         transform: (BehaviorSettingsDto) -> BehaviorSettingsDto,
@@ -385,6 +391,7 @@ class ManagerViewModel(
 
     companion object {
         private val EVENT_FREQUENCIES = setOf("rare", "normal", "frequent")
+        private val PLANET_RENDERINGS = setOf("classic", "front-view")
         private val CANADIAN_REGIONS =
             setOf("ca-qc", "ca-on", "ca-ab", "ca-bc", "ca-sk", "ca-nb", "ca-other")
         private val GALAXY_THEMES =
