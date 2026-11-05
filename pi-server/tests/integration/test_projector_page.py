@@ -25,7 +25,8 @@ def client_for(tmp_path):
     static = tmp_path / "static"
     (static / "vendor").mkdir(parents=True)
     (static / "index.html").write_text(INDEX, encoding="utf-8")
-    (static / "galaxy.js").write_text("export const wall = 'current';\n", encoding="utf-8")
+    # Bytes, not text: on Windows write_text would turn the newline into CRLF.
+    (static / "galaxy.js").write_bytes(b"export const wall = 'current';\n")
     (static / "vendor" / "three.module.js").write_text("export {};\n", encoding="utf-8")
     settings = Settings(
         upload_dir=tmp_path / "uploads",
