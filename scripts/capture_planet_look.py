@@ -234,7 +234,7 @@ def main(out_dir: Path) -> int:
                 f"  if (!kg?.kidPlanets || kg.kidPlanets.size < {len(planets)}) return false;"
                 "  return [...kg.kidPlanets.values()].every((p) => {"
                 "    const d = p?.mesh?.material?.userData || {};"
-                "    return Boolean(d.kidsGalaxySoftToySurface || d.kidsGalaxyManifestStrokeSurface);"
+                "    return Boolean(d.kidsGalaxyManifestStrokeSurface);"
                 "  });"
                 "})()",
                 30_000,
