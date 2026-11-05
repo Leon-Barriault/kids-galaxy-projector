@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real-WebGL acceptance for spherical stroke mapping and astronaut choices."""
+"""Real-WebGL acceptance for the three astronaut companion choices."""
 
 from __future__ import annotations
 
@@ -40,28 +40,6 @@ def render_state(page, planet_id: str) -> dict:
         """
         (id) => {
           const p = window.kidsGalaxy.kidPlanets.get(id);
-          const group = p?.sculptedArtworkGroup;
-          const patches = (group?.children || []).filter((m) =>
-            m.isMesh && m.visible !== false && m.geometry?.userData?.kidsGalaxyStrokeOnlyProjection
-          );
-          const ys = [];
-          const latitudeMins = [];
-          const latitudeMaxes = [];
-          patches.forEach((mesh) => {
-            const attr = mesh.geometry?.getAttribute?.('position');
-            if (!attr) return;
-            for (let i = 0; i < attr.count; i += 1) {
-              const x = attr.getX(i);
-              const y = attr.getY(i);
-              const z = attr.getZ(i);
-              const length = Math.hypot(x, y, z);
-              if (length > 0.000001) ys.push(y / length);
-            }
-            const minLat = mesh.geometry?.userData?.kidsGalaxyStrokeLatitudeMin;
-            const maxLat = mesh.geometry?.userData?.kidsGalaxyStrokeLatitudeMax;
-            if (Number.isFinite(minLat)) latitudeMins.push(minLat);
-            if (Number.isFinite(maxLat)) latitudeMaxes.push(maxLat);
-          });
 
           const astronaut = p?.companions?.find((record) => record.type === 'astronaut')?.object;
           let visorTone = null;
@@ -78,13 +56,6 @@ def render_state(page, planet_id: str) -> dict:
           });
 
           return {
-            wrapDegrees: p?.mesh?.material?.userData?.kidsGalaxyStrokeWrapDegrees || 0,
-            latitudeDegrees: group?.userData?.kidsGalaxyStrokeLatitudeDegrees || 0,
-            projectionMode: group?.userData?.kidsGalaxyStrokeProjectionMode || null,
-            minY: ys.length ? Math.min(...ys) : 0,
-            maxY: ys.length ? Math.max(...ys) : 0,
-            minLatitude: latitudeMins.length ? Math.min(...latitudeMins) : 0,
-            maxLatitude: latitudeMaxes.length ? Math.max(...latitudeMaxes) : 0,
             variantCount: window.kidsGalaxy.astronautVariants?.length || 0,
             astronautVariant: astronaut?.userData?.kidsGalaxyAstronautVariantNumber || 0,
             astronautKey: astronaut?.userData?.kidsGalaxyAstronautVariant || null,
@@ -122,7 +93,7 @@ def open_variant(browser, server, planet_id: str, query: str) -> tuple[dict, lis
     )
     wait_for(
         page,
-        f"window.kidsGalaxy.kidPlanets.get('{planet_id}')?.sculptedArtworkGroup?.userData?.kidsGalaxyStrokeLatitudeProjection === true",
+        f"Boolean(window.kidsGalaxy.kidPlanets.get('{planet_id}')?.mesh?.material?.userData?.kidsGalaxyManifestStrokeSurface)",
         12_000,
     )
     state = render_state(page, planet_id)
@@ -214,7 +185,7 @@ def main() -> int:
     if FAILURES:
         print(f"\n{len(FAILURES)} spherical/astronaut acceptance check(s) failed")
         return 1
-    print("\nSpherical stroke projection and pixel astronaut WebGL options passed")
+    print("\nPixel astronaut WebGL options passed")
     return 0
 
 

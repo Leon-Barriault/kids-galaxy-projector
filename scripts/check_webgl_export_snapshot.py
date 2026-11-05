@@ -182,7 +182,7 @@ def main() -> int:
             "(() => {"
             f"  const m = window.kidsGalaxy?.kidPlanets?.get('{planet_id}')?.mesh?.material;"
             "  const d = m?.userData || {};"
-            "  return Boolean(d.kidsGalaxyManifestStrokeSurface || d.kidsGalaxySoftToySurface);"
+            "  return Boolean(d.kidsGalaxyManifestStrokeSurface);"
             "})()",
             12_000,
         )

@@ -57,6 +57,21 @@ function ringLightnessAt(t) {
   return RING_LIGHTNESS_STOPS[RING_LIGHTNESS_STOPS.length - 1][1];
 }
 
+/**
+ * Free a material and every texture it holds. Listing slots by name missed the
+ * roughnessMap and aoMap the manifest surface uses, leaking two textures on the
+ * GPU for every planet that ever left the wall.
+ */
+function disposeMaterial(material) {
+  if (!material) return;
+  Object.entries(material).forEach(([key, value]) => {
+    // The environment map is one studio texture shared by every planet.
+    if (key === 'envMap' || !value?.isTexture) return;
+    value.dispose();
+  });
+  material.dispose();
+}
+
 /** A single kid-created planet and the Three.js resources it owns. */
 export class PlanetEntity {
   constructor({ payload, order, gallerySize, scene, animator, celebrate }) {
@@ -618,15 +633,7 @@ export class PlanetEntity {
       if (!child.material) return;
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       materials.forEach((material) => {
-        const textures = new Set([
-          material.map,
-          material.alphaMap,
-          material.bumpMap,
-          material.normalMap,
-          material.emissiveMap,
-        ]);
-        textures.forEach((texture) => texture?.dispose());
-        material.dispose();
+        disposeMaterial(material);
       });
     });
   }
@@ -635,6 +642,13 @@ export class PlanetEntity {
     if (this.disposed) return;
     this.disposed = true;
     this.disposeObject(this.mesh);
+    // Materials and geometry that later stages replaced while building this
+    // planet. See retire() in ManifestStrokeSurface.js.
+    (this.retiredResources || []).forEach((resource) => {
+      if (resource?.isMaterial) disposeMaterial(resource);
+      else resource?.dispose?.();
+    });
+    this.retiredResources = [];
     this.reliefMap = null;
     this.accentMask = null;
     this.decorations.forEach((object) => this.disposeObject(object));

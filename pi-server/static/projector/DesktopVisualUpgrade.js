@@ -48,7 +48,11 @@ export function applyDesktopVisualUpgrade(galaxyScene) {
   renderer.userData.kidsGalaxyStudioGroundColor = STUDIO_GROUND_COLOR;
 
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.set(2048, 2048);
+  // 1024 per cube face, not 2048. The sun is a point light, so this is six
+  // shadow maps; at 2048 they were most of the frame on an Iris Xe (33.7 ms
+  // with 12 planets). With 1024 and only ringed bodies casting, 17 ms - near the
+  // 16.6 ms of no shadows at all - and ring and companion shadows still land.
+  sunLight.shadow.mapSize.set(1024, 1024);
   sunLight.shadow.camera.near = 0.5;
   sunLight.shadow.camera.far = 90;
   sunLight.shadow.bias = -0.00035;

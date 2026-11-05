@@ -234,6 +234,16 @@ These routes require the manager role in secure deployments, by owner decision.
   tag), and `/api/planets` returns `X-Kids-Galaxy-Build` so an open wall
   reloads itself once after an update. Keep asset references in `index.html`
   quoted and absolute (`"/static/..."`) so the page rewrite can version them.
+- Planet surface maps are built in a module worker (`ManifestMapsWorker.js`).
+  Module workers do not see the page's import map, so `ManifestMaps.js`,
+  `ReliefFields.js` and `FrontViewProjection.js` must never import `three`.
+  Anything that needs the finished surface (the polar twist, the print
+  snapshot) waits on `entity.surfaceReady` or registers a surface-ready hook.
+- Shadows are a measured budget: the sun is a point light, so each caster is
+  drawn six more times per frame. Planet bodies cast only when ringed; keep
+  new casters small.
+- A planet owns every GPU resource built for it. Materials or geometry a stage
+  replaces go to `retire()` and are freed in `PlanetEntity.dispose()`.
 - Behavior can arrive from an SSE frame and a REST refresh at the same time.
   `ProjectorBehaviorController` tickets each arrival when it is requested and
   drops results older than what is on screen; do not bypass that.

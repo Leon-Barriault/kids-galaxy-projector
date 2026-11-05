@@ -14,6 +14,7 @@ from _projector_deps import require as _require_projector_dependencies
 
 _require_projector_dependencies()
 
+import contextlib
 import io
 import json
 import os
@@ -34,7 +35,15 @@ SERVER_DIR = REPO_ROOT / "pi-server"
 
 
 def chromium_executable() -> str | None:
-    """Launch the full Chromium available on this host."""
+    """Launch the full Chromium available on this host.
+
+    KIDS_GALAXY_CHROMIUM points the checks at an installed Chrome instead -
+    handy on a Windows or macOS workstation where Playwright's own build has
+    not been downloaded.
+    """
+    override = os.environ.get("KIDS_GALAXY_CHROMIUM")
+    if override:
+        return override
     builds = sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome"))
     return str(builds[-1]) if builds else None
 
@@ -174,7 +183,9 @@ class Server:
             self._process.wait(timeout=10)
         if self._log:
             self._log.close()
-            Path(self._log.name).unlink(missing_ok=True)
+            # Windows keeps the file locked a moment after the server exits.
+            with contextlib.suppress(PermissionError):
+                Path(self._log.name).unlink(missing_ok=True)
             self._log = None
         shutil.rmtree(self.root, ignore_errors=True)
 
@@ -547,7 +558,7 @@ def main() -> int:
             abs(state["toneMappingExposure"] - 1.91) < 0.01,
             f"exposure holds the solved match ({state['toneMappingExposure']})",
         )
-        check(state["pipeline"][0] == "kid-artwork-upgrade", "render pipeline still exposes its stable first stage")
+        check(state["pipeline"][0] == "saturn-planet-rings", "render pipeline still exposes its stable first stage")
         check(state["shadows"] and state["sunCastsShadow"], "renderer keeps real shadows")
         check(state["internalWidth"] <= 3840, "internal width stays within the 4K ceiling")
         check(state["internalHeight"] <= 2160, "internal height stays within the 4K ceiling")

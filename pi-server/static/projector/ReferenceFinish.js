@@ -2,86 +2,6 @@ import * as THREE from 'three';
 
 import { PlanetEntity } from './PlanetEntity.js';
 
-const TARGET_EDGE_RADIUS = 1.082;
-const TARGET_TOP_RADIUS = 1.118;
-
-function effectiveScaleForRadius(mesh, targetRadius) {
-  const sourceRadius = Number(mesh?.geometry?.parameters?.radius) || 1;
-  return targetRadius / sourceRadius;
-}
-
-function tuneClayMaterial(material, { roughness, clearcoat, clearcoatRoughness }) {
-  if (!material) return;
-  material.roughness = roughness;
-  material.metalness = 0.001;
-  material.clearcoat = clearcoat;
-  material.clearcoatRoughness = clearcoatRoughness;
-  if ('sheen' in material) {
-    material.sheen = 0.035;
-    material.sheenRoughness = 0.72;
-    material.sheenColor = new THREE.Color(0xffffff);
-  }
-  material.needsUpdate = true;
-}
-
-function tuneComponentSurface(entity) {
-  const body = entity.mesh?.material;
-  const edge = entity.accentEdgeMesh?.material;
-  const top = entity.accentMesh?.material;
-  if (!body?.userData?.kidsGalaxyComponentSurface || !edge || !top) return;
-
-  // Reference objects use broad, saturated studio highlights and stay readable
-  // on the shadow side. Lift the kid-derived body very slightly without
-  // changing its hue identity.
-  body.color.offsetHSL(0, 0.012, 0.028);
-  tuneClayMaterial(body, {
-    roughness: 0.38,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.32,
-  });
-
-  // Keep a real darker same-hue shoulder, but make the top visibly proud of it.
-  entity.accentEdgeMesh.scale.setScalar(
-    effectiveScaleForRadius(entity.accentEdgeMesh, TARGET_EDGE_RADIUS),
-  );
-  entity.accentMesh.scale.setScalar(
-    effectiveScaleForRadius(entity.accentMesh, TARGET_TOP_RADIUS),
-  );
-
-  tuneClayMaterial(edge, {
-    roughness: 0.42,
-    clearcoat: 0.45,
-    clearcoatRoughness: 0.38,
-  });
-  edge.bumpScale = 0.035;
-  edge.alphaTest = 0.035;
-  edge.transparent = true;
-  edge.opacity = 1;
-  edge.depthWrite = true;
-  edge.alphaToCoverage = true;
-
-  tuneClayMaterial(top, {
-    roughness: 0.34,
-    clearcoat: 0.62,
-    clearcoatRoughness: 0.28,
-  });
-  top.bumpScale = 0.055;
-  top.displacementScale = 0.014;
-  top.displacementBias = -0.0006;
-  top.alphaTest = 0.045;
-  top.transparent = true;
-  top.opacity = 1;
-  top.depthWrite = true;
-  top.alphaToCoverage = true;
-
-  body.userData.kidsGalaxyReferenceFinish = true;
-  body.userData.kidsGalaxyReferenceBodyLift = 0.028;
-  edge.userData.kidsGalaxySoftClayEdge = true;
-  top.userData.kidsGalaxySoftClayTop = true;
-  top.userData.kidsGalaxyReferenceTopRadius = TARGET_TOP_RADIUS;
-  edge.userData.kidsGalaxyReferenceEdgeRadius = TARGET_EDGE_RADIUS;
-}
-
 function brightenInstanceColours(mesh, lift) {
   if (!mesh?.isInstancedMesh || !mesh.instanceColor) return;
   const colour = new THREE.Color();
@@ -162,24 +82,21 @@ function tuneSaturnRing(entity) {
   ring.userData.kidsGalaxyVisibleChunkScale = 0.55;
 }
 
-/** Final visual acceptance layer for the supplied clay/toy references. */
+/**
+ * Saturn ring finish: smaller, brighter, unshadowed particle chunks.
+ *
+ * The body-material half of this stage was removed; the manifest surface
+ * replaces that material wholesale.
+ */
 export function installReferenceFinish() {
-  if (PlanetEntity.prototype.applyTexture?.kidsGalaxyReferenceFinish) return;
-  const previousApplyTexture = PlanetEntity.prototype.applyTexture;
+  if (PlanetEntity.prototype.addPlanetRing?.kidsGalaxyReferenceFinish) return;
   const previousAddPlanetRing = PlanetEntity.prototype.addPlanetRing;
-
-  function referenceFinishedTexture(texture) {
-    previousApplyTexture.call(this, texture);
-    tuneComponentSurface(this);
-  }
 
   function referenceFinishedRing() {
     previousAddPlanetRing.call(this);
     tuneSaturnRing(this);
   }
 
-  referenceFinishedTexture.kidsGalaxyReferenceFinish = true;
   referenceFinishedRing.kidsGalaxyReferenceFinish = true;
-  PlanetEntity.prototype.applyTexture = referenceFinishedTexture;
   PlanetEntity.prototype.addPlanetRing = referenceFinishedRing;
 }

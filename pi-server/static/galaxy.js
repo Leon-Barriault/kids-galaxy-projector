@@ -8,8 +8,6 @@
 
 import * as THREE from 'three';
 
-import { installAreaFillSphericalProjection } from './projector/AreaFillSphericalProjection.js';
-import { installArtworkCoverageProjection } from './projector/ArtworkCoverageProjection.js';
 import {
   ASTRONAUT_VARIANTS,
   installFriendlyAstronautOptions,
@@ -17,14 +15,9 @@ import {
 import { CameraController } from './projector/CameraController.js';
 import { CelebrationEffect } from './projector/CelebrationEffect.js';
 import { applyDesktopVisualUpgrade } from './projector/DesktopVisualUpgrade.js';
-import { installExplicitBodyColor } from './projector/ExplicitBodyColor.js';
 import { GalaxyEnvironment } from './projector/GalaxyEnvironment.js';
 import { GalaxyScene } from './projector/GalaxyScene.js';
 import { installHighFidelityPlanetFeatures } from './projector/HighFidelityPlanetFeatures.js';
-import { installKidArtworkComponentSurface } from './projector/KidArtworkComponentSurface.js';
-import { installKidArtworkFaithfulMask } from './projector/KidArtworkFaithfulMask.js';
-import { installKidArtworkMotifProjection } from './projector/KidArtworkMotifProjection.js';
-import { installKidArtworkUpgrade } from './projector/KidArtworkUpgrade.js';
 import { installManifestStrokeSurface } from './projector/ManifestStrokeSurface.js';
 import { PlanetAnimator } from './projector/PlanetAnimator.js';
 import { PlanetLoader } from './projector/PlanetLoader.js';
@@ -43,10 +36,6 @@ import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrad
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
 import { installRingColorFidelity } from './projector/RingColorFidelity.js';
 import { installSaturnPlanetRings } from './projector/SaturnPlanetRings.js';
-import { installSoftToyPlanetSurface } from './projector/SoftToyPlanetSurface.js';
-import { installSculptedArtworkGeometry } from './projector/SculptedArtworkGeometry.js';
-import { installStrokeLatitudeProjection } from './projector/StrokeLatitudeProjection.js';
-import { installStrokeWrapProjection } from './projector/StrokeWrapProjection.js';
 import { installThemedGalaxyEnvironment } from './projector/ThemedGalaxyEnvironment.js';
 import { installVisualRefinement } from './projector/VisualRefinement.js';
 
@@ -57,48 +46,31 @@ function installVisualRefinementStage() {
   installFriendlyAstronautOptions();
 }
 
-function installSphericalStrokeProjectionStage() {
-  installStrokeWrapProjection();
-  installStrokeLatitudeProjection();
-  installAreaFillSphericalProjection();
-}
 
-// Five stages removed as provably dead: their only effects were on
-// entity.mesh.material (replaced wholesale by the surface stages) or on meshes
-// inside sculptedArtworkGroup (hidden by hideSculptedGeometry), and every
-// userData key they wrote was read by nothing - no other projector module and no
-// script. sculpted-artwork-runtime-compat was a pure no-op: it set a global
-// BODY_RADIUS that every consumer shadows with its own module-scope constant.
-//
-// Deliberately kept, though equally invisible: the kid-artwork stages and
-// sculpted-artwork-geometry / stroke-wrap-projection, whose userData the
-// acceptance scripts still read.
+// Every planet is rendered from its drawing manifest by ManifestStrokeSurface,
+// which replaces the body material and geometry wholesale, so older surface
+// stages that ran before it did work nobody saw. Five were removed earlier; the
+// nine kid-artwork, sculpted, stroke-projection and soft-toy stages followed
+// once measurement showed the finished surface byte-for-byte identical without
+// them and planet build time about 45% lower. Every stage below still changes
+// something on screen - rings, craters, mountains, companions, themes - and the
+// two reference stages now only finish the Saturn ring.
 const PLANET_RENDER_STAGES = Object.freeze([
-  { name: 'kid-artwork-upgrade', install: installKidArtworkUpgrade },
-  { name: 'kid-artwork-faithful-mask', install: installKidArtworkFaithfulMask },
-  { name: 'kid-artwork-motif-projection', install: installKidArtworkMotifProjection },
   { name: 'saturn-planet-rings', install: installSaturnPlanetRings },
   { name: 'high-fidelity-planet-features', install: installHighFidelityPlanetFeatures },
   { name: 'reference-surface-tuning', install: installReferenceSurfaceTuning },
-  { name: 'kid-artwork-component-surface', install: installKidArtworkComponentSurface },
   { name: 'reference-finish', install: installReferenceFinish },
   { name: 'ring-color-fidelity', install: installRingColorFidelity },
-  { name: 'sculpted-artwork-geometry', install: installSculptedArtworkGeometry },
-  { name: 'artwork-coverage-projection', install: installArtworkCoverageProjection },
   { name: 'reference-planet-upgrade', install: installReferencePlanetUpgrade },
   { name: 'themed-galaxy-environment', install: installThemedGalaxyEnvironment },
-  { name: 'explicit-body-color', install: installExplicitBodyColor },
   { name: 'visual-refinement', install: installVisualRefinementStage },
-  { name: 'stroke-wrap-projection', install: installSphericalStrokeProjectionStage },
-  { name: 'soft-toy-planet-surface', install: installSoftToyPlanetSurface },
 ]);
 
 const installedPlanetRenderStages = installPlanetRenderPipeline(PLANET_RENDER_STAGES);
-// Keep the long-standing pipeline diagnostics stable. The manifest renderer is
-// an authoritative input adapter for new vector-aware tablet drawings rather
-// than a replacement for the image-only compatibility pipeline. Installing it
-// afterwards still makes it the outermost applyTexture wrapper, so manifest
-// intent wins synchronously whenever a sidecar is present.
+// The manifest renderer owns every planet's body. Installing it after the
+// stages makes it the outermost applyTexture wrapper; it then builds the surface
+// maps off the main thread (ManifestMapsClient) and finishes the planet when
+// they arrive, so an arriving drawing no longer freezes the wall.
 //
 // The internal gap fill used to wrap this as a further stage. It runs inside
 // buildManifestMaps now, before the relief pass. As a post-processor it had to
@@ -116,8 +88,9 @@ installManifestStrokeSurface();
 //
 // It sits outside PLANET_RENDER_STAGES because it is not a surface stage - it
 // does not decide what the planet looks like, it deforms whatever the surface
-// stages produced, and it must run last. Keeping it out also leaves the
-// pipeline diagnostics the acceptance scripts read unchanged.
+// stages produced, and it must run last - as a surface-ready hook, since the
+// surface now arrives asynchronously. Keeping it out also leaves the pipeline
+// diagnostics the acceptance scripts read unchanged.
 installPolarMagnetSweep3D();
 
 const container = document.getElementById('canvas-container');
