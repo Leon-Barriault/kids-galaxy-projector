@@ -168,6 +168,53 @@
       0%   { transform: translate(0, 0) scale(1); opacity: 1; }
       100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
     }
+    /* The system cursor stays hidden on the wall; ShuttlePointer.js draws this
+       shuttle instead while a mouse is moving. Its nose is the hotspot. */
+    #shuttle-pointer {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    #shuttle-pointer.visible { opacity: 1; }
+
+    #shuttle-pointer .ship {
+      position: absolute;
+      left: -20px;
+      top: -2px;
+      width: 40px;
+      height: 62px;
+      transform-origin: 20px 2px;
+      filter: drop-shadow(0 0 5px rgba(79, 195, 247, 0.85));
+    }
+
+    #shuttle-pointer .flame {
+      transform-origin: 20px 47px;
+      transform: scaleY(0.35);
+      opacity: 0.55;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    #shuttle-pointer.thrusting .flame {
+      transform: scaleY(1);
+      opacity: 1;
+      animation: shuttle-flicker 0.12s infinite alternate;
+    }
+
+    @keyframes shuttle-flicker {
+      from { transform: scaleY(0.85); }
+      to { transform: scaleY(1.12); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #shuttle-pointer.thrusting .flame { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -185,6 +232,22 @@
   <div id="hint"></div>
   <div id="sparkles"></div>
   <div id="canvas-container"></div>
+  <!-- Follows the mouse on the wall; see projector/ShuttlePointer.js. -->
+  <div id="shuttle-pointer" aria-hidden="true">
+    <svg class="ship" viewBox="0 0 40 62" width="40" height="62">
+      <g class="flame">
+        <ellipse cx="20" cy="54" rx="6" ry="8" fill="#ff8f00" />
+        <ellipse cx="20" cy="52" rx="3" ry="5" fill="#ffe082" />
+      </g>
+      <path d="M20 16 L36 46 L20 42 L4 46 Z" fill="#cfd8e3" stroke="#22304d" stroke-width="1.5" stroke-linejoin="round" />
+      <rect x="14.5" y="44" width="4" height="4" rx="1" fill="#607d8b" />
+      <rect x="21.5" y="44" width="4" height="4" rx="1" fill="#607d8b" />
+      <path d="M20 2 C26 10 27 21 27 34 L27 45 L13 45 L13 34 C13 21 14 10 20 2 Z" fill="#ffffff" stroke="#22304d" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M20 2 C23 6 24.6 9.5 25.2 13 L14.8 13 C15.4 9.5 17 6 20 2 Z" fill="#22304d" />
+      <rect x="13.8" y="35" width="12.4" height="3" fill="#e53935" />
+      <circle cx="20" cy="22" r="3.4" fill="#4fc3f7" stroke="#22304d" stroke-width="1.2" />
+    </svg>
+  </div>
 
   <!-- Three.js is vendored locally (static/vendor) so the projector works on a
        fully offline Pi hotspot. See static/vendor/THREE_LICENSE.txt (MIT). -->
