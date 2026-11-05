@@ -121,7 +121,11 @@ by Projector CI.
 | `projector/CameraController.js` | Camera and OrbitControls behavior |
 | `projector/PlanetLoader.js`, `PlanetAnimator.js` | Planet loading, lifecycle and animation |
 | `projector/ProjectorBehaviorController.js` | Runtime display/behavior policy |
-| `projector/*Artwork*.js`, `*Finish.js`, feature modules | Kid-art projection, geometry, materials and feature stages |
+| `projector/ManifestStrokeSurface.js` | Every planet body: material, raised bevelled geometry, surface-ready hooks |
+| `projector/ManifestMaps.js`, `ManifestMapsWorker.js`, `ManifestMapsClient.js` | Surface maps built from the drawing manifest, off the main thread (three-free) |
+| `projector/ReliefFields.js`, `BeveledPatchRelief.js` | Bevel/distance/crease arithmetic (three-free) and relief geometry |
+| `projector/FrontViewProjection.js` | Front-view ("Like the drawing") projection maths |
+| `*Rings*.js`, `HighFidelityPlanetFeatures.js`, `Reference*.js`, feature modules | Rings, craters, mountains, companions and theme stages |
 
 ### Projector composition rules
 
