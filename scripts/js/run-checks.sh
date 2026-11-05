@@ -34,19 +34,19 @@ printf "export * from '%s';\n" "${vendor}" > "${scratch}/node_modules/three/inde
 echo '{ "type": "module" }' > "${scratch}/package.json"
 
 cp "${projector}/BeveledPatchRelief.js" "${projector}/StudioEnvironment.js" \
-   "${projector}/SoftToyPlanetSurface.js" "${projector}/ManifestStrokeSurface.js" \
+   "${projector}/ManifestStrokeSurface.js" "${projector}/ManifestMaps.js" \
+   "${projector}/ManifestMapsClient.js" "${projector}/ReliefFields.js" \
    "${projector}/FrontViewProjection.js" "${projector}/PlanetLoader.js" \
    "${projector}/LiveUpdates.js" "${projector}/ProjectorBehaviorController.js" \
    "${projector}/ProjectorBuildWatcher.js" "${projector}/ShuttlePointer.js" \
    "${projector}/PlanetEntity.js" "${scratch}/"
 cp "${repo_root}/scripts/js/"*.mjs "${scratch}/"
 
-# SoftToyPlanetSurface pulls in PlanetEntity purely to monkeypatch its prototype
-# at install time, and PlanetEntity drags most of the projector behind it. The
-# segmentation functions under test touch none of that, so the import is stubbed
-# rather than the whole scene graph copied in. The stub keeps just enough of the
-# lifecycle (id, order, dispose) for the planet-rendering switch check to drive
-# PlanetLoader without a scene.
+# The surface modules import PlanetEntity only to extend its prototype at install
+# time, and PlanetEntity drags most of the projector behind it. The functions
+# under test touch none of that, so the import is stubbed rather than the whole
+# scene graph copied in. The stub keeps just enough of the lifecycle (id, order,
+# dispose) for the planet-rendering switch check to drive PlanetLoader.
 cat > "${scratch}/PlanetEntity.js" <<'JS'
 export class PlanetEntity {
   constructor({ payload, order } = {}) {
@@ -67,7 +67,7 @@ export class PlanetEntity {
 JS
 
 status=0
-for check in check_relief_geometry.mjs check_studio_environment.mjs check_region_flatness.mjs \
+for check in check_relief_geometry.mjs check_studio_environment.mjs \
              check_internal_gap_fill.mjs check_front_view_projection.mjs \
              check_planet_rendering_switch.mjs check_projector_build_watcher.mjs \
              check_shuttle_pointer.mjs \

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { PlanetEntity } from './PlanetEntity.js';
+import { addSurfaceReadyHook } from './ManifestStrokeSurface.js';
 import { weldSeamAndPoleNormals } from './BeveledPatchRelief.js';
 
 const POLAR_MAGNET_SWEEP_DEGREES = 360;
@@ -115,20 +115,8 @@ function applyPolarMagnetSweep(entity) {
  * parameterization (including the raised kid artwork) is twisted in 3-D.
  */
 export function installPolarMagnetSweep3D() {
-  if (PlanetEntity.prototype.applyTexture?.kidsGalaxyPolarMagnetSweep3D) return;
-  const previousApplyTexture = PlanetEntity.prototype.applyTexture;
-
-  function polarMagnetSweepTexture(texture) {
-    previousApplyTexture.call(this, texture);
-    try {
-      applyPolarMagnetSweep(this);
-    } catch (error) {
-      console.error('Kids Galaxy 3-D polar magnet sweep failed', this.id, error);
-      window.kidsGalaxyPolarMagnetSweepFailures = window.kidsGalaxyPolarMagnetSweepFailures || [];
-      window.kidsGalaxyPolarMagnetSweepFailures.push({ id: this.id, message: String(error) });
-    }
-  }
-
-  polarMagnetSweepTexture.kidsGalaxyPolarMagnetSweep3D = true;
-  PlanetEntity.prototype.applyTexture = polarMagnetSweepTexture;
+  // Runs once the manifest surface is in place. That surface is built off the
+  // main thread now, so wrapping applyTexture would twist the placeholder body
+  // before the real one arrives.
+  addSurfaceReadyHook(applyPolarMagnetSweep);
 }

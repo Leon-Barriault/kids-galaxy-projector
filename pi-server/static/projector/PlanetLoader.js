@@ -120,9 +120,12 @@ export class PlanetLoader {
           return;
         }
         entity.applyTexture(texture);
-        // The complete prototype-based projector pipeline has now transformed
-        // this entity. Capture that final WebGL object graph for print/PDF use.
-        this.snapshotPublisher?.schedule(entity);
+        // The manifest surface finishes asynchronously (its maps are built off
+        // the main thread). Capture the print/PDF snapshot only once the final
+        // WebGL object graph is in place.
+        Promise.resolve(entity.surfaceReady).then(() => {
+          if (!entity.disposed) this.snapshotPublisher?.schedule(entity);
+        });
       },
       undefined,
       () => this.celebration.textureLoadFailed(),
