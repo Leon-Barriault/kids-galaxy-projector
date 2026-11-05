@@ -37,6 +37,7 @@ import {
   sessionStorageOrNull,
 } from './projector/ProjectorBuildWatcher.js';
 import { ProjectorSnapshotPublisher } from './projector/ProjectorSnapshotPublisher.js';
+import { ShuttlePointer } from './projector/ShuttlePointer.js';
 import { installReferenceFinish } from './projector/ReferenceFinish.js';
 import { installReferencePlanetUpgrade } from './projector/ReferencePlanetUpgrade.js';
 import { installReferenceSurfaceTuning } from './projector/ReferenceSurfaceTuning.js';
@@ -129,6 +130,10 @@ const celebration = new CelebrationEffect({
   hintEl: document.getElementById('hint'),
 });
 
+// The wall hides the system cursor; a shuttle follows the mouse instead.
+const shuttlePointer = new ShuttlePointer({ element: document.getElementById('shuttle-pointer') });
+shuttlePointer.start();
+
 const animator = new PlanetAnimator();
 const galaxyScene = new GalaxyScene(container, animator);
 applyDesktopVisualUpgrade(galaxyScene);
@@ -193,6 +198,7 @@ window.kidsGalaxy = {
     behaviorController,
     snapshotPublisher,
     buildWatcher,
+    shuttlePointer,
   },
 };
 

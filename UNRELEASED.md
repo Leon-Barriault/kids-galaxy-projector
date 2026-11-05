@@ -7,6 +7,14 @@ is cut, then leave a fresh `Unreleased` heading behind.
 
 ## Unreleased
 
+### Added
+
+- A small shuttle follows the mouse on the galaxy wall. The page hides the
+  system cursor, which left anyone steering the wall with a mouse with nothing
+  to follow. The shuttle's nose is the pointer; it turns toward where it is
+  heading, fires its engine while moving, and fades out a few seconds after the
+  mouse rests or leaves the window. Touch input never shows it.
+
 ### Fixed
 
 - The wall could keep showing the old planet rendering after **Planet look**

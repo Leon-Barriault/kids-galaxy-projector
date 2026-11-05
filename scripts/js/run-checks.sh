@@ -37,7 +37,7 @@ cp "${projector}/BeveledPatchRelief.js" "${projector}/StudioEnvironment.js" \
    "${projector}/SoftToyPlanetSurface.js" "${projector}/ManifestStrokeSurface.js" \
    "${projector}/FrontViewProjection.js" "${projector}/PlanetLoader.js" \
    "${projector}/LiveUpdates.js" "${projector}/ProjectorBehaviorController.js" \
-   "${projector}/ProjectorBuildWatcher.js" \
+   "${projector}/ProjectorBuildWatcher.js" "${projector}/ShuttlePointer.js" \
    "${projector}/PlanetEntity.js" "${scratch}/"
 cp "${repo_root}/scripts/js/"*.mjs "${scratch}/"
 
@@ -70,6 +70,7 @@ status=0
 for check in check_relief_geometry.mjs check_studio_environment.mjs check_region_flatness.mjs \
              check_internal_gap_fill.mjs check_front_view_projection.mjs \
              check_planet_rendering_switch.mjs check_projector_build_watcher.mjs \
+             check_shuttle_pointer.mjs \
              derive_tone_exposure.mjs; do
   echo "=============================================================="
   echo "  ${check}"
