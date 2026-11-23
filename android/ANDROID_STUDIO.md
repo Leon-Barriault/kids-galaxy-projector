@@ -319,15 +319,23 @@ misleading error inside the app.
 
 That line is Android Studio, after the build has already succeeded. It waits
 about five minutes, then times out, because the selected emulator never reached
-`device` on the Windows `adb` server. The usual causes on this PC:
+`device` on the Windows `adb` server. On this PC the confirmed cause was a
+quick-boot snapshot. The AVD had `forceFastBoot=yes`. After the emulator moved
+to 37.1.11 it reloaded the 4 November snapshot, the window came up, and `adb
+devices` stayed `offline` for the whole wait. A cold boot (`-no-snapshot-load`)
+reached `device` in 41 seconds. WHPX was already on, and Windows already owned
+port 5037.
 
-1. **Windows Hypervisor Platform is off.** WSL2 uses the Windows hypervisor. The
+Check in this order:
+
+1. **`adb devices` shows `offline`.** In Device Manager open that AVD's menu and
+   choose **Cold Boot Now**. Then **Edit → Advanced settings**, and set **Boot
+   option** to **Cold boot** so the next start does not load the stale snapshot.
+2. **Windows Hypervisor Platform is off.** WSL2 uses the Windows hypervisor. The
    emulator hangs on a black window without that feature. Turn it on under
    **Turn Windows features on or off**, then restart.
-2. **The AVD was not started from Device Manager**, or its snapshot is stuck.
-   Start it there. If the screen stays black, open the emulator menu and choose
-   **Cold Boot Now**.
-3. **Port 5037 belongs to Ubuntu.** `scripts/provision_kid_tablet.sh` and
+3. **The AVD was not started from Device Manager.** Start it there.
+4. **Port 5037 belongs to Ubuntu.** `scripts/provision_kid_tablet.sh` and
    `scripts/prepare_manager_tablet.sh` run `adb start-server` and, with mirrored
    networking, that server is on the same localhost as Windows. The repo does
    not set `ADB_SERVER_SOCKET`; do not set it either. Those scripts now stop

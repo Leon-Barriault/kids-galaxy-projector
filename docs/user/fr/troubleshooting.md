@@ -38,9 +38,29 @@ Cela s’arrête après environ 5 minutes.
 La construction a déjà réussi.
 Cela se passe sur Windows avec WSL2.
 
+<!-- step: emulator-offline -->
+
+1. Ouvrez PowerShell.
+   Collez cette ligne.
+
+```powershell
+adb devices
+```
+
+   Si la ligne de l’émulateur dit `offline`, ouvrez Device Manager.
+   Ouvrez le menu de cet appareil.
+   Choisissez Cold Boot Now.
+   Ouvrez Edit, puis Advanced settings.
+   Réglez Boot option sur Cold boot.
+
+   **Ce que vous devez voir.** La même ligne finit par `device`.
+   L’émulateur montre son écran d’accueil.
+
+   **Sinon.** Passez à l’étape suivante.
+
 <!-- step: emulator-hypervisor -->
 
-1. Activez Windows Hypervisor Platform.
+2. Activez Windows Hypervisor Platform.
    Ouvrez Démarrer.
    Cherchez les fonctionnalités Windows.
    Cochez Windows Hypervisor Platform.
@@ -52,10 +72,8 @@ Cela se passe sur Windows avec WSL2.
 
 <!-- step: emulator-cold-boot -->
 
-2. Dans Android Studio, ouvrez Device Manager.
+3. Dans Android Studio, ouvrez Device Manager.
    Démarrez votre émulateur depuis cette liste.
-   Si l’écran reste noir, ouvrez son menu.
-   Choisissez Cold Boot Now.
 
    **Ce que vous devez voir.** L’écran d’accueil de l’émulateur.
 
@@ -64,7 +82,7 @@ Cela se passe sur Windows avec WSL2.
 
 <!-- step: emulator-adb -->
 
-3. Ouvrez PowerShell.
+4. Ouvrez PowerShell.
    Collez cette ligne.
    Si Ubuntu est ouvert, collez d’abord la même ligne là.
    Appuyez de nouveau sur Run dans Android Studio.
