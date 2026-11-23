@@ -29,6 +29,63 @@ cd /home/omega/kids-galaxy-projector
 >
 > N’effacez pas une tablette tant qu’une étape ne le dit pas.
 
+<!-- problem: emulator-online -->
+
+## L’émulateur ne se met pas en ligne
+
+**Vous voyez.** `Waiting for all target devices to come online`.
+Cela s’arrête après environ 5 minutes.
+La construction a déjà réussi.
+Cela se passe sur Windows avec WSL2.
+
+<!-- step: emulator-hypervisor -->
+
+1. Activez Windows Hypervisor Platform.
+   Ouvrez Démarrer.
+   Cherchez les fonctionnalités Windows.
+   Cochez Windows Hypervisor Platform.
+   Redémarrez le PC.
+
+   **Ce que vous devez voir.** La case reste cochée après le redémarrage.
+
+   **Sinon.** Une personne-ressource doit activer cette fonction de Windows.
+
+<!-- step: emulator-cold-boot -->
+
+2. Dans Android Studio, ouvrez Device Manager.
+   Démarrez votre émulateur depuis cette liste.
+   Si l’écran reste noir, ouvrez son menu.
+   Choisissez Cold Boot Now.
+
+   **Ce que vous devez voir.** L’écran d’accueil de l’émulateur.
+
+   **Sinon.** Utilisez une image API 34 ou API 35.
+   Cette application n’a pas besoin d’une image API 37.
+
+<!-- step: emulator-adb -->
+
+3. Ouvrez PowerShell.
+   Collez cette ligne.
+   Si Ubuntu est ouvert, collez d’abord la même ligne là.
+   Appuyez de nouveau sur Run dans Android Studio.
+
+```powershell
+adb kill-server
+```
+
+   **Ce que vous devez voir.** L’application s’ouvre dans l’émulateur.
+
+   **Sinon.** Fermez Ubuntu.
+   Collez la ligne de nouveau.
+   Appuyez une fois sur Run.
+
+<!-- fix: emulator-online -->
+
+> **Si cela ne fonctionne pas**
+>
+> Ne choisissez pas un émulateur absent de Device Manager.
+> Le projet ne choisit pas un émulateur à votre place.
+
 <!-- problem: no-picture -->
 
 ## Le mur n’a pas d’image

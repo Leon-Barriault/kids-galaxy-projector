@@ -51,3 +51,7 @@ echo "Installing the manager app."
 adb install -r "$apk"
 echo "You should see Kids Galaxy Manager in the app list."
 echo "This tablet is not locked. That is correct."
+
+# Mirrored WSL2 shares localhost with Windows. A server left on port 5037
+# keeps Android Studio's emulator from coming online.
+adb kill-server >/dev/null 2>&1 || true
