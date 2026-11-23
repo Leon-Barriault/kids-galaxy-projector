@@ -43,6 +43,8 @@ function syncEasterBunnies(theme) {
   const easter = normalizeTheme(theme) === 'easter';
   this.companions.forEach((record) => {
     if (record.type !== 'astronaut') return;
+    // Christmas owns the Santa suit. This pass only swaps the Easter bunny.
+    if (!easter && record.object?.userData?.kidsGalaxySanta) return;
     const isBunny = Boolean(record.object?.userData?.kidsGalaxyWhiteBunny);
     const isWitch = Boolean(record.object?.userData?.kidsGalaxyWitchOnBroom);
 

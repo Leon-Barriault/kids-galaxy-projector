@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { PlanetEntity } from './PlanetEntity.js';
 import {
   createChristmasTree,
+  createGiftSatellite,
+  createSantaAstronaut,
   createWhiteBunny,
   createWitchOnBroom,
 } from './ThemeVisualFactory.js';
@@ -303,7 +305,38 @@ function addChristmasTrees() {
 function companionKind(object) {
   if (object?.userData?.kidsGalaxyWitchOnBroom) return 'witch';
   if (object?.userData?.kidsGalaxyWhiteBunny) return 'bunny';
+  if (object?.userData?.kidsGalaxySanta) return 'santa';
   return 'astronaut';
+}
+
+function satelliteKind(object) {
+  if (object?.userData?.kidsGalaxyGiftSatellite) return 'gift';
+  return 'satellite';
+}
+
+function holidayAstronautKind(theme, seed) {
+  if (theme === 'halloween') return 'witch';
+  if (theme === 'easter' && seed % 2 === 0) return 'bunny';
+  if (theme === 'christmas') return 'santa';
+  return 'astronaut';
+}
+
+function holidaySatelliteKind(theme) {
+  return theme === 'christmas' ? 'gift' : 'satellite';
+}
+
+function astronautReplacement(kind) {
+  if (kind === 'witch') return createWitchOnBroom();
+  if (kind === 'bunny') return createWhiteBunny();
+  if (kind === 'santa') return createSantaAstronaut();
+  return null;
+}
+
+function replaceCompanion(record, next) {
+  this.disposeObject(record.object);
+  record.object = next;
+  enableShadows(next);
+  this.scene.add(next);
 }
 
 /** Install laptop-grade crater geometry and holiday planet substitutions. */
@@ -354,21 +387,23 @@ export function installHighFidelityPlanetFeatures() {
     }
 
     this.companions.forEach((record, index) => {
-      if (record.type !== 'astronaut') return;
-      const easterSeed = this.animator.hashId(`${this.id}-easter-bunny-${index}`);
-      const desiredKind = normalized === 'halloween'
-        ? 'witch'
-        : normalized === 'easter' && easterSeed % 2 === 0
-          ? 'bunny'
-          : 'astronaut';
-      if (companionKind(record.object) === desiredKind) return;
+      if (record.type === 'astronaut') {
+        const seed = this.animator.hashId(`${this.id}-easter-bunny-${index}`);
+        const desiredKind = holidayAstronautKind(normalized, seed);
+        if (companionKind(record.object) === desiredKind) return;
+        const next = astronautReplacement(desiredKind)
+          || originalCreateCompanion.call(this, 'astronaut');
+        replaceCompanion.call(this, record, next);
+        return;
+      }
 
-      this.disposeObject(record.object);
-      if (desiredKind === 'witch') record.object = createWitchOnBroom();
-      else if (desiredKind === 'bunny') record.object = createWhiteBunny();
-      else record.object = originalCreateCompanion.call(this, 'astronaut');
-      enableShadows(record.object);
-      this.scene.add(record.object);
+      if (record.type !== 'satellite') return;
+      const desiredSatellite = holidaySatelliteKind(normalized);
+      if (satelliteKind(record.object) === desiredSatellite) return;
+      const next = desiredSatellite === 'gift'
+        ? createGiftSatellite()
+        : originalCreateCompanion.call(this, 'satellite');
+      replaceCompanion.call(this, record, next);
     });
 
     this._kidsGalaxyVisualTheme = normalized;

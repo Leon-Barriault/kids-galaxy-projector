@@ -38,6 +38,11 @@ is cut, then leave a fresh `Unreleased` heading behind.
 
 ### Fixed
 
+- Christmas mode on the galaxy wall reads as Christmas again. The astronaut
+  wears a red suit with white fur trim, a white beard, and a red tuque with a
+  white brim and pompom. The satellite carries a wrapped gift, ribbon and bow,
+  between its panels. The floating baubles are glossy glass ornaments with a
+  specular highlight, a metal cap, and a hook on top.
 - GPU memory leak: every planet that left the wall left textures and
   geometry behind (roughness and crease maps, replaced materials and the
   original sphere). After removing all planets the projector is now back to

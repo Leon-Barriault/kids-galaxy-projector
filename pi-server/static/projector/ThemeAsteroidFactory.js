@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import {
   createAsteroidGeometry,
   createAsteroidMaterial,
+  createPumpkinStemGeometry,
+  createPumpkinStemMaterial,
   easterEggColorFor,
 } from './ThemeVisualFactory.js';
 
@@ -118,7 +120,10 @@ export function createThemeBodyGeometry(style, radius = 0.16) {
   } else if (style === 'maple-leaf') geometry = createMapleLeafGeometry(radius);
   else if (style === 'fleur-de-lis') geometry = createFleurDeLisGeometry(radius);
   else if (style === 'heart') geometry = createHeartGeometry(radius);
-  else if (style === 'ornament' || style === 'gold-orb' || style === 'silver-orb') {
+  else if (style === 'ornament') {
+    geometry = new THREE.SphereGeometry(radius, 24, 18);
+    geometry.userData.kidsGalaxyGlassOrnament = true;
+  } else if (style === 'gold-orb' || style === 'silver-orb') {
     geometry = new THREE.SphereGeometry(radius, 24, 18);
   } else {
     geometry = createAsteroidGeometry('default', radius);
@@ -150,7 +155,7 @@ export function createThemeBodyMaterial(style) {
   if (style === 'maple-leaf') return physicalMaterial(0xd82333, { roughness: 0.52 });
   if (style === 'fleur-de-lis') return physicalMaterial(0xf8fbff, { roughness: 0.44 });
   if (style === 'heart') return physicalMaterial(0xff8db7, { roughness: 0.46 });
-  if (style === 'ornament') return physicalMaterial(0xffffff, { roughness: 0.31, clearcoat: 0.24 });
+  if (style === 'ornament') return createOrnamentMaterial();
   if (style === 'gold-orb') return physicalMaterial(0xffcf55, { roughness: 0.28, metalness: 0.2 });
   if (style === 'silver-orb') return physicalMaterial(0xe4e9f2, { roughness: 0.25, metalness: 0.24 });
   if (style === 'red-rock') return physicalMaterial(0xc82835, { roughness: 0.76 });
@@ -175,4 +180,141 @@ export function instanceColorForThemeBody(style, index) {
 
 export function themeBodyHasStem(style) {
   return style === 'pumpkin' || style === 'jack-o-lantern';
+}
+
+/**
+ * Ornaments hang with the hook up. `unit` is a 0..1 roll for a small yaw so
+ * neighbours are not clones. Every other body keeps its tumble.
+ */
+export function themeBodyEuler(style, unit, tumble) {
+  if (style === 'ornament') {
+    const yaw = (Number(unit) - 0.5) * 0.9;
+    return [0, yaw, 0];
+  }
+  return tumble;
+}
+
+function mergeGeometries(geometries) {
+  const parts = geometries.map((geometry) => {
+    const expanded = geometry.index ? geometry.toNonIndexed() : geometry;
+    return { geometry: expanded, owned: expanded !== geometry };
+  });
+  let vertexCount = 0;
+  parts.forEach(({ geometry }) => {
+    vertexCount += geometry.getAttribute('position').count;
+  });
+
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  let vertex = 0;
+  parts.forEach(({ geometry, owned }) => {
+    const position = geometry.getAttribute('position');
+    const normal = geometry.getAttribute('normal');
+    for (let index = 0; index < position.count; index += 1) {
+      const offset = (vertex + index) * 3;
+      positions[offset] = position.getX(index);
+      positions[offset + 1] = position.getY(index);
+      positions[offset + 2] = position.getZ(index);
+      normals[offset] = normal.getX(index);
+      normals[offset + 1] = normal.getY(index);
+      normals[offset + 2] = normal.getZ(index);
+    }
+    vertex += position.count;
+    if (owned) geometry.dispose();
+  });
+
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  return merged;
+}
+
+/**
+ * Glossy coloured glass. Transmission stays off: a refractive bauble would
+ * redraw the scene, and the belt has dozens of them. The sun still throws a
+ * specular lobe; a separate highlight disc makes that glint large enough to
+ * see at belt distance.
+ */
+export function createOrnamentMaterial() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    roughness: 0.06,
+    metalness: 0,
+    clearcoat: 1,
+    clearcoatRoughness: 0.05,
+    specularIntensity: 1,
+    specularColor: 0xffffff,
+    ior: 1.5,
+  });
+}
+
+function createOrnamentCapMaterial() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xe6c36a,
+    roughness: 0.28,
+    metalness: 0.86,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.22,
+  });
+}
+
+export function createOrnamentCapGeometry(radius = 0.16) {
+  const cap = new THREE.CylinderGeometry(radius * 0.18, radius * 0.36, radius * 0.18, 8);
+  cap.translate(0, radius * 0.97, 0);
+  const neck = new THREE.CylinderGeometry(radius * 0.04, radius * 0.04, radius * 0.14, 6);
+  neck.translate(0, radius * 1.1, 0);
+  const hook = new THREE.TorusGeometry(radius * 0.12, radius * 0.03, 6, 12);
+  hook.translate(0, radius * 1.26, 0);
+  const geometry = mergeGeometries([cap, neck, hook]);
+  geometry.userData.kidsGalaxyOrnamentCap = true;
+  geometry.userData.kidsGalaxyOrnamentHook = true;
+  cap.dispose();
+  neck.dispose();
+  hook.dispose();
+  return geometry;
+}
+
+export function createOrnamentHighlightGeometry(radius = 0.16) {
+  const geometry = new THREE.SphereGeometry(radius * 0.28, 10, 8);
+  geometry.scale(1.15, 0.72, 0.38);
+  geometry.translate(radius * 0.16, radius * 0.46, radius * 0.86);
+  geometry.userData.kidsGalaxyOrnamentSpecularHighlight = true;
+  return geometry;
+}
+
+function createOrnamentHighlightMaterial() {
+  return new THREE.MeshBasicMaterial({ color: 0xffffff });
+}
+
+/**
+ * Extra instanced pieces that share each body's matrix. Pumpkin stems and
+ * ornament caps are one draw each, not one mesh per rock. The ornament glint
+ * does not cast: the sun's shadow cube is the frame-time budget.
+ */
+export function themeBodyAttachments(style, radius = 0.16) {
+  if (themeBodyHasStem(style)) {
+    return [{
+      geometry: createPumpkinStemGeometry(radius),
+      material: createPumpkinStemMaterial(),
+      marker: 'kidsGalaxyPumpkinStems',
+      castShadow: true,
+    }];
+  }
+  if (style === 'ornament') {
+    return [
+      {
+        geometry: createOrnamentCapGeometry(radius),
+        material: createOrnamentCapMaterial(),
+        marker: 'kidsGalaxyOrnamentCaps',
+        castShadow: true,
+      },
+      {
+        geometry: createOrnamentHighlightGeometry(radius),
+        material: createOrnamentHighlightMaterial(),
+        marker: 'kidsGalaxyOrnamentHighlights',
+        castShadow: false,
+      },
+    ];
+  }
+  return [];
 }
