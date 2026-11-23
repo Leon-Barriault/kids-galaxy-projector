@@ -48,8 +48,16 @@ SERVER_IP=10.9.8.8 bash "$ROOT/scripts/production_certs.sh" reissue-server
 ca_after="$(sha256sum "$CERTS_DIR/ca.key" | awk '{ print $1 }')"
 [[ "$ca_before" == "$ca_after" ]]
 openssl x509 -in "$CERTS_DIR/server.crt" -noout -ext subjectAltName | grep -q 'IP Address:10.9.8.8'
-openssl x509 -in "$CERTS_DIR/tablets/kid-1/client.crt" -noout -subject | grep -q 'OU = kid'
-openssl x509 -in "$CERTS_DIR/tablets/manager-1/client.crt" -noout -subject | grep -q 'OU = manager'
+# OpenSSL 3.0 prints "OU = kid". OpenSSL on Ubuntu 26 prints "OU=kid".
+subject_has_ou() {
+  local cert="$1"
+  local ou="$2"
+  local subject
+  subject="$(openssl x509 -in "$cert" -noout -subject)"
+  grep -E -q "OU[[:space:]]*=[[:space:]]*${ou}(,|$)" <<<"$subject"
+}
+subject_has_ou "$CERTS_DIR/tablets/kid-1/client.crt" kid
+subject_has_ou "$CERTS_DIR/tablets/manager-1/client.crt" manager
 
 server_key="$(sha256sum "$CERTS_DIR/server.key" | awk '{ print $1 }')"
 active_key="$(sha256sum "$CERTS_DIR/tablets/kid-1/client.key" | awk '{ print $1 }')"
