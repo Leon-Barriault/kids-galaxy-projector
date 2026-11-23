@@ -15,7 +15,12 @@ plugins {
  *   1. builds and starts the pi-server container, detached
  *   2. waits for GET /health, so the app never launches against a server that
  *      is still starting - which presents as a broken app, not a slow one
- *   3. starts an emulator if no device is attached, and waits for it to boot
+ *   3. on macOS and Linux, starts an emulator if no device is attached
+ *
+ * On Windows the same task only restarts the Windows adb server. It does not
+ * boot an AVD: Android Studio launches the emulator selected in the toolbar.
+ * Booting "the first AVD" from here made Run wait for a device that was not
+ * that selection. compileSdk 37 does not mean the emulator image must be 37.
  *
  * The logic lives in scripts/dev-up.sh and scripts/dev-up.ps1 rather than here.
  * Shell is the right language for orchestrating docker, adb and emulator, the
@@ -27,7 +32,7 @@ plugins {
  */
 tasks.register<Exec>("devUp") {
     group = "kids galaxy"
-    description = "Start the local debug environment: pi-server container, then an emulator if none is attached."
+    description = "Start the local debug server. On Windows, also restart adb. The shell script may start an emulator; the Windows script does not."
 
     // The scripts sit at the repository root, one level above this Gradle
     // project - Studio opens android/, not the repo.

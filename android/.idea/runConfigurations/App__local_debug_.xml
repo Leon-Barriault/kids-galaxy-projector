@@ -15,17 +15,16 @@
       2. waits for GET /health to answer, so the app is never installed
          against a server that is still starting - which presents as a broken
          app rather than a slow one
-      3. starts an emulator if no device is attached, and waits for it to
-         finish booting
+      3. on Windows, restarts the Windows adb server and does not boot an AVD
 
-    It is idempotent, so on a second run it costs a couple of seconds and
-    confirms the server is still healthy. The implementation is
-    scripts/dev-up.sh and scripts/dev-up.ps1 at the repository root; both are
-    runnable on their own when something needs investigating.
+    This file does not name a device or an AVD. There is no
+    deploymentTargetSelector.xml in the repo. Android Studio launches whichever
+    emulator is selected in the toolbar. On macOS and Linux, dev-up.sh still
+    starts the first AVD when none is set; the Windows script does not, because
+    that picked an image Studio was not waiting for.
 
-    It runs before the APK is assembled on purpose. The emulator boot is the
-    long pole, so starting it first overlaps with everything else, and if the
-    build then fails you still have a warm environment for the retry.
+    compileSdk 37 is a compile-time platform only. minSdk is 26 and targetSdk
+    is 36. Run does not need an API 37 system image.
 
     If you are debugging on a physical tablet over USB, set KG_SKIP_EMULATOR=1
     in the environment and the device step is skipped.

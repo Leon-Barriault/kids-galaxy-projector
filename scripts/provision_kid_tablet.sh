@@ -160,3 +160,8 @@ echo "Notifications, the Play Store, and browsers are blocked when this app is t
 echo "This script cannot turn on start-when-plugged-in."
 echo "If the tablet has that switch, turn it on once under Battery or Display."
 echo "This took ${SECONDS} seconds."
+
+# Mirrored WSL2 shares localhost with Windows. A server left on port 5037
+# keeps Android Studio's emulator from coming online. The tablet stays
+# installed; the next adb command in Ubuntu starts a server again.
+adb kill-server >/dev/null 2>&1 || true

@@ -29,6 +29,81 @@ cd /home/omega/kids-galaxy-projector
 >
 > Do not erase a tablet until a step tells you to.
 
+<!-- problem: emulator-online -->
+
+## The emulator never comes online
+
+**You see:** `Waiting for all target devices to come online`.
+It stops after about 5 minutes.
+The build already worked.
+This is Windows with WSL2.
+
+<!-- step: emulator-offline -->
+
+1. Open PowerShell.
+   Paste this line.
+
+```powershell
+adb devices
+```
+
+   If the emulator line says `offline`, open Device Manager.
+   Open the menu for that device.
+   Choose Cold Boot Now.
+   Open Edit, then Advanced settings.
+   Set Boot option to Cold boot.
+
+   **What you should see.** The same line now ends with `device`.
+   The emulator shows its home screen.
+
+   **If not.** Do the next step.
+
+<!-- step: emulator-hypervisor -->
+
+2. Turn on Windows Hypervisor Platform.
+   Open Start.
+   Search for Windows features.
+   Tick Windows Hypervisor Platform.
+   Restart the PC.
+
+   **What you should see.** The box stays ticked after the restart.
+
+   **If not.** A helper must turn that Windows feature on.
+
+<!-- step: emulator-cold-boot -->
+
+3. In Android Studio, open Device Manager.
+   Start your emulator from that list.
+
+   **What you should see.** The emulator home screen.
+
+   **If not.** Use an image for API 34 or API 35.
+   This app does not need an API 37 image to run.
+
+<!-- step: emulator-adb -->
+
+4. Open PowerShell.
+   Paste this line.
+   If Ubuntu is open, paste the same line there first.
+   Press Run in Android Studio again.
+
+```powershell
+adb kill-server
+```
+
+   **What you should see.** The app opens in the emulator.
+
+   **If not.** Close Ubuntu.
+   Paste the line again.
+   Press Run once.
+
+<!-- fix: emulator-online -->
+
+> **If this does not work**
+>
+> Do not pick an emulator name that is not in Device Manager.
+> The project does not choose an emulator for you.
+
 <!-- problem: no-picture -->
 
 ## The wall has no picture

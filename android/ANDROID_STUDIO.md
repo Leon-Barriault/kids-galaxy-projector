@@ -263,8 +263,9 @@ Source-set overrides are the mechanism that actually works.
 
 ## 4a. Starting a debugging session
 
-Press **Debug** on **App (local debug)**. That is the whole procedure, from a
-cold machine with Docker closed and no emulator running.
+Press **Debug** on **App (local debug)**. Start the emulator yourself from
+**Device Manager** first (on Windows that is required — see below). Docker can
+be closed; `devUp` starts the server container.
 
 A `devUp` Gradle task runs first, as a before-launch step:
 
@@ -272,12 +273,23 @@ A `devUp` Gradle task runs first, as a before-launch step:
 2. waits for `GET /health` to answer, so the app is never installed against a
    server that is still starting — a race that presents as a *broken* app
    rather than a slow one, and costs a confusing ten minutes the first time;
-3. starts an emulator if no device is attached, and waits for `sys.boot_completed`.
+3. on macOS and Linux, starts an emulator if no device is attached. On Windows
+   it restarts the Windows `adb` server and does **not** boot an AVD.
+
+The committed run configuration does not name a device. Nothing in
+`android/.idea/` pins an AVD, and `deploymentTargetSelector.xml` is not in the
+repo. Studio deploys to the emulator selected in the toolbar. `dev-up.ps1` used
+to boot the first AVD on disk instead, which is a different device, and Run
+then waited until that other target timed out.
+
+`compileSdk` is 37 because `androidx.lifecycle` 2.11 compiles against that
+platform. `minSdk` is 26 and `targetSdk` is 36. Installing or launching the app
+does not require an API 37 system image. Use an API 34 or 35 image unless you
+already have a 37 image that boots.
 
 Each step is idempotent, so a second Debug costs a couple of seconds and just
-re-confirms health. It runs *before* the APK is assembled on purpose: the
-emulator boot is the long pole, so starting it first overlaps with the build,
-and a compile failure still leaves you a warm environment for the retry.
+re-confirms health. The server task runs *before* the APK is assembled on
+purpose.
 
 The implementation is `scripts/dev-up.sh` and `scripts/dev-up.ps1`, picked by
 OS. Both are runnable on their own, and so is the task:
@@ -294,14 +306,44 @@ tablet instead of an emulator:
 | Variable | Effect |
 |---|---|
 | `KG_SKIP_EMULATOR=1` | Don't touch devices — for a physical tablet on USB |
-| `KG_AVD` | Which AVD to start; default is the first one listed |
+| `KG_AVD` | Boot this AVD from the script. On Windows, unset means "do not boot one" |
 | `KG_SERVER_TIMEOUT` | Seconds to wait for `/health`, default 300 |
-| `KG_EMULATOR_TIMEOUT` | Seconds to wait for boot, default 300 |
+| `KG_EMULATOR_TIMEOUT` | Seconds to wait for boot when this script starts an AVD, default 300 |
 
-If a step can't run — no Docker daemon, no `adb`, no AVD defined — it says so
-and, where it safely can, carries on rather than blocking the launch. A missing
-emulator is a warning; an unreachable server is a hard failure, because
-launching the app without one only produces a misleading error inside the app.
+If a step can't run — no Docker daemon, no `adb` — it says so and, where it
+safely can, carries on rather than blocking the launch. An unreachable server
+is a hard failure, because launching the app without one only produces a
+misleading error inside the app.
+
+### Windows, WSL2, and "Waiting for all target devices to come online"
+
+That line is Android Studio, after the build has already succeeded. It waits
+about five minutes, then times out, because the selected emulator never reached
+`device` on the Windows `adb` server. On this PC the confirmed cause was a
+quick-boot snapshot. The AVD had `forceFastBoot=yes`. After the emulator moved
+to 37.1.11 it reloaded the 4 November snapshot, the window came up, and `adb
+devices` stayed `offline` for the whole wait. A cold boot (`-no-snapshot-load`)
+reached `device` in 41 seconds. WHPX was already on, and Windows already owned
+port 5037.
+
+Check in this order:
+
+1. **`adb devices` shows `offline`.** In Device Manager open that AVD's menu and
+   choose **Cold Boot Now**. Then **Edit → Advanced settings**, and set **Boot
+   option** to **Cold boot** so the next start does not load the stale snapshot.
+2. **Windows Hypervisor Platform is off.** WSL2 uses the Windows hypervisor. The
+   emulator hangs on a black window without that feature. Turn it on under
+   **Turn Windows features on or off**, then restart.
+3. **The AVD was not started from Device Manager.** Start it there.
+4. **Port 5037 belongs to Ubuntu.** `scripts/provision_kid_tablet.sh` and
+   `scripts/prepare_manager_tablet.sh` run `adb start-server` and, with mirrored
+   networking, that server is on the same localhost as Windows. The repo does
+   not set `ADB_SERVER_SOCKET`; do not set it either. Those scripts now stop
+   their server when they finish. If Ubuntu is still open, run `adb kill-server`
+   there, then the same command in PowerShell, then Run again.
+
+`devUp` on Windows already runs `adb kill-server` and `adb start-server` before
+Studio deploys, using Studio's SDK `adb` when `ANDROID_HOME` is unset.
 
 ## 5. Emulators worth creating
 
@@ -313,7 +355,8 @@ that used to be broken — the controls squeezed the drawing area to nothing.
    *right of the canvas* rather than stacking underneath.
 2. **Phone** — e.g. Pixel 7, API 26, to exercise `minSdk` and the narrowest width.
    The eight colour swatches should **wrap onto a second row**, never clip.
-3. **Large tablet** — e.g. Pixel Tablet, API 37, for the target device.
+3. **Large tablet** — e.g. Pixel Tablet, API 34 or 35. An API 37 image is
+   optional. `compileSdk 37` does not make Run wait for one.
 
 What to look for specifically:
 

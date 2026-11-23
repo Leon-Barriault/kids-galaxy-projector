@@ -35,7 +35,10 @@ jobs:
 
   browser-smoke:
     name: Manifest-driven WebGL acceptance
-    runs-on: ubuntu-latest
+    # ubuntu-latest moved to 26.04. Playwright 1.54 cannot install Chromium there
+    # ("does not support chromium on ubuntu26.04-x64"). Stay on 24.04 until the
+    # pin moves to a Playwright that knows that image.
+    runs-on: ubuntu-24.04
     # About 6 minutes on a normal runner; a slow one passed 10 on develop.
     timeout-minutes: 20
     steps:

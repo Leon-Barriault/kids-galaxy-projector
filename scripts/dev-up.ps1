@@ -11,7 +11,13 @@
       1. build and start the pi-server container, detached
       2. block until GET /health answers, so the app never launches against a
          server that is still starting - that failure looks like a broken app
-      3. start an emulator if no device is attached, and wait for it to boot
+      3. restart the Windows adb server so a copy left running in WSL is not
+         still holding port 5037
+
+    It does not start an emulator. Android Studio launches the AVD selected in
+    the toolbar. Starting "the first AVD" here raced that choice, and Run then
+    sat on "Waiting for all target devices to come online" until it timed out.
+    Set KG_AVD only when you mean this script itself to boot that one image.
 
     Every step is idempotent. Running it twice is a no-op that re-checks health.
 
@@ -80,14 +86,10 @@ Write-Step 'Server is healthy.'
 
 # --------------------------------------------------------------- emulator ---
 
-if ($SkipEmulator) {
-    Write-Step "SkipEmulator set - leaving devices alone. Server: $HealthUrl"
-    exit 0
-}
-
 # The SDK location, in the same order Android Studio resolves it. The
 # local.properties form is Java .properties escaped ("C\:\\Users\\..."), so
-# unescape it before use.
+# unescape it before use. Studio's own default is the last resort, so a
+# Gradle task still finds adb when ANDROID_HOME is unset.
 $sdkRoot = $null
 if ($env:ANDROID_HOME) {
     $sdkRoot = $env:ANDROID_HOME
@@ -98,6 +100,10 @@ if ($env:ANDROID_HOME) {
     if ($match) {
         $sdkRoot = $match.Line -replace '^sdk\.dir=', '' -replace '\\\\', '\' -replace '\\:', ':'
     }
+}
+if (-not $sdkRoot -and $env:LOCALAPPDATA) {
+    $defaultSdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+    if (Test-Path $defaultSdk) { $sdkRoot = $defaultSdk }
 }
 
 function Resolve-Tool {
@@ -113,31 +119,48 @@ function Resolve-Tool {
 
 $adbBin = Resolve-Tool -Name 'adb' -RelativePath 'platform-tools\adb.exe'
 if (-not $adbBin) {
-    Write-Note 'adb not found - skipping the device step. Set ANDROID_HOME, or start a device from Android Studio.'
+    Write-Note 'adb not found - Android Studio will use its own SDK copy.'
     Write-Step "Server is up regardless: $HealthUrl"
+    exit 0
+}
+
+# WSL2 mirrored networking shares localhost. `adb start-server` inside Ubuntu
+# keeps port 5037, and the Windows emulator then never reaches "device".
+# Nothing in this repo sets ADB_SERVER_SOCKET. Restart the Windows server so
+# Studio and this task talk to the same one. Do not point either side at the
+# other machine's server.
+Write-Step 'Restarting the Windows adb server (port 5037).'
+& $adbBin kill-server
+& $adbBin start-server
+if ($LASTEXITCODE -ne 0) {
+    Write-Note 'adb start-server failed. In PowerShell run: adb kill-server'
+}
+
+if ($SkipEmulator) {
+    Write-Step "SkipEmulator set - leaving devices alone. Server: $HealthUrl"
     exit 0
 }
 
 $attached = (& $adbBin devices) | Select-Object -Skip 1 | Where-Object { $_ -match '\sdevice$' }
 if ($attached) {
-    Write-Step 'A device is already attached - nothing to start.'
+    Write-Step 'A device is already online - nothing to start.'
     Write-Step "Debug environment is up. Server: $HealthUrl"
+    exit 0
+}
+
+# Studio Run is waiting for the AVD picked in the toolbar. Booting the first
+# image on disk instead selects a different device, often one whose system
+# image is not installed. compileSdk 37 does not require an API 37 image.
+if (-not $Avd) {
+    Write-Note 'Not starting an emulator. Android Studio launches the selected AVD.'
+    Write-Note 'Start it from Device Manager. If the screen stays black, choose Cold Boot Now.'
+    Write-Step "Server is up regardless: $HealthUrl"
     exit 0
 }
 
 $emulatorBin = Resolve-Tool -Name 'emulator' -RelativePath 'emulator\emulator.exe'
 if (-not $emulatorBin) {
-    Write-Note 'No emulator binary found - start a device from Android Studio instead.'
-    Write-Step "Server is up regardless: $HealthUrl"
-    exit 0
-}
-
-if (-not $Avd) {
-    $Avd = (& $emulatorBin -list-avds | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
-}
-
-if (-not $Avd) {
-    Write-Note 'No AVD defined. Create one in Device Manager - a 7 to 8 inch tablet is the interesting shape for this app.'
+    Write-Note 'No emulator binary found - start the AVD from Android Studio Device Manager.'
     Write-Step "Server is up regardless: $HealthUrl"
     exit 0
 }
@@ -154,7 +177,7 @@ while ($true) {
     $booted = (& $adbBin shell getprop sys.boot_completed 2>$null) -replace '\s', ''
     if ($booted -eq '1') { break }
     if ((Get-Date) -gt $deadline) {
-        throw "Emulator did not finish booting within $EmulatorTimeout seconds."
+        throw "Emulator did not finish booting within $EmulatorTimeout seconds. Turn on Windows Hypervisor Platform, then Cold Boot this AVD from Device Manager."
     }
     Start-Sleep -Seconds 2
 }
