@@ -39,7 +39,8 @@ cp "${projector}/BeveledPatchRelief.js" "${projector}/StudioEnvironment.js" \
    "${projector}/FrontViewProjection.js" "${projector}/PlanetLoader.js" \
    "${projector}/LiveUpdates.js" "${projector}/ProjectorBehaviorController.js" \
    "${projector}/ProjectorBuildWatcher.js" "${projector}/ShuttlePointer.js" \
-   "${projector}/PlanetEntity.js" "${scratch}/"
+   "${projector}/PlanetEntity.js" "${projector}/ThemeVisualFactory.js" \
+   "${projector}/ThemeAsteroidFactory.js" "${scratch}/"
 cp "${repo_root}/scripts/js/"*.mjs "${scratch}/"
 
 # The surface modules import PlanetEntity only to extend its prototype at install
@@ -70,7 +71,7 @@ status=0
 for check in check_relief_geometry.mjs check_studio_environment.mjs \
              check_internal_gap_fill.mjs check_front_view_projection.mjs \
              check_planet_rendering_switch.mjs check_projector_build_watcher.mjs \
-             check_shuttle_pointer.mjs \
+             check_shuttle_pointer.mjs check_christmas_visuals.mjs \
              derive_tone_exposure.mjs; do
   echo "=============================================================="
   echo "  ${check}"

@@ -2,14 +2,11 @@ import * as THREE from 'three';
 
 import { GalaxyEnvironment } from './GalaxyEnvironment.js';
 import {
-  createPumpkinStemGeometry,
-  createPumpkinStemMaterial,
-} from './ThemeVisualFactory.js';
-import {
   createThemeBodyGeometry,
   createThemeBodyMaterial,
   instanceColorForThemeBody,
-  themeBodyHasStem,
+  themeBodyAttachments,
+  themeBodyEuler,
 } from './ThemeAsteroidFactory.js';
 import {
   normalizeTheme,
@@ -113,29 +110,41 @@ function createInstancedBodies(descriptors, radius, marker) {
     bodies.instanceMatrix.needsUpdate = true;
     if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
     group.add(bodies);
-
-    if (themeBodyHasStem(style)) {
-      const stems = new THREE.InstancedMesh(
-        createPumpkinStemGeometry(radius),
-        createPumpkinStemMaterial(),
-        entries.length,
-      );
-      stems.castShadow = true;
-      stems.receiveShadow = true;
-      stems.userData.kidsGalaxyPumpkinStems = true;
-      stems.userData.kidsGalaxyAsteroidStyle = style;
-      entries.forEach((descriptor, localIndex) => {
-        stems.setMatrixAt(localIndex, descriptor.matrix);
-      });
-      stems.instanceMatrix.needsUpdate = true;
-      group.add(stems);
-    }
+    addThemeAttachments(group, style, entries, radius);
   }
 
   group.userData.kidsGalaxyMixedThemeBodies = true;
   group.userData.bodyCount = descriptors.length;
   group.userData.styles = [...byStyle.keys()];
   return group;
+}
+
+function addThemeAttachments(group, style, entries, radius) {
+  themeBodyAttachments(style, radius).forEach((attachment) => {
+    const mesh = new THREE.InstancedMesh(
+      attachment.geometry,
+      attachment.material,
+      entries.length,
+    );
+    mesh.castShadow = attachment.castShadow;
+    mesh.receiveShadow = attachment.castShadow;
+    mesh.userData[attachment.marker] = true;
+    mesh.userData.kidsGalaxyAsteroidStyle = style;
+    entries.forEach((descriptor, localIndex) => {
+      mesh.setMatrixAt(localIndex, descriptor.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+  });
+}
+
+function orientBody(style) {
+  const [tiltX, tiltY, tiltZ] = themeBodyEuler(style, Math.random(), [
+    Math.random() * Math.PI,
+    Math.random() * Math.PI,
+    Math.random() * Math.PI,
+  ]);
+  return new THREE.Euler(tiltX, tiltY, tiltZ);
 }
 
 function createBeltDescriptors(theme) {
@@ -152,7 +161,7 @@ function createBeltDescriptors(theme) {
       randomBetween(-0.9, 0.9),
       Math.sin(angle) * orbitalRadius,
     );
-    euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    euler.copy(orientBody(style));
     quaternion.setFromEuler(euler);
     const scale = bodyScale(style, randomBetween(0.55, 1.8));
     return matrix.clone().compose(position, quaternion, scale);
@@ -218,7 +227,7 @@ function createFlybyDescriptors(theme, count) {
       randomBetween(-1.1, 1.1),
       randomBetween(-1.5, 1.5),
     );
-    euler.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    euler.copy(orientBody(style));
     quaternion.setFromEuler(euler);
     const scale = bodyScale(style, randomBetween(0.55, 1.4), true);
     return matrix.clone().compose(position, quaternion, scale);

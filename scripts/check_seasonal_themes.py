@@ -30,13 +30,17 @@ def fnv1a(text: str) -> int:
 
 
 def upload_bunny_candidate(server: Server) -> str:
-    """Create a spiky astronaut planet whose deterministic Easter slot is a bunny."""
+    """Create a spiky planet whose deterministic Easter slot is a bunny.
+
+    The astronaut stays first so the Easter seed is index 0. The satellite is
+    the Christmas gift fixture.
+    """
     for index in range(8):
         planet_id = server.upload(
             f"Seasonal-{index}",
             style="spiky",
             mountain_color="#d98242",
-            companions="astronaut",
+            companions="astronaut,satellite",
         )
         if fnv1a(f"{planet_id}-easter-bunny-0") % 2 == 0:
             return planet_id
@@ -58,6 +62,77 @@ def theme_state(page, planet_id: str) -> dict:
             }
           });
           const astronaut = planet?.companions.find((record) => record.type === 'astronaut');
+          const satellite = planet?.companions.find((record) => record.type === 'satellite');
+          const red = (color) => color.r > 0.55 && color.g < 0.28 && color.b < 0.32 && color.r > color.g * 2;
+          const white = (color) => color.r > 0.82 && color.g > 0.82 && color.b > 0.78;
+          const roleMatches = (object, key, role, predicate) => {
+            let found = false;
+            let ok = true;
+            object?.traverse((child) => {
+              if (child.userData?.[key] !== role || !child.material?.color) return;
+              found = true;
+              ok = ok && predicate(child.material.color);
+            });
+            return found && ok;
+          };
+          const hasPartGeometry = (object, role, type) => {
+            let found = false;
+            object?.traverse((child) => {
+              if (child.userData?.kidsGalaxyGiftPart === role && child.geometry?.type === type) {
+                found = true;
+              }
+            });
+            return found;
+          };
+          let leftPanel = false;
+          let rightPanel = false;
+          satellite?.object?.traverse((child) => {
+            if (child.userData?.kidsGalaxyGiftPart !== 'panel') return;
+            if (child.position.x < -0.1) leftPanel = true;
+            if (child.position.x > 0.1) rightPanel = true;
+          });
+          let ornamentCapMeshes = 0;
+          let ornamentCapCasts = false;
+          let ornamentHook = false;
+          let ornamentHighlightMeshes = 0;
+          let ornamentHighlightCasts = false;
+          let ornamentRoughness = null;
+          let ornamentTransmission = null;
+          let ornamentClearcoat = null;
+          let ornamentUpright = 0;
+          let ornamentSamples = 0;
+          environment.asteroidBelt?.traverse((object) => {
+            if (object.userData?.kidsGalaxyOrnamentCaps) {
+              ornamentCapMeshes += 1;
+              ornamentCapCasts = object.castShadow === true;
+              ornamentHook = Boolean(object.geometry?.userData?.kidsGalaxyOrnamentHook);
+            }
+            if (object.userData?.kidsGalaxyOrnamentHighlights) {
+              ornamentHighlightMeshes += 1;
+              ornamentHighlightCasts = object.castShadow === true;
+            }
+            if (
+              object.userData?.kidsGalaxyThemedAsteroids
+              && object.userData?.kidsGalaxyAsteroidStyle === 'ornament'
+            ) {
+              ornamentRoughness = object.material?.roughness ?? null;
+              ornamentTransmission = object.material?.transmission ?? 0;
+              ornamentClearcoat = object.material?.clearcoat ?? 0;
+              const scratch = object.matrix.clone();
+              const sample = Math.min(object.count, 6);
+              for (let index = 0; index < sample; index += 1) {
+                object.getMatrixAt(index, scratch);
+                ornamentSamples += 1;
+                const yAxisX = scratch.elements[4];
+                const yAxisY = scratch.elements[5];
+                const yAxisZ = scratch.elements[6];
+                if (Math.abs(yAxisX) < 1e-3 && Math.abs(yAxisZ) < 1e-3 && yAxisY > 0) {
+                  ornamentUpright += 1;
+                }
+              }
+            }
+          });
+          const santa = astronaut?.object;
           return {
             activeTheme: controller.current?.theme || '',
             beltTheme: environment.asteroidBelt?.userData?.kidsGalaxyTheme || '',
@@ -71,8 +146,30 @@ def theme_state(page, planet_id: str) -> dict:
               planet?._themeHolidayDecorations?.filter(
                 (object) => object.userData?.kidsGalaxyChristmasTreeCluster,
               ).length || 0,
-            bunny: Boolean(astronaut?.object?.userData?.kidsGalaxyWhiteBunny),
-            witch: Boolean(astronaut?.object?.userData?.kidsGalaxyWitchOnBroom),
+            bunny: Boolean(santa?.userData?.kidsGalaxyWhiteBunny),
+            witch: Boolean(santa?.userData?.kidsGalaxyWitchOnBroom),
+            santa: Boolean(santa?.userData?.kidsGalaxySanta),
+            santaSuit: roleMatches(santa, 'kidsGalaxySantaPart', 'suit', red),
+            santaFur: roleMatches(santa, 'kidsGalaxySantaPart', 'fur', white),
+            santaBeard: roleMatches(santa, 'kidsGalaxySantaPart', 'beard', white),
+            santaHat: roleMatches(santa, 'kidsGalaxySantaPart', 'hat', red),
+            santaTrim: roleMatches(santa, 'kidsGalaxySantaPart', 'trim', white),
+            santaPompom: roleMatches(santa, 'kidsGalaxySantaPart', 'pompom', white),
+            gift: Boolean(satellite?.object?.userData?.kidsGalaxyGiftSatellite),
+            giftWrap: hasPartGeometry(satellite?.object, 'wrap', 'BoxGeometry'),
+            giftRibbon: hasPartGeometry(satellite?.object, 'ribbon', 'BoxGeometry'),
+            giftBow: hasPartGeometry(satellite?.object, 'bow', 'TorusGeometry'),
+            giftPanels: leftPanel && rightPanel,
+            ornamentCapMeshes,
+            ornamentCapCasts,
+            ornamentHook,
+            ornamentHighlightMeshes,
+            ornamentHighlightCasts,
+            ornamentRoughness,
+            ornamentTransmission,
+            ornamentClearcoat,
+            ornamentUpright,
+            ornamentSamples,
           };
         }
         """,
@@ -153,6 +250,19 @@ def main() -> int:
                     )
 
                 if theme == "christmas":
+                    wait_for(
+                        page,
+                        f"() => window.kidsGalaxy.kidPlanets.get('{planet_id}')?.companions"
+                        ".find((record) => record.type === 'astronaut')?.object?.userData"
+                        "?.kidsGalaxySanta === true",
+                    )
+                    wait_for(
+                        page,
+                        f"() => window.kidsGalaxy.kidPlanets.get('{planet_id}')?.companions"
+                        ".find((record) => record.type === 'satellite')?.object?.userData"
+                        "?.kidsGalaxyGiftSatellite === true",
+                    )
+                    state = theme_state(page, planet_id)
                     check(
                         state["terrainCount"] == baseline_terrain,
                         "Christmas preserves the child's mountain terrain",
@@ -160,6 +270,50 @@ def main() -> int:
                     check(
                         state["christmasClusters"] > 0,
                         "Christmas adds tree clusters as separate decorations",
+                    )
+                    check(state["santaSuit"] is True, "Christmas astronaut wears a red suit")
+                    check(state["santaFur"] is True, "Christmas suit has white fur trim")
+                    check(state["santaBeard"] is True, "Christmas astronaut has a white beard")
+                    check(state["santaHat"] is True, "Christmas astronaut wears a red tuque")
+                    check(state["santaTrim"] is True, "Christmas tuque has white trim")
+                    check(state["santaPompom"] is True, "Christmas tuque has a white pompom")
+                    check(state["giftWrap"] is True, "Christmas satellite carries a wrapped gift")
+                    check(state["giftRibbon"] is True, "Christmas gift is tied with a ribbon")
+                    check(state["giftBow"] is True, "Christmas gift has a bow")
+                    check(state["giftPanels"] is True, "Christmas gift stays between the satellite panels")
+                    check(
+                        state["ornamentCapMeshes"] == 1 and state["ornamentCapCasts"] is True,
+                        "ornament caps are one shadow-casting instanced mesh",
+                    )
+                    check(state["ornamentHook"] is True, "ornament caps include a top hook")
+                    check(
+                        state["ornamentHighlightMeshes"] == 1
+                        and state["ornamentHighlightCasts"] is False,
+                        "ornament highlights are one instanced mesh and do not cast shadows",
+                    )
+                    check(
+                        state["ornamentRoughness"] is not None and state["ornamentRoughness"] < 0.15,
+                        "ornaments are glossy glass",
+                    )
+                    check(
+                        state["ornamentClearcoat"] is not None and state["ornamentClearcoat"] >= 0.8,
+                        "ornaments keep a glass clearcoat",
+                    )
+                    check(
+                        state["ornamentTransmission"] == 0,
+                        "ornaments do not enable refractive transmission",
+                    )
+                    check(
+                        state["ornamentSamples"] > 0
+                        and state["ornamentUpright"] == state["ornamentSamples"],
+                        "ornaments hang upright so the hook stays on top",
+                    )
+                else:
+                    check(state["santa"] is False, f"{theme}: astronaut is not dressed as Santa")
+                    check(state["gift"] is False, f"{theme}: satellite is not a gift")
+                    check(
+                        state["ornamentCapMeshes"] == 0,
+                        f"{theme}: no Christmas ornament caps",
                     )
 
                 if theme == "easter":
@@ -192,6 +346,9 @@ def main() -> int:
             )
             check(restored["bunny"] is False, "Easter bunny returns to the normal astronaut")
             check(restored["witch"] is False, "Halloween witch returns to the normal astronaut")
+            check(restored["santa"] is False, "Christmas Santa returns to the normal astronaut")
+            check(restored["gift"] is False, "Christmas gift returns to the normal satellite")
+            check(restored["ornamentCapMeshes"] == 0, "Christmas ornament caps leave with the theme")
 
             browser.close()
 

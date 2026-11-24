@@ -170,13 +170,30 @@ export function createPumpkinStemMaterial() {
   });
 }
 
-function physicalMaterial(color, roughness = 0.62, clearcoat = 0.06) {
+function physicalMaterial(color, roughness = 0.62, clearcoat = 0.06, extras = {}) {
   return new THREE.MeshPhysicalMaterial({
     color,
     roughness,
     metalness: 0.004,
     clearcoat,
     clearcoatRoughness: Math.min(0.9, roughness + 0.12),
+    ...extras,
+  });
+}
+
+function placeMesh(group, geometry, material, x, y, z, rotation = null) {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  if (rotation) mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+  group.add(mesh);
+  return mesh;
+}
+
+function enableHolidayShadows(group) {
+  group.traverse((object) => {
+    if (!object.isMesh) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
   });
 }
 
@@ -363,5 +380,289 @@ export function createChristmasTree(seed = 1, accentColor = 0xffd65c) {
     object.castShadow = true;
     object.receiveShadow = true;
   });
+  return group;
+}
+
+function santaPart(group, geometry, material, x, y, z, role, rotation = null) {
+  const mesh = placeMesh(group, geometry, material, x, y, z, rotation);
+  mesh.userData.kidsGalaxySantaPart = role;
+  return mesh;
+}
+
+function santaMaterials() {
+  return {
+    suit: physicalMaterial(0xd21a2c, 0.58, 0.05),
+    fur: physicalMaterial(0xfff8f2, 0.86, 0.02, {
+      emissive: 0x2c2c2c,
+      emissiveIntensity: 0.22,
+    }),
+    skin: physicalMaterial(0xffd2b0, 0.62, 0.04),
+    belt: physicalMaterial(0x1b1d22, 0.46, 0.08, { metalness: 0.12 }),
+    buckle: physicalMaterial(0xf0c84b, 0.32, 0.2, { metalness: 0.72 }),
+    eye: physicalMaterial(0x1a1c22, 0.4, 0.05),
+  };
+}
+
+function addSantaSuit(group, materials) {
+  const body = santaPart(
+    group,
+    new THREE.SphereGeometry(0.115, 20, 16),
+    materials.suit,
+    0,
+    -0.02,
+    0,
+    'suit',
+  );
+  body.scale.set(1.08, 1.28, 0.92);
+
+  const hem = santaPart(
+    group,
+    new THREE.SphereGeometry(0.102, 16, 12),
+    materials.fur,
+    0,
+    -0.128,
+    0,
+    'fur',
+  );
+  hem.scale.set(1.2, 0.4, 1.02);
+
+  santaPart(
+    group,
+    new THREE.CylinderGeometry(0.12, 0.12, 0.028, 16),
+    materials.belt,
+    0,
+    -0.028,
+    0,
+    'belt',
+  );
+  santaPart(
+    group,
+    new THREE.BoxGeometry(0.046, 0.036, 0.018),
+    materials.buckle,
+    0,
+    -0.028,
+    0.116,
+    'buckle',
+  );
+  santaPart(
+    group,
+    new THREE.TorusGeometry(0.074, 0.016, 6, 14),
+    materials.fur,
+    0,
+    0.078,
+    0,
+    'fur',
+    [Math.PI / 2, 0, 0],
+  );
+
+  [[-1, -0.72], [1, 0.72]].forEach(([side, tilt]) => {
+    santaPart(
+      group,
+      new THREE.CapsuleGeometry(0.026, 0.09, 4, 8),
+      materials.suit,
+      side * 0.15,
+      0.01,
+      0.02,
+      'suit',
+      [0, 0, tilt],
+    );
+    const cuff = santaPart(
+      group,
+      new THREE.SphereGeometry(0.032, 10, 8),
+      materials.fur,
+      side * 0.205,
+      -0.05,
+      0.035,
+      'fur',
+    );
+    cuff.scale.set(1, 0.82, 1);
+  });
+}
+
+function addSantaFace(group, materials) {
+  santaPart(
+    group,
+    new THREE.SphereGeometry(0.078, 20, 16),
+    materials.skin,
+    0,
+    0.155,
+    0.012,
+    'face',
+  );
+
+  const beard = santaPart(
+    group,
+    new THREE.SphereGeometry(0.074, 18, 14),
+    materials.fur,
+    0,
+    0.1,
+    0.045,
+    'beard',
+  );
+  beard.scale.set(1.18, 1.08, 0.78);
+  const beardPoint = santaPart(
+    group,
+    new THREE.SphereGeometry(0.04, 12, 10),
+    materials.fur,
+    0,
+    0.03,
+    0.055,
+    'beard',
+  );
+  beardPoint.scale.set(0.82, 1.4, 0.7);
+
+  const mustache = santaPart(
+    group,
+    new THREE.SphereGeometry(0.028, 12, 10),
+    materials.fur,
+    0,
+    0.128,
+    0.092,
+    'beard',
+  );
+  mustache.scale.set(1.9, 0.5, 0.55);
+
+  [-0.028, 0.028].forEach((x) => {
+    santaPart(
+      group,
+      new THREE.SphereGeometry(0.012, 10, 8),
+      materials.eye,
+      x,
+      0.178,
+      0.074,
+      'face',
+    );
+  });
+  santaPart(
+    group,
+    new THREE.SphereGeometry(0.016, 10, 8),
+    materials.skin,
+    0,
+    0.152,
+    0.086,
+    'face',
+  );
+}
+
+function addSantaHat(group, materials) {
+  // The cone flops to one side. The brim stays level on the head, and the
+  // pompom sits on the tilted tip so the tuque reads at companion scale.
+  santaPart(
+    group,
+    new THREE.ConeGeometry(0.074, 0.18, 16),
+    materials.suit,
+    0.01,
+    0.3,
+    0,
+    'hat',
+    [0, 0, -0.55],
+  );
+  santaPart(
+    group,
+    new THREE.CylinderGeometry(0.092, 0.098, 0.034, 18),
+    materials.fur,
+    0,
+    0.216,
+    0,
+    'trim',
+  );
+  santaPart(
+    group,
+    new THREE.SphereGeometry(0.036, 12, 10),
+    materials.fur,
+    0.066,
+    0.402,
+    0,
+    'pompom',
+  );
+}
+
+/** Christmas companion: red suit, white fur, beard, and a tuque with a pompom. */
+export function createSantaAstronaut() {
+  const group = new THREE.Group();
+  const materials = santaMaterials();
+  addSantaSuit(group, materials);
+  addSantaFace(group, materials);
+  addSantaHat(group, materials);
+  group.scale.setScalar(1.08);
+  group.userData.kidsGalaxySanta = true;
+  enableHolidayShadows(group);
+  return group;
+}
+
+function giftPart(group, geometry, material, x, y, z, role, rotation = null) {
+  const mesh = placeMesh(group, geometry, material, x, y, z, rotation);
+  mesh.userData.kidsGalaxyGiftPart = role;
+  return mesh;
+}
+
+function addWrappedGift(group, paper, ribbon) {
+  giftPart(group, new THREE.BoxGeometry(0.26, 0.24, 0.26), paper, 0, 0, 0, 'wrap');
+  // Two bands that stand proud of the box: one over the top, one around the middle.
+  giftPart(group, new THREE.BoxGeometry(0.05, 0.27, 0.28), ribbon, 0, 0, 0, 'ribbon');
+  giftPart(group, new THREE.BoxGeometry(0.28, 0.05, 0.28), ribbon, 0, 0, 0, 'ribbon');
+}
+
+function addGiftBow(group, ribbon) {
+  [-1, 1].forEach((side) => {
+    giftPart(
+      group,
+      new THREE.TorusGeometry(0.05, 0.014, 8, 14),
+      ribbon,
+      side * 0.058,
+      0.178,
+      0,
+      'bow',
+      [0.15, 0, side * -0.7],
+    );
+  });
+  giftPart(group, new THREE.SphereGeometry(0.028, 12, 10), ribbon, 0, 0.15, 0, 'bow');
+  [-1, 1].forEach((side) => {
+    giftPart(
+      group,
+      new THREE.BoxGeometry(0.032, 0.09, 0.012),
+      ribbon,
+      side * 0.04,
+      0.09,
+      0.14,
+      'bow',
+      [0.15, 0, side * 0.45],
+    );
+  });
+}
+
+function addSatellitePanels(group) {
+  const panel = new THREE.MeshStandardMaterial({
+    color: 0x2878d0,
+    roughness: 0.45,
+    metalness: 0.3,
+  });
+  [-1, 1].forEach((side) => {
+    giftPart(
+      group,
+      new THREE.BoxGeometry(0.36, 0.025, 0.2),
+      panel,
+      side * 0.34,
+      0,
+      0,
+      'panel',
+    );
+  });
+}
+
+/**
+ * Christmas satellite. The body in the middle is a wrapped gift; the blue
+ * panels stay so it is still the orbiting satellite.
+ */
+export function createGiftSatellite() {
+  const group = new THREE.Group();
+  const paper = physicalMaterial(0xd21a2c, 0.48, 0.12);
+  const ribbon = physicalMaterial(0xf0c84b, 0.34, 0.28, { metalness: 0.18 });
+  addWrappedGift(group, paper, ribbon);
+  addGiftBow(group, ribbon);
+  addSatellitePanels(group);
+  group.scale.setScalar(0.9);
+  group.userData.kidsGalaxyGiftSatellite = true;
+  enableHolidayShadows(group);
   return group;
 }
